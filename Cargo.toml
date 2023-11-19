@@ -1,0 +1,19 @@
+[package]
+name = "rust_ev_crypto_primitives"
+description = "Crypto Primitives necessary for E-Voting Applications."
+authors = ["Denis Morel"]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+license = "Apache-2.0"
+repository = "https://github.com/de-mo/rust_verifier"
+
+[dependencies]
+openssl-sys = "0.9"
+openssl = "0.10"
+num-bigint-dig = { version="0.8", features= ["prime"] }
+num-traits = "0.2"
+num-bigint = "0.4"
+chrono = "0.4"
+thiserror = "1.0.40"
+data-encoding = "2.3"
