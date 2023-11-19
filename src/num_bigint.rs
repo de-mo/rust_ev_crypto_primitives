@@ -54,6 +54,7 @@ pub trait Hexa: Sized {
     fn to_hexa(&self) -> String;
 }
 
+// enum representing the errors with bigint
 #[derive(Error, Debug)]
 pub enum BigUIntError {
     #[error("Error parsing {orig} in BigUInt in method {fnname}")]

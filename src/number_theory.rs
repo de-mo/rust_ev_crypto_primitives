@@ -92,6 +92,7 @@ pub fn miller_rabin_test(n: &BigUint, base: usize) -> bool {
     probably_prime_miller_rabin(&BigUintDig::new(n.to_u32_digits()), base, false)
 }
 
+// Enum representing the errors in number theory
 #[derive(Error, Debug)]
 pub enum NumberTheoryError {
     #[error("Out of range error for {n}: {msg}")]

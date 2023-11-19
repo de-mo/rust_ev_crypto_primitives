@@ -77,6 +77,7 @@ impl DirectTrustCertificate {
     }
 }
 
+// Enum representing the direct trust errors
 #[derive(Error, Debug)]
 pub enum DirectTrustError {
     #[error("IO error caused by {source}: {msg}")]

@@ -76,6 +76,7 @@ where
     }
 }
 
+// Enum representing the errors validating the signature
 #[derive(Error, Debug)]
 pub enum SignatureError {
     #[error(transparent)]

@@ -77,6 +77,7 @@ pub fn get_encryption_parameters(
     }
 }
 
+// Enum reprsenting the elgamal errors
 #[derive(Error, Debug)]
 pub enum ElgamalError {
     #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
