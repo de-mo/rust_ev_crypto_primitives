@@ -70,7 +70,7 @@ impl ByteArray {
 
     /// Append other to self
     pub fn append(&mut self, other: &ByteArray) -> &ByteArray {
-        self.inner.extend(other.inner.clone().into_iter());
+        self.inner.extend(other.inner.clone());
         self
     }
 
