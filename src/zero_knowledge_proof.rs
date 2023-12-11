@@ -60,16 +60,16 @@ pub fn verify_exponentiation(
         HashableMessage::from(q),
         HashableMessage::from(gs),
     ];
-    let f = HashableMessage::from(f_list);
+    let f = HashableMessage::from(&f_list);
     let c_prime_s: Vec<BigUint> = zip(&xs, ys)
         .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, p).mod_inverse(p), p))
         .collect();
-    let mut l: Vec<HashableMessage> = vec![];
-    l.push(HashableMessage::from("ExponentiationProof"));
+    let mut h_aux_l: Vec<HashableMessage> = vec![];
+    h_aux_l.push(HashableMessage::from("ExponentiationProof"));
     if !i_aux.is_empty() {
-        l.push(HashableMessage::from(i_aux));
+        h_aux_l.push(HashableMessage::from(i_aux));
     }
-    let h_aux = HashableMessage::from(&l);
+    let h_aux = HashableMessage::from(&h_aux_l);
     let l_final: Vec<HashableMessage> = vec![
         f,
         HashableMessage::from(ys),
