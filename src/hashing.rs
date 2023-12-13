@@ -17,7 +17,7 @@ use num_bigint::BigUint;
 /// to reference to BigUint or usize
 ///
 /// Example:
-/// ```rust
+/// ```
 /// use rust_ev_crypto_primitives::byte_array::ByteArray;
 /// use rust_ev_crypto_primitives::byte_array::Decode;
 /// use rust_ev_crypto_primitives::hashing::HashableMessage;
@@ -25,6 +25,17 @@ use num_bigint::BigUint;
 /// let expected = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
 /// assert_eq!(r, expected);
 /// ```
+/// 
+/// In the specification of SwissPost, lists with various types of elements are hashed recursivly. Since Rust doesn't allow simple
+/// the use of lists with different elements, the elemets must be first transformed in [HashableMessage] and then put in a [vec].
+/// ```rust
+/// use rust_ev_crypto_primitives::hashing::HashableMessage;
+/// let mut l: Vec<HashableMessage> = vec![];
+/// l.push(HashableMessage::from("common reference string"));
+/// l.push(HashableMessage::from(&(2 as usize)));
+/// HashableMessage::from(l).recursive_hash();
+/// ```
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashableMessage<'a> {
     RByteArray(&'a ByteArray),
@@ -37,6 +48,7 @@ pub enum HashableMessage<'a> {
 }
 
 impl<'a> HashableMessage<'a> {
+    /// Hashable to byte_array accordind the specification of Swiss Post
     fn to_hashable_byte_array(&self) -> ByteArray {
         match self {
             HashableMessage::RByteArray(b) => b.prepend_byte(0u8),
