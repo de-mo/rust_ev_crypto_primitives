@@ -1,5 +1,5 @@
 //! Module that implement some functions of the number theory
-use super::num_bigint::Constants;
+use super::num_bigint::{Constants, Operations};
 use num_bigint::BigUint;
 use num_bigint_dig::{
     prime::{probably_prime, probably_prime_miller_rabin},
@@ -79,17 +79,70 @@ pub fn jacobi(a: &BigUint, n: &BigUint) -> Result<i8, NumberTheoryError> {
     }
 }
 
+/// Determine if n is a power of b, e.g. n = b^x for any x
+pub fn is_mod_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> bool {
+    let n_mod = n % modulus;
+    let b_mod = b % modulus;
+
+    if b_mod == BigUint::one() {
+        return n_mod == BigUint::one()
+    }
+
+    if n_mod == BigUint::one() {
+        return b_mod == BigUint::one()
+    }
+
+    let mut pow = BigUint::one();
+    while pow < n_mod {
+        pow = pow.mod_multiply(&b_mod, modulus)
+    }
+
+    pow==n_mod
+}
+
 /// Determine of the number n is a quadratic residue of p
 pub fn is_quadratic_residue(n: &BigUint, p: &BigUint) -> bool {
     jacobi(n, p).unwrap() == 1
 }
 
+/// Determine if a number is propable prime
 pub fn is_probable_prime(n: &BigUint) -> bool {
     probably_prime(&BigUintDig::new(n.to_u32_digits()), 2)
 }
 
+/// Determine if a number is prime according to Miller-Rabin Test
 pub fn miller_rabin_test(n: &BigUint, base: usize) -> bool {
     probably_prime_miller_rabin(&BigUintDig::new(n.to_u32_digits()), base, false)
+}
+
+/// Check if quadratic residue
+/// 
+/// Return a [NumberTheoryError] if the check is not positive. Else None
+pub fn check_quadratic_residue(n: &BigUint, p: &BigUint) -> Option<NumberTheoryError> {
+    if !is_quadratic_residue(n, p) {
+        return Some(NumberTheoryError::CheckQuadraticResidue(n.clone(), p.clone()))
+    }
+    None
+}
+
+/// Check if the number is prime
+/// 
+/// Return a [NumberTheoryError] if the check is not positive. Else None
+pub fn check_prime(p: &BigUint) -> Option<NumberTheoryError> {
+    if !is_probable_prime(p) {
+        return Some(NumberTheoryError::CheckPrime(p.clone()))
+    }
+    None
+}
+
+/// Check if the number n is a power of another number b
+/// 
+/// Return a [NumberTheoryError] if the check is not positive. Else None
+pub fn check_is_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> Option<NumberTheoryError> {
+    if !is_mod_power_of(n, b, modulus) {
+        return Some(NumberTheoryError::CheckIsPowerOf(n.clone(), b.clone()))
+    }
+    None
 }
 
 // Enum representing the errors in number theory
@@ -99,6 +152,12 @@ pub enum NumberTheoryError {
     OutOfRange { msg: String, n: usize },
     #[error("Denominator {0} is not odd, but it must be.")]
     DenominatorNotOdd(BigUint),
+    #[error("{0} is not quadratic residue of {1}")]
+    CheckQuadraticResidue(BigUint, BigUint),
+    #[error("Number {0} is not prime")]
+    CheckPrime(BigUint),
+    #[error("Number {0} is not a power of {1}")]
+    CheckIsPowerOf(BigUint, BigUint),
 }
 
 #[cfg(test)]
@@ -159,6 +218,31 @@ mod test {
         assert!(is_quadratic_residue(&BigUint::from(5u8), &p));
         assert!(is_quadratic_residue(&BigUint::from(17u8), &p));
         assert!(is_quadratic_residue(&BigUint::from(19u8), &p));
+    }
+
+    #[test]
+    fn test_check_quadratic_residue() {
+        let p = BigUint::from(11u8);
+        let g_ok = BigUint::from(3u8);
+        let g_err = BigUint::from(2u8);
+        assert!(check_quadratic_residue(&g_ok, &p).is_none());
+        assert!(check_quadratic_residue( &g_err, &p).is_some());
+    }
+
+    #[test]
+    fn test_check_prime() {
+        let p = BigUint::from_hexa_string("0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867").unwrap();
+        assert!(check_prime(&p).is_none());
+        let p = BigUint::from(6u8); 
+        assert!(check_prime(&p).is_some())
+    }
+
+    #[test]
+    fn test_is_mod_power_of() {
+        assert!(is_mod_power_of(&BigUint::from(1u8), &BigUint::from(1u8), &BigUint::from(100u8)));
+        assert!(!is_mod_power_of(&BigUint::from(1u8), &BigUint::from(2u8), &BigUint::from(100u8)));
+        assert!(!is_mod_power_of(&BigUint::from(2u8), &BigUint::from(1u8), &BigUint::from(100u8)));
+        assert!(is_mod_power_of(&BigUint::from(25u8), &BigUint::from(5u8), &BigUint::from(100u8)));
     }
 }
 
