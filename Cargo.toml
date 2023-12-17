@@ -17,3 +17,6 @@ num-bigint = "0.4"
 chrono = "0.4"
 thiserror = "1.0.40"
 data-encoding = "2.3"
+
+[features]
+checks=[]
