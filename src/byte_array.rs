@@ -68,16 +68,24 @@ impl ByteArray {
         self.inner.clone()
     }
 
-    /// Append other to self
-    pub fn append(&mut self, other: &ByteArray) -> &ByteArray {
+    /// Extend other to self
+    pub fn extend(&mut self, other: &ByteArray) -> &ByteArray {
         self.inner.extend(other.inner.clone());
         self
+    }
+
+    /// Append and return a new one
+    pub fn append(&self, other: &ByteArray) -> ByteArray {
+        let mut self_bytes = self.to_bytes();
+        let other_bytes = other.to_bytes();
+        self_bytes.extend(other_bytes);
+        ByteArray::from(&self_bytes)
     }
 
     /// Create a bew ByteArray prepending a byte
     pub fn prepend_byte(&self, byte: u8) -> ByteArray {
         let mut res = ByteArray::from(&vec![byte]);
-        res.append(self);
+        res.extend(self);
         res
     }
 
@@ -90,24 +98,24 @@ impl ByteArray {
             });
         }
         let bs = self.to_bytes();
-        println!("bs: {:?}", bs);
+        //println!("bs: {:?}", bs);
         let length = (n + 8 - 1) / 8;
-        println!("length: {:?}", length);
+        //println!("length: {:?}", length);
         let offset = self.len() - length;
-        println!("offset: {:?}", length);
+        //println!("offset: {:?}", length);
         let mut arr: Vec<u8> = vec![];
         if n % 8 != 0 {
-            println!("n % 8: {:?}", (n % 8));
-            println!("2^(n % 8): {:?}", Pow::pow(2u8, n % 8));
-            println!("2^(n % 8)-1: {:?}", Pow::pow(2u8, n % 8) - 1);
-            println!("mask: {:?}", (Pow::pow(2u8, n % 8) - 1));
+            //println!("n % 8: {:?}", (n % 8));
+            //println!("2^(n % 8): {:?}", Pow::pow(2u8, n % 8));
+            //println!("2^(n % 8)-1: {:?}", Pow::pow(2u8, n % 8) - 1);
+            //println!("mask: {:?}", (Pow::pow(2u8, n % 8) - 1));
             arr.push(bs[offset] & (Pow::pow(2u8, n % 8) - 1));
         } else {
             arr.push(bs[offset])
         }
         for i in 1..length {
-            println!("i: {:?}", i);
-            println!("bs[offset+i]: {:?}", bs[offset + i]);
+            //println!("i: {:?}", i);
+            //println!("bs[offset+i]: {:?}", bs[offset + i]);
             arr.push(bs[offset + i])
         }
         Ok(ByteArray::from(&arr))
@@ -310,10 +318,17 @@ mod test {
     }
 
     #[test]
-    fn append() {
+    fn test_extend() {
         let mut b = ByteArray::from_bytes(b"\x04\x03");
-        b.append(&ByteArray::from_bytes(b"\x10\x11\x12"));
+        b.extend(&ByteArray::from_bytes(b"\x10\x11\x12"));
         assert_eq!(b, ByteArray::from_bytes(b"\x04\x03\x10\x11\x12"))
+    }
+
+    #[test]
+    fn test_append() {
+        let b = ByteArray::from_bytes(b"\x04\x03");
+        let res = b.append(&ByteArray::from_bytes(b"\x10\x11\x12"));
+        assert_eq!(res, ByteArray::from_bytes(b"\x04\x03\x10\x11\x12"))
     }
 
     #[test]
