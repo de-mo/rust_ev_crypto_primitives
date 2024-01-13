@@ -25,7 +25,7 @@ use num_bigint::BigUint;
 /// let expected = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
 /// assert_eq!(r, expected);
 /// ```
-/// 
+///
 /// In the specification of SwissPost, lists with various types of elements are hashed recursivly. Since Rust doesn't allow simple
 /// the use of lists with different elements, the elemets must be first transformed in [HashableMessage] and then put in a [vec].
 /// ```rust
@@ -35,6 +35,9 @@ use num_bigint::BigUint;
 /// l.push(HashableMessage::from(&(2 as usize)));
 /// HashableMessage::from(l).recursive_hash();
 /// ```
+///
+/// If you decide to calculate intermediate hash values, and store the in the message (to avoid big structures),
+/// use the variant [HashableMessage::Hashed]
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashableMessage<'a> {
@@ -45,6 +48,7 @@ pub enum HashableMessage<'a> {
     RStr(&'a str),
     String(String),
     Composite(Vec<HashableMessage<'a>>),
+    Hashed(ByteArray),
 }
 
 impl<'a> HashableMessage<'a> {
@@ -57,20 +61,25 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::RString(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::String(s) => ByteArray::from(s).prepend_byte(2u8),
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
-            HashableMessage::Composite(c) => {
-                let mut res = ByteArray::from_bytes(b"\x03");
-                for e in c {
-                    res.append(&e.recursive_hash());
-                }
-                res
-            }
+            HashableMessage::Composite(c) => c
+                .iter()
+                .map(|h| h.recursive_hash())
+                .fold(ByteArray::from_bytes(b"\x03"), |acc, b| acc.append(&b)),
+            HashableMessage::Hashed(b) => b.clone(),
         }
+    }
+
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, HashableMessage::Hashed(_))
     }
 
     /// Calculate the recursive hash according to the specification of Swiss Post
     pub fn recursive_hash(&self) -> ByteArray {
         let b = self.to_hashable_byte_array();
-        sha3_256(&b)
+        match self.is_hashed() {
+            true => b,
+            false => sha3_256(&b),
+        }
     }
 }
 
@@ -294,6 +303,29 @@ mod test {
         let mut nl: Vec<HashableMessage> = vec![];
         let n = 4;
         nl.push(HashableMessage::from(&n));
+        let bu2= BigUint::from_hexa_string("0x3896D05A527747E840CEB0A10454DE39955529297AC4CB21010E9287A21F826FA7221215E1C7EE8362223DF51215A7F4CD14F158980154EE0794B599639A6FBC171A97F376A4DD95945C476F0DC6836FCEA68C9B28F901CE7F30DC03F406947E6245BF741650F5164BFC24F4B23948A5D6642C36D61016E63E943DB9717335EEB04373BFAE10BB4FB20EA9FD1BE48CA9A02B8E8C6639AD8E43D714ED16D4764D258E9A70BABD5497C09E148052C1C6A965F18F71F7B03385178B4991AA790611FA3B98E9C2F1EE1E0369F496A1D6928D718650513439D01898AAB87BC968F76D9DB8089809142A0C79A84C689D02314CEDE64F4C9615B79D49D2BE641BE8D4AB").unwrap();
+        nl.push(HashableMessage::from(&bu2));
+        let mut l: Vec<HashableMessage> = vec![];
+        l.push(HashableMessage::from("common reference string"));
+        let bu3=BigUint::from_hexa_string("0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF324E7738926CFBE5F4BF8D8D8C31D763DA06C80ABB1185EB4F7C7B5757F5958490CFD47D7C19BB42158D9554F7B46BCED55C4D79FD5F24D6613C31C3839A2DDF8A9A276BCFBFA1C877C56284DAB79CD4C2B3293D20E9E5EAF02AC60ACC93ED874422A52ECB238FEEE5AB6ADD835FD1A0753D0A8F78E537D2B95BB79D8DCAEC642C1E9F23B829B5C2780BF38737DF8BB300D01334A0D0BD8645CBFA73A6160FFE393C48CBBBCA060F0FF8EC6D31BEB5CCEED7F2F0BB088017163BC60DF45A0ECB1BCD289B06CBBFEA21AD08E1847F3F7378D56CED94640D6EF0D3D37BE69D0063").unwrap();
+        l.push(HashableMessage::from(&bu3));
+        let bu4 = BigUint::from_hexa_string("0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF34E8031").unwrap();
+        l.push(HashableMessage::from(&bu4));
+        let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
+        l.push(HashableMessage::from(&ba));
+        l.push(HashableMessage::Composite(nl));
+        let r = HashableMessage::Composite(l).recursive_hash();
+        let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
+        assert_eq!(r, e);
+    }
+
+    #[test]
+    fn test_hashed() {
+        let mut nl: Vec<HashableMessage> = vec![];
+        let bu1 = BigUint::from_hexa_string("0x4").unwrap();
+        nl.push(HashableMessage::Hashed(
+            HashableMessage::from(&bu1).recursive_hash(),
+        ));
         let bu2= BigUint::from_hexa_string("0x3896D05A527747E840CEB0A10454DE39955529297AC4CB21010E9287A21F826FA7221215E1C7EE8362223DF51215A7F4CD14F158980154EE0794B599639A6FBC171A97F376A4DD95945C476F0DC6836FCEA68C9B28F901CE7F30DC03F406947E6245BF741650F5164BFC24F4B23948A5D6642C36D61016E63E943DB9717335EEB04373BFAE10BB4FB20EA9FD1BE48CA9A02B8E8C6639AD8E43D714ED16D4764D258E9A70BABD5497C09E148052C1C6A965F18F71F7B03385178B4991AA790611FA3B98E9C2F1EE1E0369F496A1D6928D718650513439D01898AAB87BC968F76D9DB8089809142A0C79A84C689D02314CEDE64F4C9615B79D49D2BE641BE8D4AB").unwrap();
         nl.push(HashableMessage::from(&bu2));
         let mut l: Vec<HashableMessage> = vec![];
