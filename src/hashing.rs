@@ -62,12 +62,13 @@ pub trait HashTrait {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashableMessage<'a> {
     RByteArray(&'a ByteArray),
+    ByteArray(ByteArray),
     RInt(&'a BigUint),
+    Int(BigUint),
     RUSize(&'a usize),
+    USize(usize),
     RString(&'a String),
     RStr(&'a str),
-    Int(BigUint),
-    USize(usize),
     String(String),
     Composite(Vec<HashableMessage<'a>>),
     Hashed(ByteArray),
@@ -78,13 +79,14 @@ impl<'a> HashableMessage<'a> {
     fn to_hashable_byte_array(&self) -> ByteArray {
         match self {
             HashableMessage::RByteArray(b) => b.prepend_byte(0u8),
+            HashableMessage::ByteArray(b) => b.prepend_byte(0u8),
             HashableMessage::RInt(i) => ByteArray::from(*i).prepend_byte(1u8),
+            HashableMessage::Int(i) => ByteArray::from(i).prepend_byte(1u8),
             HashableMessage::RUSize(i) => ByteArray::from(*i).prepend_byte(1u8),
+            HashableMessage::USize(i) => ByteArray::from(i).prepend_byte(1u8),
             HashableMessage::RString(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::String(s) => ByteArray::from(s).prepend_byte(2u8),
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
-            HashableMessage::Int(i) => ByteArray::from(i).prepend_byte(1u8),
-            HashableMessage::USize(i) => ByteArray::from(i).prepend_byte(1u8),
             HashableMessage::Composite(c) => c
                 .iter()
                 .map(|h| h.hash())
@@ -117,6 +119,12 @@ impl<'a> HashTrait for HashableMessage<'a> {
 impl<'a> From<&'a ByteArray> for HashableMessage<'a> {
     fn from(value: &'a ByteArray) -> Self {
         HashableMessage::RByteArray(value)
+    }
+}
+
+impl<'a> From<ByteArray> for HashableMessage<'a> {
+    fn from(value: ByteArray) -> Self {
+        HashableMessage::ByteArray(value)
     }
 }
 
