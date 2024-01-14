@@ -66,6 +66,8 @@ pub enum HashableMessage<'a> {
     RUSize(&'a usize),
     RString(&'a String),
     RStr(&'a str),
+    Int(BigUint),
+    USize(usize),
     String(String),
     Composite(Vec<HashableMessage<'a>>),
     Hashed(ByteArray),
@@ -81,6 +83,8 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::RString(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::String(s) => ByteArray::from(s).prepend_byte(2u8),
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
+            HashableMessage::Int(i) => ByteArray::from(i).prepend_byte(1u8),
+            HashableMessage::USize(i) => ByteArray::from(i).prepend_byte(1u8),
             HashableMessage::Composite(c) => c
                 .iter()
                 .map(|h| h.hash())
@@ -122,9 +126,21 @@ impl<'a> From<&'a BigUint> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<BigUint> for HashableMessage<'a> {
+    fn from(value: BigUint) -> Self {
+        HashableMessage::Int(value)
+    }
+}
+
 impl<'a> From<&'a usize> for HashableMessage<'a> {
     fn from(value: &'a usize) -> Self {
         HashableMessage::RUSize(value)
+    }
+}
+
+impl<'a> From<usize> for HashableMessage<'a> {
+    fn from(value: usize) -> Self {
+        HashableMessage::USize(value)
     }
 }
 
