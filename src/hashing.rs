@@ -1,7 +1,7 @@
 //! Module to implement hashing functions
 //!
 
-use std::error::Error;
+use std::fmt::Debug;
 use super::{byte_array::ByteArray, openssl_wrapper::sha3_256};
 use chrono::NaiveDateTime;
 use num_bigint::BigUint;
@@ -10,7 +10,7 @@ use num_bigint::BigUint;
 /// recursive hash function. 
 pub trait HashTrait {
     /// The type of the error in [try_recursive_hash]
-    type Error: Error;
+    type Error: Debug;
 
     /// Try recursive hash
     /// 
