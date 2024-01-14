@@ -15,8 +15,12 @@ use thiserror::Error;
 pub trait VerifiySignatureTrait<'a>
 where
     Self: 'a,
-    HashableMessage<'a>: From<&'a Self> + From<&'a str>,
 {
+    type Error: std::fmt::Debug;
+
+    /// Get the hashable from the object
+    fn get_hashable(&'a self) -> Result<HashableMessage<'a>, Self::Error>;
+
     /// Get the context data of the object according to the specifications
     fn get_context_data(&'a self) -> Vec<HashableMessage<'a>>;
 
@@ -62,9 +66,12 @@ where
                 error: e,
                 action: "reading public key".to_string(),
             })?;
+        let hashable = self
+            .get_hashable()
+            .map_err(|e| SignatureError::Hash(format!("{:?}", e)))?;
         verify(
             pkey.pkey_public().as_ref(),
-            &HashableMessage::from(self),
+            &hashable,
             &self.get_context_hashable(),
             &self.get_signature(),
         )
@@ -89,4 +96,6 @@ pub enum SignatureError {
     },
     #[error("Time is not valide for certificate: {0}")]
     Time(String),
+    #[error("Error hashing the structure: {0}")]
+    Hash(String),
 }
