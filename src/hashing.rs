@@ -1,9 +1,29 @@
 //! Module to implement hashing functions
 //!
 
+use std::error::Error;
 use super::{byte_array::ByteArray, openssl_wrapper::sha3_256};
 use chrono::NaiveDateTime;
 use num_bigint::BigUint;
+
+/// Trait implementing defining an interface for objects implementing a
+/// recursive hash function. 
+pub trait HashTrait {
+    /// The type of the error in [try_recursive_hash]
+    type Error: Error;
+
+    /// Try recursive hash
+    /// 
+    /// Return [Self::Error] if an error appears during the calculation
+    fn try_hash(&self) -> Result<ByteArray, Self::Error>;
+
+    /// Try recursive hash
+    /// 
+    /// Panic if an error appears during the calculation
+    fn hash(&self) -> ByteArray {
+        self.try_hash().unwrap()
+    }
+}
 
 /// Enum to represent an element that is hashable
 ///
@@ -63,7 +83,7 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::Composite(c) => c
                 .iter()
-                .map(|h| h.recursive_hash())
+                .map(|h| h.hash())
                 .fold(ByteArray::from_bytes(b"\x03"), |acc, b| acc.append(&b)),
             HashableMessage::Hashed(b) => b.clone(),
         }
@@ -73,13 +93,20 @@ impl<'a> HashableMessage<'a> {
         matches!(self, HashableMessage::Hashed(_))
     }
 
-    /// Calculate the recursive hash according to the specification of Swiss Post
     pub fn recursive_hash(&self) -> ByteArray {
+        self.hash()
+    }
+}
+
+impl<'a> HashTrait for HashableMessage<'a> {
+    type Error=std::convert::Infallible;
+
+    fn try_hash(&self) -> Result<ByteArray, Self::Error> {
         let b = self.to_hashable_byte_array();
-        match self.is_hashed() {
+        Ok(match self.is_hashed() {
             true => b,
             false => sha3_256(&b),
-        }
+        })
     }
 }
 
@@ -204,7 +231,7 @@ mod test {
     #[test]
     fn test_simple_byte_array() {
         let b = ByteArray::base64_decode("t+FRYortKmq/cViAnPTzx2LnFg84tNpWp4TZBFGQz+8yTnc4kmz75fS/jY2MMddj2gbICrsRhetPfHtXV/WVhJDP1H18GbtCFY2VVPe0a87VXE15/V8k1mE8McODmi3fipona8+/och3xWKE2rec1MKzKT0g6eXq8CrGCsyT7YdEIqUuyyOP7uWrat2DX9GgdT0Kj3jlN9K5W7edjcrsZCwenyO4KbXCeAvzhzffi7MA0BM0oNC9hkXL+nOmFg/+OTxIy7vKBg8P+OxtMb61zO7X8vC7CIAXFjvGDfRaDssbzSibBsu/6iGtCOGEfz9zeNVs7ZRkDW7w09N75p0AYw==").unwrap();
-        let r = HashableMessage::from(&b).recursive_hash();
+        let r = HashableMessage::from(&b).hash();
         let e = ByteArray::base64_decode("0SHVZ9hTTmR+NRhanLPF/qPg3NmQbXyAzLYw9QVxYOg=").unwrap();
         assert_eq!(r, e);
     }
@@ -212,7 +239,7 @@ mod test {
     #[test]
     fn test_biguint() {
         let i = BigUint::from_hexa_string("0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF324E7738926CFBE5F4BF8D8D8C31D763DA06C80ABB1185EB4F7C7B5757F5958490CFD47D7C19BB42158D9554F7B46BCED55C4D79FD5F24D6613C31C3839A2DDF8A9A276BCFBFA1C877C56284DAB79CD4C2B3293D20E9E5EAF02AC60ACC93ED874422A52ECB238FEEE5AB6ADD835FD1A0753D0A8F78E537D2B95BB79D8DCAEC642C1E9F23B829B5C2780BF38737DF8BB300D01334A0D0BD8645CBFA73A6160FFE393C48CBBBCA060F0FF8EC6D31BEB5CCEED7F2F0BB088017163BC60DF45A0ECB1BCD289B06CBBFEA21AD08E1847F3F7378D56CED94640D6EF0D3D37BE69D0063").unwrap();
-        let r = HashableMessage::from(&i).recursive_hash();
+        let r = HashableMessage::from(&i).hash();
         let e = ByteArray::base64_decode("YXHR0NvojiUMGz7RCTcO48ZQ1uqRtS64goB6XMFW01E=").unwrap();
         assert_eq!(r, e);
     }
@@ -220,14 +247,14 @@ mod test {
     #[test]
     fn test_string() {
         let s = "test string".to_string();
-        let r = HashableMessage::from(&s).recursive_hash();
+        let r = HashableMessage::from(&s).hash();
         let e = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
         assert_eq!(r, e);
     }
 
     #[test]
     fn test_str() {
-        let r = HashableMessage::from("test string").recursive_hash();
+        let r = HashableMessage::from("test string").hash();
         let e = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
         assert_eq!(r, e);
     }
@@ -243,7 +270,7 @@ mod test {
             .iter()
             .map(|e| BigUint::from_hexa_slice(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash();
+        let r = HashableMessage::from(&bis).hash();
         let e = ByteArray::base64_decode("Qn1sWr2uZ87jwjeEoJa9zS6dc6S92oC0X83yxpyv2ZA=").unwrap();
         assert_eq!(r, e);
     }
@@ -257,7 +284,7 @@ mod test {
             .iter()
             .map(|e| BigUint::from_hexa_slice(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash();
+        let r = HashableMessage::from(&bis).hash();
         let e = ByteArray::base64_decode("+e9LVZg0L5uHLbnUv8pIVVm28y+QZMtfG1edAFx2oPM=").unwrap();
         assert_eq!(r, e);
     }
@@ -272,7 +299,7 @@ mod test {
         l.push(HashableMessage::from(&bi2));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).hash();
         let e = ByteArray::base64_decode("rHGUCWqWKTj9KBY3GgSeNEXZfraTDK+ZGIhlSxpVs5c=").unwrap();
         assert_eq!(r, e);
     }
@@ -293,7 +320,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).hash();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -314,7 +341,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).hash();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -324,7 +351,7 @@ mod test {
         let mut nl: Vec<HashableMessage> = vec![];
         let bu1 = BigUint::from_hexa_string("0x4").unwrap();
         nl.push(HashableMessage::Hashed(
-            HashableMessage::from(&bu1).recursive_hash(),
+            HashableMessage::from(&bu1).hash(),
         ));
         let bu2= BigUint::from_hexa_string("0x3896D05A527747E840CEB0A10454DE39955529297AC4CB21010E9287A21F826FA7221215E1C7EE8362223DF51215A7F4CD14F158980154EE0794B599639A6FBC171A97F376A4DD95945C476F0DC6836FCEA68C9B28F901CE7F30DC03F406947E6245BF741650F5164BFC24F4B23948A5D6642C36D61016E63E943DB9717335EEB04373BFAE10BB4FB20EA9FD1BE48CA9A02B8E8C6639AD8E43D714ED16D4764D258E9A70BABD5497C09E148052C1C6A965F18F71F7B03385178B4991AA790611FA3B98E9C2F1EE1E0369F496A1D6928D718650513439D01898AAB87BC968F76D9DB8089809142A0C79A84C689D02314CEDE64F4C9615B79D49D2BE641BE8D4AB").unwrap();
         nl.push(HashableMessage::from(&bu2));
@@ -337,7 +364,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).hash();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
