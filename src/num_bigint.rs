@@ -7,23 +7,24 @@ use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::Num;
 use std::fmt::Debug;
 use thiserror::Error;
+use std::sync::OnceLock;
 
 /// Trait to implement constant numbers
 pub trait Constants {
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn two() -> Self;
-    fn three() -> Self;
-    fn four() -> Self;
-    fn five() -> Self;
+    fn zero() -> &'static Self;
+    fn one() -> &'static Self;
+    fn two() -> &'static Self;
+    fn three() -> &'static Self;
+    fn four() -> &'static Self;
+    fn five() -> &'static Self;
 }
 
 /// Trait to extend operations of BigUInt
 pub trait Operations {
-    /// Test is is even
+    /// Test if is even
     fn is_even(&self) -> bool;
 
-    /// Test is is even
+    /// Test if is odd
     fn is_odd(&self) -> bool {
         !self.is_even()
     }
@@ -85,32 +86,39 @@ impl ByteLength for BigUint {
     }
 }
 
+static ZERO: OnceLock<BigUint> = OnceLock::new();
+static ONE: OnceLock<BigUint> = OnceLock::new();
+static TWO: OnceLock<BigUint> = OnceLock::new();
+static THREE: OnceLock<BigUint> = OnceLock::new();
+static FOR: OnceLock<BigUint> = OnceLock::new();
+static FIVE: OnceLock<BigUint> = OnceLock::new();
+
 impl Constants for BigUint {
-    fn zero() -> Self {
-        BigUint::from(0u8)
+    fn zero() -> &'static Self {
+        ZERO.get_or_init(|| BigUint::from(0u8))
     }
 
-    fn one() -> Self {
-        BigUint::from(1u8)
+    fn one() -> &'static Self {
+        ONE.get_or_init(|| BigUint::from(1u8))
     }
 
-    fn two() -> Self {
-        BigUint::from(2u8)
+    fn two() -> &'static Self {
+        TWO.get_or_init(|| BigUint::from(2u8))
     }
-    fn three() -> Self {
-        BigUint::from(3u8)
+    fn three() -> &'static Self {
+        THREE.get_or_init(|| BigUint::from(3u8))
     }
-    fn four() -> Self {
-        BigUint::from(4u8)
+    fn four() -> &'static Self {
+        FOR.get_or_init(|| BigUint::from(4u8))
     }
-    fn five() -> Self {
-        BigUint::from(5u8)
+    fn five() -> &'static Self {
+        FIVE.get_or_init(|| BigUint::from(5u8))
     }
 }
 
 impl Operations for BigUint {
     fn is_even(&self) -> bool {
-        self % Self::two() == Self::zero()
+        &(self % Self::two()) == Self::zero()
     }
 
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {

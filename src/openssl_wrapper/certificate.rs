@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Wrapper to the keystore
+/// Wrapper to the keystore give in a file
 pub struct Keystore {
     pcks12: ParsedPkcs12_2,
     path: PathBuf,
@@ -27,11 +27,14 @@ pub struct SigningCertificate {
     x509: X509,
 }
 
-// PublicKey
+// The struct contaiing the PublicKey
 pub struct PublicKey(PKey<Public>);
 
 impl Keystore {
     /// Read the keystore from file with password to open it
+    ///
+    /// # Error
+    /// if somwthing is going wrong
     pub fn read_keystore(path: &Path, password: &str) -> Result<Keystore, OpensslError> {
         let bytes = fs::read(path).map_err(|e| OpensslError::IO {
             msg: format!("Error reading keystore file {:?}", path),
@@ -53,6 +56,9 @@ impl Keystore {
     }
 
     /// Get a given certificate from the keystore
+    ///
+    /// # Error
+    /// if somwthing is going wrong
     pub fn get_certificate(&self, authority: &str) -> Result<SigningCertificate, OpensslError> {
         let cas = match self.pcks12.ca.as_ref() {
             Some(s) => s,
@@ -81,6 +87,9 @@ impl Keystore {
 
 impl SigningCertificate {
     /// Get the public key from the certificate
+    ///
+    /// # Error
+    /// if somwthing is going wrong
     pub fn get_public_key(&self) -> Result<PublicKey, OpensslError> {
         self.x509
             .public_key()
@@ -97,6 +106,9 @@ impl SigningCertificate {
     }
 
     /// Check the validity of the date according to now
+    ///
+    /// # Error
+    /// if somwthing is going wrong
     pub fn is_valid_time(&self) -> Result<bool, OpensslError> {
         let not_before = self.x509.not_before();
         let not_after = self.x509.not_after();
@@ -112,8 +124,20 @@ impl SigningCertificate {
     }
 
     /// Return the digest (hash256) fingerprint of the certificate
-    pub fn digest(&self) -> ByteArray {
-        ByteArray::from(&self.x509.digest(MessageDigest::sha256()).unwrap().to_vec())
+    ///
+    /// # Error
+    /// if somwthing is going wrong
+    pub fn digest(&self) -> Result<ByteArray, OpensslError> {
+        Ok(ByteArray::from(
+            &self
+                .x509
+                .digest(MessageDigest::sha256())
+                .map_err(|e| OpensslError::CertificateDigest {
+                    msg: "Error by digest".to_string(),
+                    source: e,
+                })?
+                .to_vec(),
+        ))
     }
 }
 
@@ -125,11 +149,10 @@ impl PublicKey {
 
 #[cfg(test)]
 mod test {
-    use crate::byte_array::Encode;
     use std::path::PathBuf;
     use std::str;
-
     use super::*;
+    use crate::byte_array::Encode;
 
     const PASSWORD: &str = "testPassword";
 
@@ -181,6 +204,7 @@ mod test {
             ks.get_certificate("canton")
                 .unwrap()
                 .digest()
+                .unwrap()
                 .base16_encode(),
             "51fcea9139ce3de992eeee1ef77d1e6461e747dff3e3fa52d23f855a319cc35e".to_uppercase()
         );

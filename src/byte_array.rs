@@ -1,4 +1,4 @@
-//! This module implement the struct ByteArray that is used over the
+//! This module implement the struct ByteArray that is used over the crate and for cryptographic functions
 
 use super::num_bigint::ByteLength;
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
@@ -14,6 +14,13 @@ pub struct ByteArray {
 }
 
 /// Trait to encode in string in different bases
+/// 
+/// ```
+/// use rust_ev_crypto_primitives::Encode;
+/// use rust_ev_crypto_primitives::ByteArray;
+/// let ba = ByteArray::from_bytes(b"\x41").base64_encode();
+/// assert_eq!(ba, "QQ==");
+/// ```
 pub trait Encode {
     /// Code to baase16 according specifications
     fn base16_encode(&self) -> String;
@@ -26,19 +33,36 @@ pub trait Encode {
 }
 
 /// Trait to decode from string in different bases
+/// 
+/// ```
+/// use rust_ev_crypto_primitives::Decode;
+/// use rust_ev_crypto_primitives::ByteArray;
+/// let ba_res = ByteArray::base32_decode("MA======");
+/// assert!(ba_res.is_ok());
+/// assert_eq!(ba_res.unwrap().to_bytes(), b"\x60");
+/// ```
 pub trait Decode: Sized {
     /// Code from string in base16 according specifications. The letters are in upper.
+    /// 
+    /// # Error
+    /// Return [ByteArrayError] if decode not possible
     fn base16_decode(s: &str) -> Result<Self, ByteArrayError>;
 
     /// Code from string in base32 according specifications.
+    /// 
+    /// # Error
+    /// Return [ByteArrayError] if decode not possible
     fn base32_decode(s: &str) -> Result<Self, ByteArrayError>;
 
     /// Code from string in base32 according specifications.
+    /// 
+    /// # Error
+    /// Return [ByteArrayError] if decode not possible
     fn base64_decode(s: &str) -> Result<Self, ByteArrayError>;
 }
 
 impl ByteArray {
-    /// Create an ampty Bytearray (only woth 0)
+    /// Create an empty Bytearray (only with 0)
     pub fn new() -> Self {
         ByteArray { inner: vec![0] }
     }
@@ -69,12 +93,16 @@ impl ByteArray {
     }
 
     /// Extend other to self
+    /// 
+    /// self will changed and extend. other is cloned at the end of self
     pub fn extend(&mut self, other: &ByteArray) -> &ByteArray {
         self.inner.extend(other.inner.clone());
         self
     }
 
     /// Append and return a new one
+    /// 
+    /// The new one is the concatenation of self and other. self and other remain unchanged
     pub fn append(&self, other: &ByteArray) -> ByteArray {
         let mut self_bytes = self.to_bytes();
         let other_bytes = other.to_bytes();
@@ -82,14 +110,17 @@ impl ByteArray {
         ByteArray::from(&self_bytes)
     }
 
-    /// Create a bew ByteArray prepending a byte
+    /// Create a new ByteArray prepending a byte
     pub fn prepend_byte(&self, byte: u8) -> ByteArray {
         let mut res = ByteArray::from(&vec![byte]);
         res.extend(self);
         res
     }
 
-    /// Cut the byte array to given bit length according to the specifications
+    /// Cut the byte array to given bit length according to the specifications of Swiss Post
+    /// 
+    /// # Error
+    /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
     pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, ByteArrayError> {
         if n < 1 || n > 8 * self.len() {
             return Err(ByteArrayError::CutToBitLengthIndexError {

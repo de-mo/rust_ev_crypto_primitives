@@ -27,12 +27,12 @@ pub enum OpensslError {
     CertificateErrorPK { name: String, source: ErrorStack },
     #[error("Error of time during time check of the certificate {name} caused by {source}")]
     CertificateErrorTime { name: String, source: ErrorStack },
-    #[error(transparent)]
-    PublicKeyError(#[from] ErrorStack),
+     #[error("Digest (Fingerprint) error caused by {source}: {msg}")]
+    CertificateDigest { msg: String, source: ErrorStack },
+     #[error("PublicKey error caused by {source}: {msg}")]
+    PublicKeyError {msg: String, source: ErrorStack} ,
     #[error("{msg} caused by {source}")]
     SignatureVerify { msg: String, source: ErrorStack },
-    //Certificate,
-    //PublicKey,
-    //Time,
-    //VerifiySignature,
+     #[error("Hash error caused by {source}: {msg}")]
+    HashError {msg: String, source: ErrorStack} ,
 }

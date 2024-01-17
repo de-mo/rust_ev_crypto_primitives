@@ -7,7 +7,10 @@ use num_bigint_dig::{
 };
 use thiserror::Error;
 
-/// Validate if the number is a small prime according to the algorithm specified
+/// Validate if the number is a small prime according to the algorithm specified by Swiss Post
+/// 
+/// # Error
+/// If preconditions are not satisfied
 pub fn is_small_prime(n: usize) -> Result<bool, NumberTheoryError> {
     if n >= usize::pow(2, 31) {
         return Err(NumberTheoryError::OutOfRange {
@@ -51,28 +54,28 @@ pub fn is_small_prime(n: usize) -> Result<bool, NumberTheoryError> {
 /// See [Jacobi symbol](https://en.wikipedia.org/wiki/Jacobi_symbol#Calculating_the_Jacobi_symbol)
 ///
 /// Return an error if the given number n is not odd.
-pub fn jacobi(a: &BigUint, n: &BigUint) -> Result<i8, NumberTheoryError> {
-    if n % 2u8 == BigUint::zero() {
+fn jacobi(a: &BigUint, n: &BigUint) -> Result<i8, NumberTheoryError> {
+    if &(n % 2u8) == BigUint::zero() {
         return Err(NumberTheoryError::DenominatorNotOdd(n.clone()));
     }
     let mut temp_a = a % n;
     let mut temp_n = n.to_owned();
     let mut t = 1i8;
-    while temp_a != BigUint::zero() {
-        while &temp_a % 2u8 == BigUint::zero() {
+    while &(temp_a) != BigUint::zero() {
+        while &(&temp_a % 2u8) == BigUint::zero() {
             temp_a = &temp_a / 2u8;
             let r = &temp_n % 8u8;
-            if r == BigUint::three() || r == BigUint::five() {
+            if &r == BigUint::three() || &r == BigUint::five() {
                 t = -t
             }
         }
         (temp_a, temp_n) = (temp_n.clone(), temp_a.clone());
-        if &temp_a % 4u8 == BigUint::three() && &temp_n % 4u8 == BigUint::three() {
+        if &(&temp_a % 4u8) == BigUint::three() && &(&temp_n % 4u8) == BigUint::three() {
             t = -t;
         }
         temp_a = temp_a.clone() % temp_n.clone();
     }
-    if temp_n == BigUint::one() {
+    if &temp_n == BigUint::one() {
         Ok(t)
     } else {
         Ok(0)
@@ -84,15 +87,15 @@ pub fn is_mod_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> bool {
     let n_mod = n % modulus;
     let b_mod = b % modulus;
 
-    if b_mod == BigUint::one() {
-        return n_mod == BigUint::one()
+    if &b_mod == BigUint::one() {
+        return &n_mod == BigUint::one()
     }
 
-    if n_mod == BigUint::one() {
-        return b_mod == BigUint::one()
+    if &n_mod == BigUint::one() {
+        return &b_mod == BigUint::one()
     }
 
-    let mut pow = BigUint::one();
+    let mut pow = BigUint::one().clone();
     while pow < n_mod {
         pow = pow.mod_multiply(&b_mod, modulus)
     }
@@ -138,6 +141,7 @@ pub fn check_prime(p: &BigUint) -> Option<NumberTheoryError> {
 /// Check if the number n is a power of another number b
 /// 
 /// Return a [NumberTheoryError] if the check is not positive. Else None
+#[allow(dead_code)]
 pub fn check_is_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> Option<NumberTheoryError> {
     if !is_mod_power_of(n, b, modulus) {
         return Some(NumberTheoryError::CheckIsPowerOf(n.clone(), b.clone()))
