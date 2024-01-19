@@ -7,6 +7,7 @@ edition = "2021"
 rust-version = "1.74"
 license = "Apache-2.0"
 repository = "https://github.com/de-mo/rust_verifier"
+readme = "README.md"
 
 [dependencies]
 openssl-sys = "0.9"
