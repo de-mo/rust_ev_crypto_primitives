@@ -2,11 +2,11 @@
 name = "rust_ev_crypto_primitives"
 description = "Crypto Primitives necessary for E-Voting Applications."
 authors = ["Denis Morel"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.74"
 license = "Apache-2.0"
-repository = "https://github.com/de-mo/rust_verifier"
+repository = "https://github.com/de-mo/rust_ev_crypto_primitives"
 readme = "README.md"
 
 [dependencies]

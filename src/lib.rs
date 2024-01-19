@@ -15,15 +15,15 @@
 //! performance. If the checks are performed during the usage of the crate, it is recommended, not to activate the feature
 //!
 
-mod byte_array;
-mod direct_trust;
-mod elgamal;
-mod hashing;
-mod num_bigint;
-mod number_theory;
+pub mod byte_array;
+pub mod direct_trust;
+pub mod elgamal;
+pub mod hashing;
+pub mod num_bigint;
+pub mod number_theory;
 mod openssl_wrapper;
-mod signature;
-mod zero_knowledge_proof;
+pub mod signature;
+pub mod zero_knowledge_proof;
 
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{Keystore, DirectTrustCertificate, DirectTrustError};
