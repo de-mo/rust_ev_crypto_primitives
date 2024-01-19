@@ -1,4 +1,5 @@
-//! Module that implement some functions of the number theory
+//! Module that implement some functions of the number theory that are necessary for the primitives
+//! 
 use super::num_bigint::{Constants, Operations};
 use num_bigint::BigUint;
 use num_bigint_dig::{

@@ -1,4 +1,4 @@
-//! Module to implement hashing functions
+//! Implementation of recursive hash functionality
 //!
 
 use super::{

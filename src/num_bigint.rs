@@ -2,6 +2,7 @@
 //!
 //! The extended functionalities are implemented using Trait that have to be
 //! used in the client modules
+//! 
 
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::Num;

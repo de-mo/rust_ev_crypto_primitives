@@ -1,4 +1,4 @@
-//! Module to implement El Gamal functions and the structure for the Encryption parameters
+//! Implementation of El Gamal functionalitiies and the structure for the Encryption parameters
 
 use crate::{
     byte_array::ByteArray,
@@ -8,6 +8,7 @@ use crate::{
         is_probable_prime, is_quadratic_residue, is_small_prime, miller_rabin_test, SMALL_PRIMES,
     },
     openssl_wrapper::{shake128, OpensslError},
+    HashableMessage,
 };
 use num_bigint::BigUint;
 use thiserror::Error;
@@ -15,12 +16,48 @@ use thiserror::Error;
 /// Encryption parameters for the ecryption system according to the specification of Swiss Post
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncryptionParameters {
-    pub p: BigUint,
-    pub q: BigUint,
-    pub g: BigUint,
+    p: BigUint,
+    q: BigUint,
+    g: BigUint,
 }
 
 impl EncryptionParameters {
+    /// The parameter `p` according to the specification of Swiss Post
+    pub fn p(&self) -> &BigUint {
+        &self.p
+    }
+
+    /// The parameter `q` according to the specification of Swiss Post
+    pub fn q(&self) -> &BigUint {
+        &self.q
+    }
+
+    /// The parameter `g` according to the specification of Swiss Post
+    pub fn g(&self) -> &BigUint {
+        &self.g
+    }
+
+    /// Set the parameter `p`.
+    ///
+    /// This method should only be used in special cases, e.g. for moking
+    pub fn set_p(&mut self, p: &BigUint) {
+        self.p = p.clone()
+    }
+
+    /// Set the parameter `q`.
+    ///
+    /// This method should only be used in special cases, e.g. for moking
+    pub fn set_q(&mut self, q: &BigUint) {
+        self.q = q.clone()
+    }
+
+    /// Set the parameter `g`.
+    ///
+    /// This method should only be used in special cases, e.g. for moking
+    pub fn set_g(&mut self, g: &BigUint) {
+        self.g = g.clone()
+    }
+
     // GetEncryptionParameters according to the specification of Swiss Post
     pub fn get_encryption_parameters(seed: &String) -> Result<Self, ElgamalError> {
         let q_b_1 = shake128(&ByteArray::from(seed)).map_err(ElgamalError::OpenSSLError)?;
@@ -81,6 +118,11 @@ impl EncryptionParameters {
         }
         None
     }
+
+    /// Transform the parameters to a tuple
+    pub fn as_tuple(&self) -> (&BigUint, &BigUint, &BigUint) {
+        (&self.p, &self.q, &self.g)
+    }
 }
 
 impl From<(&BigUint, &BigUint, &BigUint)> for EncryptionParameters {
@@ -90,6 +132,16 @@ impl From<(&BigUint, &BigUint, &BigUint)> for EncryptionParameters {
             q: value.1.clone(),
             g: value.2.clone(),
         }
+    }
+}
+
+impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
+    fn from(value: &'a EncryptionParameters) -> Self {
+        Self::from(vec![
+            Self::from(value.p()),
+            Self::from(value.q()),
+            Self::from(value.g()),
+        ])
     }
 }
 

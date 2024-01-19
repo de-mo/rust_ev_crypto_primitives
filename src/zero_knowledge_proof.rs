@@ -1,4 +1,6 @@
-//! This module implements the necessary algorithms used for the zero-knowledge proofs of Swiss Post
+//! Implementation of the necessary algorithms used for the zero-knowledge proofs of Swiss Post:
+//! - [verify_schnorr]
+//! - [verify_exponentiation]
 use super::{
     elgamal::{check_p, check_q, ElgamalError, EncryptionParameters},
     hashing::HashableMessage,
@@ -11,7 +13,7 @@ use thiserror::Error;
 
 /// Compute Phi Schnorr according to specifications
 fn compute_phi_schnorr(ep: &EncryptionParameters, x: &BigUint) -> BigUint {
-    ep.g.mod_exponentiate(x, &ep.p)
+    ep.g().mod_exponentiate(x, ep.p())
 }
 
 /// Verify Schnorr Proof according to specifications
@@ -28,7 +30,7 @@ pub fn verify_schnorr(
         if let Some(e) = ep.check_encryption_parameters() {
             return Err(ZeroKnowledgeProofError::CheckElgamal(e));
         }
-        if let Some(e) = check_quadratic_residue(y, &ep.p) {
+        if let Some(e) = check_quadratic_residue(y, ep.p()) {
             return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
         }
         //if let Some(e) = check_is_power_of(y, g, p) {
@@ -36,10 +38,10 @@ pub fn verify_schnorr(
         //}
     }
     let x = compute_phi_schnorr(ep, z);
-    let f = HashableMessage::from(vec![&ep.p, &ep.q, &ep.g]);
+    let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
     // e in Z_q => modulo q
     // x, y in G_q => modulo p
-    let c_prime = x.mod_multiply(&y.mod_exponentiate(e, &ep.p).mod_inverse(&ep.p), &ep.p);
+    let c_prime = x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p());
     let mut l: Vec<HashableMessage> = vec![];
     l.push(HashableMessage::from("SchnorrProof"));
     if !i_aux.is_empty() {
@@ -64,7 +66,7 @@ fn compute_phi_exponentiation(
     x: &BigUint,
     gs: &[BigUint],
 ) -> Vec<BigUint> {
-    gs.iter().map(|g| g.mod_exponentiate(x, &ep.p)).collect()
+    gs.iter().map(|g| g.mod_exponentiate(x, ep.p())).collect()
 }
 
 /// Verify Exponation proof according to specifications
@@ -80,10 +82,10 @@ pub fn verify_exponentiation(
 ) -> Result<bool, ZeroKnowledgeProofError> {
     // Check of input parameters
     if cfg!(feature = "checks") {
-        if let Some(e) = check_p(&ep.p) {
+        if let Some(e) = check_p(ep.p()) {
             return Err(ZeroKnowledgeProofError::CheckElgamal(e));
         }
-        if let Some(e) = check_q(&ep.p, &ep.q) {
+        if let Some(e) = check_q(ep.p(), ep.q()) {
             return Err(ZeroKnowledgeProofError::CheckElgamal(e));
         }
         if gs.len() != ys.len() {
@@ -93,12 +95,12 @@ pub fn verify_exponentiation(
             ));
         }
         for g in gs.iter() {
-            if let Some(e) = check_quadratic_residue(g, &ep.p) {
+            if let Some(e) = check_quadratic_residue(g, ep.p()) {
                 return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
             }
         }
         for y in ys.iter() {
-            if let Some(e) = check_quadratic_residue(y, &ep.p) {
+            if let Some(e) = check_quadratic_residue(y, ep.p()) {
                 return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
             }
         }
@@ -106,13 +108,13 @@ pub fn verify_exponentiation(
 
     let xs = compute_phi_exponentiation(ep, z, gs);
     let f_list = vec![
-        HashableMessage::from(&ep.p),
-        HashableMessage::from(&ep.q),
+        HashableMessage::from(ep.p()),
+        HashableMessage::from(ep.q()),
         HashableMessage::from(gs),
     ];
     let f = HashableMessage::from(&f_list);
     let c_prime_s: Vec<BigUint> = zip(&xs, ys)
-        .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, &ep.p).mod_inverse(&ep.p), &ep.p))
+        .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
         .collect();
     let mut h_aux_l: Vec<HashableMessage> = vec![];
     h_aux_l.push(HashableMessage::from("ExponentiationProof"));
