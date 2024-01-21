@@ -21,11 +21,25 @@ pub trait HashTrait {
     /// Return [Self::Error] if an error appears during the calculation
     fn try_hash(&self) -> Result<ByteArray, Self::Error>;
 
-    /// Try recursive hash
+    /// Recursive hash
     ///
     /// Panic if an error appears during the calculation
     fn hash(&self) -> ByteArray {
         self.try_hash().unwrap()
+    }
+
+    /// Try recursive hash and return a variant HashableMessage::Hashed containing the hashed value
+    /// 
+    /// Return [Self::Error] if an error appears during the calculation
+    fn try_to_hashed_hashable_message(&self) -> Result<HashableMessage<'_>, Self::Error> {
+        Ok(HashableMessage::Hashed(self.try_hash()?))
+    }
+
+    /// Recursive hash and return a variant HashableMessage::Hashed containing the hashed value
+    ///
+    /// Panic if an error appears during the calculation
+    fn to_hashed_hashable_message(&self) -> HashableMessage<'_> {
+        self.try_to_hashed_hashable_message().unwrap()
     }
 }
 
