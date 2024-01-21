@@ -124,6 +124,7 @@ impl<'a> HashableMessage<'a> {
         matches!(self, HashableMessage::Hashed(_))
     }
 
+    #[deprecated(since="0.2.0", note="please use `hash()` instead")]
     pub fn recursive_hash(&self) -> ByteArray {
         self.hash()
     }
