@@ -31,7 +31,7 @@ pub use elgamal::{get_small_prime_group_members, ElgamalError, EncryptionParamet
 pub use hashing::{HashError, HashTrait, HashableMessage};
 pub use num_bigint::{BigUIntError, ByteLength, Constants, Hexa, Operations};
 pub use number_theory::is_small_prime;
-pub use signature::{SignatureError, VerifiySignatureTrait};
+pub use signature::{SignatureError, verify_signature};
 pub use zero_knowledge_proof::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};
 
 /// The length of the group parameter `p` according to the specifications

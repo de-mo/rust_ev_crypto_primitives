@@ -1,6 +1,8 @@
 //! Implementation of the necessary algorithms used for the zero-knowledge proofs of Swiss Post:
 //! - [verify_schnorr]
 //! - [verify_exponentiation]
+use crate::HashTrait;
+
 use super::{
     elgamal::{check_p, check_q, ElgamalError, EncryptionParameters},
     hashing::HashableMessage,
@@ -55,7 +57,7 @@ pub fn verify_schnorr(
         h_aux,
     ];
     let e_prime = HashableMessage::from(&l_final)
-        .recursive_hash()
+        .hash()
         .into_biguint();
     Ok(&e_prime == e)
 }
@@ -129,7 +131,7 @@ pub fn verify_exponentiation(
         h_aux,
     ];
     let e_prime = HashableMessage::from(&l_final)
-        .recursive_hash()
+        .hash()
         .into_biguint();
     Ok(&e_prime == e)
 }

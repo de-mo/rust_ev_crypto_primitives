@@ -6,7 +6,9 @@ This crate implements functionalities of the crpyto primitives for the E-Voting 
 
 - [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.3.1
 
-It implements only the functionalities that are necessary for the implementation of the Vrifier.
+It implements only the functionalities that are necessary for the implementation of the Verifier.
+
+See [API Documentation](https://docs.rs/rust_ev_crypto_primitives/) for details
 
 ## Development guide
 
