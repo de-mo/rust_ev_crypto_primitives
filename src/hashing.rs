@@ -10,9 +10,10 @@ use num_bigint::BigUint;
 use std::fmt::Debug;
 use thiserror::Error;
 
-/// Trait implementing defining an interface for objects implementing a
-/// recursive hash function.
-pub trait HashTrait {
+/// Trait implementing defining an interface for objects implementing a recursive hash function.
+/// 
+/// The enum [HashableMessage] implements the trait.
+pub trait RecursiveHashTrait {
     /// The type of the error in [try_hash]
     type Error: Debug;
 
@@ -53,13 +54,16 @@ pub trait HashTrait {
 ///  
 /// For simplification, the enum contains the possibility to reference String or &str and the possibility
 /// to reference to BigUint or usize
+/// 
+/// Since [HashableMessage] implements the trait [RecursiveHashTrait], the trait must be used in a client module
+/// in order to hash the message.
 ///
 /// Example:
 /// ```
 /// use rust_ev_crypto_primitives::ByteArray;
 /// use rust_ev_crypto_primitives::Decode;
-/// use rust_ev_crypto_primitives::HashableMessage;
-/// let r = HashableMessage::from("test string").recursive_hash();
+/// use rust_ev_crypto_primitives::{HashableMessage, RecursiveHashTrait};
+/// let r = HashableMessage::from("test string").hash();
 /// let expected = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
 /// assert_eq!(r, expected);
 /// ```
@@ -67,15 +71,21 @@ pub trait HashTrait {
 /// In the specification of SwissPost, lists with various types of elements are hashed recursivly. Since Rust doesn't allow simple
 /// the use of lists with different elements, the elemets must be first transformed in [HashableMessage] and then put in a [vec].
 /// ```
-/// use rust_ev_crypto_primitives::HashableMessage;
+/// use rust_ev_crypto_primitives::{HashableMessage, RecursiveHashTrait};
 /// let mut l: Vec<HashableMessage> = vec![];
 /// l.push(HashableMessage::from("common reference string"));
 /// l.push(HashableMessage::from(&(2 as usize)));
-/// HashableMessage::from(l).recursive_hash();
+/// HashableMessage::from(l).hash();
 /// ```
 ///
 /// If you decide to calculate intermediate hash values, and store the in the message (to avoid big structures),
 /// use the variant [HashableMessage::Hashed]
+/// ```
+/// use rust_ev_crypto_primitives::{HashableMessage, RecursiveHashTrait};
+/// let b = HashableMessage::from(2 as usize).hash();
+/// let hm = HashableMessage::Hashed(b.clone());
+/// assert_eq!(hm.hash(), b);
+/// ```
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashableMessage<'a> {
@@ -130,7 +140,7 @@ impl<'a> HashableMessage<'a> {
     }
 }
 
-impl<'a> HashTrait for HashableMessage<'a> {
+impl<'a> RecursiveHashTrait for HashableMessage<'a> {
     type Error = HashError;
 
     fn try_hash(&self) -> Result<ByteArray, Self::Error> {

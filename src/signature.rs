@@ -2,7 +2,7 @@
 
 use super::{
     byte_array::ByteArray,
-    hashing::{HashError, HashTrait, HashableMessage},
+    hashing::{HashError, RecursiveHashTrait, HashableMessage},
 };
 use super::{
     direct_trust::{DirectTrustError, Keystore},

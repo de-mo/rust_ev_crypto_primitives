@@ -1,7 +1,7 @@
 //! Implementation of the necessary algorithms used for the zero-knowledge proofs of Swiss Post:
 //! - [verify_schnorr]
 //! - [verify_exponentiation]
-use crate::HashTrait;
+use crate::RecursiveHashTrait;
 
 use super::{
     elgamal::{check_p, check_q, ElgamalError, EncryptionParameters},

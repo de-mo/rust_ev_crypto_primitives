@@ -28,7 +28,7 @@ pub mod zero_knowledge_proof;
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{Keystore, DirectTrustCertificate, DirectTrustError};
 pub use elgamal::{get_small_prime_group_members, ElgamalError, EncryptionParameters, check_g, check_p, check_q};
-pub use hashing::{HashError, HashTrait, HashableMessage};
+pub use hashing::{HashError, RecursiveHashTrait, HashableMessage};
 pub use num_bigint::{BigUIntError, ByteLength, Constants, Hexa, Operations};
 pub use number_theory::is_small_prime;
 pub use signature::{SignatureError, verify_signature};
