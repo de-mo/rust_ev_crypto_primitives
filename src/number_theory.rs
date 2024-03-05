@@ -165,6 +165,7 @@ pub enum NumberTheoryError {
     CheckIsPowerOf(BigUint, BigUint),
 }
 
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod test {
 
