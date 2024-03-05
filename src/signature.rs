@@ -6,7 +6,7 @@ use super::{
 };
 use super::{
     direct_trust::{DirectTrustError, Keystore},
-    openssl_wrapper::{verify, OpensslError},
+    basic_crypto_functions::{verify, BasisCryptoError},
 };
 use thiserror::Error;
 
@@ -70,7 +70,7 @@ pub enum SignatureError {
     #[error("Error of certificate {name} during {action}: {error}")]
     Certificate {
         name: String,
-        error: OpensslError,
+        error: BasisCryptoError,
         action: String,
     },
     #[error("Time is not valide for certificate: {0}")]

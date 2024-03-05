@@ -2,8 +2,8 @@
 
 use thiserror::Error;
 
-use super::openssl_wrapper::{
-    OpensslError, {Keystore as SslKeystore, SigningCertificate},
+use super::basic_crypto_functions::{
+    BasisCryptoError, {Keystore as SslKeystore, SigningCertificate},
 };
 use std::{fs, io, path::Path};
 
@@ -66,9 +66,9 @@ pub enum DirectTrustError {
     #[error("IO error caused by {source}: {msg}")]
     IO { msg: String, source: io::Error },
     #[error(transparent)]
-    Keystore(OpensslError),
+    Keystore(BasisCryptoError),
     #[error(transparent)]
-    Certificate(OpensslError),
+    Certificate(BasisCryptoError),
 }
 
 #[cfg(test)]

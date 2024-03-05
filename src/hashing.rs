@@ -3,7 +3,7 @@
 
 use super::{
     byte_array::ByteArray,
-    openssl_wrapper::{sha3_256, OpensslError},
+    basic_crypto_functions::{sha3_256, BasisCryptoError},
 };
 use chrono::NaiveDateTime;
 use num_bigint::BigUint;
@@ -106,7 +106,7 @@ pub enum HashableMessage<'a> {
 #[derive(Error, Debug)]
 pub enum HashError {
     #[error(transparent)]
-    HashError(#[from] OpensslError),
+    HashError(#[from] BasisCryptoError),
 }
 
 impl<'a> HashableMessage<'a> {

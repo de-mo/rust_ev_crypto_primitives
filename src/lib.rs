@@ -21,7 +21,7 @@ pub mod elgamal;
 pub mod hashing;
 pub mod num_bigint;
 pub mod number_theory;
-mod openssl_wrapper;
+mod basic_crypto_functions;
 pub mod signature;
 pub mod zero_knowledge_proof;
 

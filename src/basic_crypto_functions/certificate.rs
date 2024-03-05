@@ -1,6 +1,6 @@
 //! Wrapper for Certificate functions
 
-use super::OpensslError;
+use super::BasisCryptoError;
 use crate::byte_array::ByteArray;
 use openssl::{
     asn1::Asn1Time,
@@ -35,12 +35,12 @@ impl Keystore {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn read_keystore(path: &Path, password: &str) -> Result<Keystore, OpensslError> {
-        let bytes = fs::read(path).map_err(|e| OpensslError::IO {
+    pub fn read_keystore(path: &Path, password: &str) -> Result<Keystore, BasisCryptoError> {
+        let bytes = fs::read(path).map_err(|e| BasisCryptoError::IO {
             msg: format!("Error reading keystore file {:?}", path),
             source: e,
         })?;
-        let p12: Pkcs12 = Pkcs12::from_der(&bytes).map_err(|e| OpensslError::Keystore {
+        let p12: Pkcs12 = Pkcs12::from_der(&bytes).map_err(|e| BasisCryptoError::Keystore {
             msg: format!("Error reading keystore file {:?}", path),
             source: e,
         })?;
@@ -49,7 +49,7 @@ impl Keystore {
                 pcks12: p,
                 path: path.to_path_buf(),
             })
-            .map_err(|e| OpensslError::Keystore {
+            .map_err(|e| BasisCryptoError::Keystore {
                 msg: format!("Error parsing keystore file {:?}", path),
                 source: e,
             })
@@ -59,11 +59,11 @@ impl Keystore {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn get_certificate(&self, authority: &str) -> Result<SigningCertificate, OpensslError> {
+    pub fn get_certificate(&self, authority: &str) -> Result<SigningCertificate, BasisCryptoError> {
         let cas = match self.pcks12.ca.as_ref() {
             Some(s) => s,
             None => {
-                return Err(OpensslError::KeyStoreMissingCAList(self.path.to_path_buf()));
+                return Err(BasisCryptoError::KeyStoreMissingCAList(self.path.to_path_buf()));
             }
         };
         for x in cas.iter() {
@@ -78,7 +78,7 @@ impl Keystore {
                 }
             }
         }
-        Err(OpensslError::KeyStoreMissingCA {
+        Err(BasisCryptoError::KeyStoreMissingCA {
             path: self.path.to_path_buf(),
             name: authority.to_string(),
         })
@@ -90,11 +90,11 @@ impl SigningCertificate {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn get_public_key(&self) -> Result<PublicKey, OpensslError> {
+    pub fn get_public_key(&self) -> Result<PublicKey, BasisCryptoError> {
         self.x509
             .public_key()
             .map(PublicKey)
-            .map_err(|e| OpensslError::CertificateErrorPK {
+            .map_err(|e| BasisCryptoError::CertificateErrorPK {
                 name: self.authority.to_string(),
                 source: e,
             })
@@ -109,10 +109,10 @@ impl SigningCertificate {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn is_valid_time(&self) -> Result<bool, OpensslError> {
+    pub fn is_valid_time(&self) -> Result<bool, BasisCryptoError> {
         let not_before = self.x509.not_before();
         let not_after = self.x509.not_after();
-        let now = Asn1Time::days_from_now(0).map_err(|e| OpensslError::CertificateErrorTime {
+        let now = Asn1Time::days_from_now(0).map_err(|e| BasisCryptoError::CertificateErrorTime {
             name: self.authority.to_string(),
             source: e,
         })?;
@@ -127,12 +127,12 @@ impl SigningCertificate {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn digest(&self) -> Result<ByteArray, OpensslError> {
+    pub fn digest(&self) -> Result<ByteArray, BasisCryptoError> {
         Ok(ByteArray::from(
             &self
                 .x509
                 .digest(MessageDigest::sha256())
-                .map_err(|e| OpensslError::CertificateDigest {
+                .map_err(|e| BasisCryptoError::CertificateDigest {
                     msg: "Error by digest".to_string(),
                     source: e,
                 })?

@@ -7,7 +7,7 @@ use crate::{
     number_theory::{
         is_probable_prime, is_quadratic_residue, is_small_prime, miller_rabin_test, SMALL_PRIMES,
     },
-    openssl_wrapper::{shake128, OpensslError},
+    basic_crypto_functions::{shake128, BasisCryptoError},
     HashableMessage,
 };
 use num_bigint::BigUint;
@@ -199,7 +199,7 @@ pub fn check_g(p: &BigUint, g: &BigUint) -> Option<ElgamalError> {
 #[derive(Error, Debug)]
 pub enum ElgamalError {
     #[error(transparent)]
-    OpenSSLError(#[from] OpensslError),
+    OpenSSLError(#[from] BasisCryptoError),
     #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
     TooFewSmallPrimeNumbers { expected: usize, found: usize },
     #[error("Number {0} with value {1} is not prime")]

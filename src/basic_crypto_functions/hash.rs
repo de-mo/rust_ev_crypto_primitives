@@ -1,7 +1,7 @@
 //! Impement necessary Hash algorithms for the crate
 
 use crate::{byte_array::ByteArray, GROUP_PARAMETER_P_LENGTH};
-use super::OpensslError;
+use super::BasisCryptoError;
 use openssl::{
     hash::{hash_xof, MessageDigest},
     md::Md,
@@ -12,24 +12,24 @@ use openssl::{
 ///
 /// # Error
 /// [OpensslError] if something is going wrong
-pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, OpensslError> {
-    let mut ctx = MdCtx::new().map_err(|e| OpensslError::HashError {
+pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
+    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
         msg: "Error creating MdCtx".to_string(),
         source: e,
     })?;
     ctx.digest_init(Md::sha3_256())
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_init".to_string(),
             source: e,
         })?;
     ctx.digest_update(&byte_array.to_bytes())
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_update".to_string(),
             source: e,
         })?;
     let mut digest = [0; 32];
     ctx.digest_final(&mut digest)
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_final".to_string(),
             source: e,
         })?;
@@ -41,24 +41,24 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, OpensslError> {
 /// # Error
 /// [OpensslError] if something is going wrong
 #[allow(dead_code)]
-pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, OpensslError> {
-    let mut ctx = MdCtx::new().map_err(|e| OpensslError::HashError {
+pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
+    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
         msg: "Error creating MdCtx".to_string(),
         source: e,
     })?;
     ctx.digest_init(Md::sha256())
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_init".to_string(),
             source: e,
         })?;
     ctx.digest_update(&byte_array.to_bytes())
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_update".to_string(),
             source: e,
         })?;
     let mut digest = [0; 32];
     ctx.digest_final(&mut digest)
-        .map_err(|e| OpensslError::HashError {
+        .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_final".to_string(),
             source: e,
         })?;
@@ -69,14 +69,14 @@ pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, OpensslError> {
 ///
 /// # Error
 /// [OpensslError] if something is going wrong
-pub fn shake128(byte_array: &ByteArray) -> Result<ByteArray, OpensslError> {
+pub fn shake128(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
     let mut digest = [0; GROUP_PARAMETER_P_LENGTH / 8];
     hash_xof(
         MessageDigest::shake_128(),
         &byte_array.to_bytes(),
         digest.as_mut_slice(),
     )
-    .map_err(|e| OpensslError::HashError {
+    .map_err(|e| BasisCryptoError::HashError {
         msg: "Error hash_xof".to_string(),
         source: e,
     })?;
