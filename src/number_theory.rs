@@ -5,7 +5,7 @@ use num_bigint::BigUint;
 use miller_rabin;
 use thiserror::Error;
 
-/// Validate if the number is a small prime according to the algorithm specified by Swiss Post
+/// Validate if the number is a small prime according to the algorithm specified by Swiss Post (Algorithm 8.3)
 ///
 /// # Error
 /// If preconditions are not satisfied

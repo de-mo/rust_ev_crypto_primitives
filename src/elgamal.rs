@@ -152,7 +152,7 @@ impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
     }
 }
 
-// Get small prime group members according to the specifications of Swiss Post
+// Get small prime group members according to the specifications of Swiss Post (Algorithm 8.2)
 pub fn get_small_prime_group_members(
     ep: &EncryptionParameters,
     desired_number: usize

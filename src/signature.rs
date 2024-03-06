@@ -10,7 +10,7 @@ use super::{
 };
 use thiserror::Error;
 
-/// Verification of the signature according to the specification of Swiss Post
+/// Verification of the signature according to the specification of Swiss Post (Algorithm 7.3)
 ///
 /// # Error
 /// Return a [SignatureError] if something going wrong during the verification

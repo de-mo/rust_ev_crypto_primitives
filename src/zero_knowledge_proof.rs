@@ -13,12 +13,12 @@ use num_bigint::BigUint;
 use std::iter::zip;
 use thiserror::Error;
 
-/// Compute Phi Schnorr according to specifications
+/// Compute Phi Schnorr according to specifications of Swiss Post (Algorithm 10.1)
 fn compute_phi_schnorr(ep: &EncryptionParameters, x: &BigUint) -> BigUint {
     ep.g().mod_exponentiate(x, ep.p())
 }
 
-/// Verify Schnorr Proof according to specifications
+/// Verify Schnorr Proof according to specifications of Swiss Post (Algorithm 10.3)
 ///
 /// # Error
 /// Return [ZeroKnowledgeProofError] if preconditions are not satisfied
@@ -62,7 +62,7 @@ pub fn verify_schnorr(
     Ok(&e_prime == e)
 }
 
-/// Compute phi exponation according to specifications
+/// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
 fn compute_phi_exponentiation(
     ep: &EncryptionParameters,
     x: &BigUint,
@@ -71,7 +71,7 @@ fn compute_phi_exponentiation(
     gs.iter().map(|g| g.mod_exponentiate(x, ep.p())).collect()
 }
 
-/// Verify Exponation proof according to specifications
+/// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
 ///
 /// # Error
 /// Return [ZeroKnowledgeProofError] if preconditions are not satisfied

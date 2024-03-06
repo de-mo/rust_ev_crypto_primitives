@@ -50,9 +50,9 @@ pub trait RecursiveHashTrait {
 /// elements that can be hashable.
 ///
 /// To avoid copy of existing elements (and big memory growth), the HashableMessage
-/// contains only references to data. HashableMessage has the lifetime of the reference.
+/// contains possibly references to data. HashableMessage has the lifetime of the reference.
 ///  
-/// For simplification, the enum contains the possibility to reference String or &str and the possibility
+/// For simplification for the consumer, the enum contains the possibility to reference String or &str and the possibility
 /// to reference to BigUint or usize
 /// 
 /// Since [HashableMessage] implements the trait [RecursiveHashTrait], the trait must be used in a client module
@@ -110,7 +110,7 @@ pub enum HashError {
 }
 
 impl<'a> HashableMessage<'a> {
-    /// Hashable to byte_array accordind the specification of Swiss Post
+    /// Hashable to byte_array accordind the specification of Swiss Post (Algorithm 5.5)
     fn to_hashable_byte_array(&self) -> ByteArray {
         match self {
             HashableMessage::RByteArray(b) => b.prepend_byte(0u8),

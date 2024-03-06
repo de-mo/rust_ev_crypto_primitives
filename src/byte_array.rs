@@ -22,13 +22,13 @@ pub struct ByteArray {
 /// assert_eq!(ba, "QQ==");
 /// ```
 pub trait Encode {
-    /// Code to baase16 according specifications
+    /// Code to base16 according specifications
     fn base16_encode(&self) -> String;
 
-    /// Code to baase32 according specifications
+    /// Code to base32 according specifications
     fn base32_encode(&self) -> String;
 
-    /// Code to baase64 according specifications
+    /// Code to base64 according specifications
     fn base64_encode(&self) -> String;
 }
 
@@ -117,7 +117,7 @@ impl ByteArray {
         res
     }
 
-    /// Cut the byte array to given bit length according to the specifications of Swiss Post
+    /// Cut the byte array to given bit length according to the specifications of Swiss Post (Algorithm 3.1)
     /// 
     /// # Error
     /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
