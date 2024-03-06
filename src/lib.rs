@@ -34,5 +34,8 @@ pub use number_theory::is_small_prime;
 pub use signature::{SignatureError, verify_signature};
 pub use zero_knowledge_proof::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};
 
-/// The length of the group parameter `p` according to the specifications
+/// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
+
+/// The security length according to the security level in the specifications
+pub const SECURITY_LENGTH: usize = 128;
