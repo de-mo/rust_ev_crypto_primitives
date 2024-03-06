@@ -263,15 +263,9 @@ impl From<&Vec<u8>> for ByteArray {
     }
 }
 
-impl From<&String> for ByteArray {
-    fn from(s: &String) -> Self {
-        ByteArray::from_bytes(s.as_bytes())
-    }
-}
-
 impl From<&str> for ByteArray {
     fn from(s: &str) -> Self {
-        ByteArray::from(&s.to_string())
+        ByteArray::from_bytes(s.as_bytes())
     }
 }
 
@@ -337,15 +331,15 @@ mod test {
     #[test]
     fn from_string() {
         assert_eq!(
-            ByteArray::from(&"ABC".to_string()).to_bytes(),
+            ByteArray::from("ABC").to_bytes(),
             b"\x41\x42\x43"
         );
-        assert_eq!(ByteArray::from(&"Ä".to_string()).to_bytes(), b"\xc3\x84");
+        assert_eq!(ByteArray::from("Ä").to_bytes(), b"\xc3\x84");
         assert_eq!(
-            ByteArray::from(&"1001".to_string()).to_bytes(),
+            ByteArray::from("1001").to_bytes(),
             b"\x31\x30\x30\x31"
         );
-        assert_eq!(ByteArray::from(&"1A".to_string()).to_bytes(), b"\x31\x41");
+        assert_eq!(ByteArray::from("1A").to_bytes(), b"\x31\x41");
     }
 
     #[test]

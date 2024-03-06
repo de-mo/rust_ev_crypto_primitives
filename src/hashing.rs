@@ -119,8 +119,8 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::Int(i) => ByteArray::from(i).prepend_byte(1u8),
             HashableMessage::RUSize(i) => ByteArray::from(*i).prepend_byte(1u8),
             HashableMessage::USize(i) => ByteArray::from(i).prepend_byte(1u8),
-            HashableMessage::RString(s) => ByteArray::from(*s).prepend_byte(2u8),
-            HashableMessage::String(s) => ByteArray::from(s).prepend_byte(2u8),
+            HashableMessage::RString(s) => ByteArray::from(s.as_str()).prepend_byte(2u8),
+            HashableMessage::String(s) => ByteArray::from(s.as_str()).prepend_byte(2u8),
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::Composite(c) => c
                 .iter()
