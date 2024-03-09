@@ -1,3 +1,19 @@
+// Copyright © 2023 Denis Morel
+
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option) any
+// later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+// details.
+//
+// You should have received a copy of the GNU Lesser General Public License and
+// a copy of the GNU General Public License along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+
 //! Implement necessary signature functions for the crate
 
 use super::{super::byte_array::ByteArray, BasisCryptoError};
@@ -36,12 +52,12 @@ pub fn verify(
         }
     })?;
     // Necessary for the next functions
-    verifier
-        .set_rsa_padding(Padding::PKCS1_PSS)
-        .map_err(|e| BasisCryptoError::SignatureVerify {
+    verifier.set_rsa_padding(Padding::PKCS1_PSS).map_err(|e| {
+        BasisCryptoError::SignatureVerify {
             msg: "Error set_rsa_padding".to_string(),
             source: e,
-        })?;
+        }
+    })?;
     verifier
         .set_rsa_mgf1_md(MessageDigest::sha256())
         .map_err(|e| BasisCryptoError::SignatureVerify {

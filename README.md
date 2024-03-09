@@ -20,9 +20,10 @@ The crate uses the crate [openssl](https://docs.rs/openssl/latest/openssl/) to w
 
 ## Licence
 
-Open source License Apache 2.0
-
-See [LICENSE](LICENSE)
+Rug is free software: you can redistribute it and/or modify it under the terms 
+of the GNU Lesser General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the full text of the [GNU LGPL](LICENSE.md) for details.
 
 ## Third party
 
