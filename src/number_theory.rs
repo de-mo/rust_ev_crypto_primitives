@@ -16,6 +16,64 @@ pub trait SmallPrimeTrait {
     fn is_small_prime(&self) -> Result<bool, NumberTheoryError>;
 }
 
+pub trait NumberTheoryMethodTrait: ToString {
+    /// Calculate the jacobi symbol
+    ///
+    /// The algortihm use an algorithm analoguous to the eucledian algorthm
+    /// See [Jacobi symbol](https://en.wikipedia.org/wiki/Jacobi_symbol#Calculating_the_Jacobi_symbol)
+    ///
+    /// Return an error if the given number n is not odd.
+    fn jacobi(a: &Self, n: &Self) -> Result<i8, NumberTheoryError>;
+
+    /// Determine if n is a power of b, e.g. n = b^x for any x
+    fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool;
+
+    /// Determine of the number n is a quadratic residue of p
+    fn is_quadratic_residue(&self, p: &Self) -> bool {
+        Self::jacobi(self, p).unwrap() == 1
+    }
+
+    /// Determine if a number is prime according to Miller-Rabin Test
+    fn miller_rabin(&self, iterations: usize) -> bool;
+
+    /// Check if quadratic residue
+    ///
+    /// Return a [NumberTheoryError] if the check is not positive. Else None
+    fn check_quadratic_residue(&self, p: &Self) -> Option<NumberTheoryError> {
+        if !self.is_quadratic_residue(p) {
+            return Some(NumberTheoryError::CheckQuadraticResidue(
+                self.to_string(),
+                p.to_string(),
+            ));
+        }
+        None
+    }
+
+    /// Check if the number is prime
+    ///
+    /// Return a [NumberTheoryError] if the check is not positive. Else None
+    fn check_prime(&self) -> Option<NumberTheoryError> {
+        if !self.miller_rabin(1) {
+            return Some(NumberTheoryError::CheckPrime(self.to_string()));
+        }
+        None
+    }
+
+    /// Check if the number n is a power of another number b
+    ///
+    /// Return a [NumberTheoryError] if the check is not positive. Else None
+    #[allow(dead_code)]
+    fn check_is_power_of(&self, b: &Self, modulus: &Self) -> Option<NumberTheoryError> {
+        if !self.is_mod_power_of(b, modulus) {
+            return Some(NumberTheoryError::CheckIsPowerOf(
+                self.to_string(),
+                b.to_string(),
+            ));
+        }
+        None
+    }
+}
+
 impl SmallPrimeTrait for usize {
     fn is_small_prime(&self) -> Result<bool, NumberTheoryError> {
         if *self >= Self::pow(2, 31) {
@@ -55,103 +113,58 @@ impl SmallPrimeTrait for usize {
     }
 }
 
-/// Calculate the jacobi symbol
-///
-/// The algortihm use an algorithm analoguous to the eucledian algorthm
-/// See [Jacobi symbol](https://en.wikipedia.org/wiki/Jacobi_symbol#Calculating_the_Jacobi_symbol)
-///
-/// Return an error if the given number n is not odd.
-fn jacobi(a: &BigUint, n: &BigUint) -> Result<i8, NumberTheoryError> {
-    if &(n % 2u8) == BigUint::zero() {
-        return Err(NumberTheoryError::DenominatorNotOdd(n.clone()));
-    }
-    let mut temp_a = a % n;
-    let mut temp_n = n.to_owned();
-    let mut t = 1i8;
-    while &temp_a != BigUint::zero() {
-        while &(&temp_a % 2u8) == BigUint::zero() {
-            temp_a = &temp_a / 2u8;
-            let r = &temp_n % 8u8;
-            if &r == BigUint::three() || &r == BigUint::five() {
+impl NumberTheoryMethodTrait for BigUint {
+    fn jacobi(a: &Self, n: &Self) -> Result<i8, NumberTheoryError> {
+        if &(n % 2u8) == BigUint::zero() {
+            return Err(NumberTheoryError::DenominatorNotOdd(n.clone()));
+        }
+        let mut temp_a = a % n;
+        let mut temp_n = n.to_owned();
+        let mut t = 1i8;
+        while &temp_a != BigUint::zero() {
+            while &(&temp_a % 2u8) == BigUint::zero() {
+                temp_a = &temp_a / 2u8;
+                let r = &temp_n % 8u8;
+                if &r == BigUint::three() || &r == BigUint::five() {
+                    t = -t;
+                }
+            }
+            (temp_a, temp_n) = (temp_n.clone(), temp_a.clone());
+            if &(&temp_a % 4u8) == BigUint::three() && &(&temp_n % 4u8) == BigUint::three() {
                 t = -t;
             }
+            temp_a = temp_a.clone() % temp_n.clone();
         }
-        (temp_a, temp_n) = (temp_n.clone(), temp_a.clone());
-        if &(&temp_a % 4u8) == BigUint::three() && &(&temp_n % 4u8) == BigUint::three() {
-            t = -t;
+        if &temp_n == BigUint::one() {
+            Ok(t)
+        } else {
+            Ok(0)
         }
-        temp_a = temp_a.clone() % temp_n.clone();
-    }
-    if &temp_n == BigUint::one() {
-        Ok(t)
-    } else {
-        Ok(0)
-    }
-}
-
-/// Determine if n is a power of b, e.g. n = b^x for any x
-pub fn is_mod_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> bool {
-    let n_mod = n % modulus;
-    let b_mod = b % modulus;
-
-    if &b_mod == BigUint::one() {
-        return &n_mod == BigUint::one();
     }
 
-    if &n_mod == BigUint::one() {
-        return &b_mod == BigUint::one();
+    fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool {
+        let n_mod = self % modulus;
+        let b_mod = b % modulus;
+
+        if &b_mod == BigUint::one() {
+            return &n_mod == BigUint::one();
+        }
+
+        if &n_mod == BigUint::one() {
+            return &b_mod == BigUint::one();
+        }
+
+        let mut pow = BigUint::one().clone();
+        while pow < n_mod {
+            pow = pow.mod_multiply(&b_mod, modulus);
+        }
+
+        pow == n_mod
     }
 
-    let mut pow = BigUint::one().clone();
-    while pow < n_mod {
-        pow = pow.mod_multiply(&b_mod, modulus);
+    fn miller_rabin(&self, iterations: usize) -> bool {
+        miller_rabin::is_prime(self, iterations)
     }
-
-    pow == n_mod
-}
-
-/// Determine of the number n is a quadratic residue of p
-pub fn is_quadratic_residue(n: &BigUint, p: &BigUint) -> bool {
-    jacobi(n, p).unwrap() == 1
-}
-
-/// Determine if a number is prime according to Miller-Rabin Test
-pub fn miller_rabin_test(n: &BigUint, iterations: usize) -> bool {
-    miller_rabin::is_prime(n, iterations)
-}
-
-/// Check if quadratic residue
-///
-/// Return a [NumberTheoryError] if the check is not positive. Else None
-pub fn check_quadratic_residue(n: &BigUint, p: &BigUint) -> Option<NumberTheoryError> {
-    if !is_quadratic_residue(n, p) {
-        return Some(NumberTheoryError::CheckQuadraticResidue(
-            n.clone(),
-            p.clone(),
-        ));
-    }
-    None
-}
-
-/// Check if the number is prime
-///
-/// Return a [NumberTheoryError] if the check is not positive. Else None
-pub fn check_prime(p: &BigUint) -> Option<NumberTheoryError> {
-    if !miller_rabin_test(p, 1) {
-        return Some(NumberTheoryError::CheckPrime(p.clone()));
-    }
-    None
-}
-
-/// Check if the number n is a power of another number b
-///
-/// Return a [NumberTheoryError] if the check is not positive. Else None
-#[allow(dead_code)]
-pub fn check_is_power_of(n: &BigUint, b: &BigUint, modulus: &BigUint) -> Option<NumberTheoryError> {
-    if !is_mod_power_of(n, b, modulus) {
-        return Some(NumberTheoryError::CheckIsPowerOf(n.clone(), b.clone()));
-    }
-    None
 }
 
 // Enum representing the errors in number theory
@@ -162,11 +175,11 @@ pub enum NumberTheoryError {
     #[error("Denominator {0} is not odd, but it must be.")]
     DenominatorNotOdd(BigUint),
     #[error("{0} is not quadratic residue of {1}")]
-    CheckQuadraticResidue(BigUint, BigUint),
+    CheckQuadraticResidue(String, String),
     #[error("Number {0} is not prime")]
-    CheckPrime(BigUint),
+    CheckPrime(String),
     #[error("Number {0} is not a power of {1}")]
-    CheckIsPowerOf(BigUint, BigUint),
+    CheckIsPowerOf(String, String),
 }
 
 #[allow(clippy::items_after_test_module)]
@@ -194,41 +207,38 @@ mod test {
 
     #[test]
     fn test_jacobi() {
-        assert_eq!(jacobi(&BigUint::from(1u8), &BigUint::from(9u8)).unwrap(), 1);
         assert_eq!(
-            jacobi(&BigUint::from(9u8), &BigUint::from(15u8)).unwrap(),
-            0
-        );
-        assert_eq!(
-            jacobi(&BigUint::from(7u8), &BigUint::from(17u8)).unwrap(),
-            -1
-        );
-        assert_eq!(
-            jacobi(&BigUint::from(19u8), &BigUint::from(17u8)).unwrap(),
+            BigUint::jacobi(&BigUint::from(1u8), &BigUint::from(9u8)).unwrap(),
             1
         );
         assert_eq!(
-            jacobi(&BigUint::from(1001u32), &BigUint::from(9907u32)).unwrap(),
+            BigUint::jacobi(&BigUint::from(9u8), &BigUint::from(15u8)).unwrap(),
+            0
+        );
+        assert_eq!(
+            BigUint::jacobi(&BigUint::from(7u8), &BigUint::from(17u8)).unwrap(),
+            -1
+        );
+        assert_eq!(
+            BigUint::jacobi(&BigUint::from(19u8), &BigUint::from(17u8)).unwrap(),
+            1
+        );
+        assert_eq!(
+            BigUint::jacobi(&BigUint::from(1001u32), &BigUint::from(9907u32)).unwrap(),
             -1
         );
     }
 
     #[test]
     fn test_is_quadratic_residue() {
-        assert!(!is_quadratic_residue(
-            &BigUint::from(17u8),
-            &BigUint::from(3u8)
-        ));
-        assert!(is_quadratic_residue(
-            &BigUint::from(17u8),
-            &BigUint::from(13u8)
-        ));
+        assert!(!BigUint::from(17u8).is_quadratic_residue(&BigUint::from(3u8)));
+        assert!(BigUint::from(17u8).is_quadratic_residue(&BigUint::from(13u8)));
         let p = BigUint::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
-        assert!(is_quadratic_residue(&BigUint::from(5u8), &p));
-        assert!(is_quadratic_residue(&BigUint::from(17u8), &p));
-        assert!(is_quadratic_residue(&BigUint::from(19u8), &p));
+        assert!(BigUint::from(5u8).is_quadratic_residue(&p));
+        assert!(BigUint::from(17u8).is_quadratic_residue(&p));
+        assert!(BigUint::from(19u8).is_quadratic_residue(&p));
     }
 
     #[test]
@@ -236,8 +246,8 @@ mod test {
         let p = BigUint::from(11u8);
         let g_ok = BigUint::from(3u8);
         let g_err = BigUint::from(2u8);
-        assert!(check_quadratic_residue(&g_ok, &p).is_none());
-        assert!(check_quadratic_residue(&g_err, &p).is_some());
+        assert!(g_ok.check_quadratic_residue(&p).is_none());
+        assert!(g_err.check_quadratic_residue(&p).is_some());
     }
 
     #[test]
@@ -245,10 +255,10 @@ mod test {
         let p = BigUint::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
-        assert!(miller_rabin_test(&p, 1));
-        assert!(miller_rabin_test(&p, 64));
+        assert!(p.miller_rabin(1));
+        assert!(p.miller_rabin(64));
         let p = BigUint::from(6u8);
-        assert!(!miller_rabin_test(&p, 1))
+        assert!(!p.miller_rabin(1))
     }
 
     #[test]
@@ -256,33 +266,17 @@ mod test {
         let p = BigUint::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
-        assert!(check_prime(&p).is_none());
+        assert!(p.check_prime().is_none());
         let p = BigUint::from(6u8);
-        assert!(check_prime(&p).is_some())
+        assert!(p.check_prime().is_some())
     }
 
     #[test]
     fn test_is_mod_power_of() {
-        assert!(is_mod_power_of(
-            &BigUint::from(1u8),
-            &BigUint::from(1u8),
-            &BigUint::from(100u8)
-        ));
-        assert!(!is_mod_power_of(
-            &BigUint::from(1u8),
-            &BigUint::from(2u8),
-            &BigUint::from(100u8)
-        ));
-        assert!(!is_mod_power_of(
-            &BigUint::from(2u8),
-            &BigUint::from(1u8),
-            &BigUint::from(100u8)
-        ));
-        assert!(is_mod_power_of(
-            &BigUint::from(25u8),
-            &BigUint::from(5u8),
-            &BigUint::from(100u8)
-        ));
+        assert!(BigUint::from(1u8).is_mod_power_of(&BigUint::from(1u8), &BigUint::from(100u8)));
+        assert!(!BigUint::from(1u8).is_mod_power_of(&BigUint::from(2u8), &BigUint::from(100u8)));
+        assert!(!BigUint::from(2u8).is_mod_power_of(&BigUint::from(1u8), &BigUint::from(100u8)));
+        assert!(BigUint::from(25u8).is_mod_power_of(&BigUint::from(5u8), &BigUint::from(100u8)));
     }
 }
 

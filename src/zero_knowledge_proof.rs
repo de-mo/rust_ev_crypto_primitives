@@ -7,7 +7,7 @@ use super::{
     elgamal::{check_p, check_q, ElgamalError, EncryptionParameters},
     hashing::HashableMessage,
     integer::Operations,
-    number_theory::{check_quadratic_residue, NumberTheoryError},
+    number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
 };
 use num_bigint::BigUint;
 use std::iter::zip;
@@ -32,7 +32,7 @@ pub fn verify_schnorr(
         if let Some(e) = ep.check_encryption_parameters() {
             return Err(ZeroKnowledgeProofError::CheckElgamal(e));
         }
-        if let Some(e) = check_quadratic_residue(y, ep.p()) {
+        if let Some(e) = y.check_quadratic_residue(ep.p()) {
             return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
         }
         //if let Some(e) = check_is_power_of(y, g, p) {
@@ -95,12 +95,12 @@ pub fn verify_exponentiation(
             ));
         }
         for g in gs.iter() {
-            if let Some(e) = check_quadratic_residue(g, ep.p()) {
+            if let Some(e) = g.check_quadratic_residue(ep.p()) {
                 return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
             }
         }
         for y in ys.iter() {
-            if let Some(e) = check_quadratic_residue(y, ep.p()) {
+            if let Some(e) = y.check_quadratic_residue(ep.p()) {
                 return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
             }
         }

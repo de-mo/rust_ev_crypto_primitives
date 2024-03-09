@@ -4,8 +4,7 @@ use crate::{
     basic_crypto_functions::{shake256, BasisCryptoError},
     byte_array::ByteArray,
     integer::Constants,
-    number_theory::{check_prime, check_quadratic_residue, NumberTheoryError},
-    number_theory::{is_quadratic_residue, miller_rabin_test, SmallPrimeTrait, SMALL_PRIMES},
+    number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait, SMALL_PRIMES},
     HashableMessage, SECURITY_LENGTH,
 };
 use num_bigint::BigUint;
@@ -80,24 +79,22 @@ impl EncryptionParameters {
                         i += 1;
                     }
                 }
-                if miller_rabin_test(&(&q + &delta), 1)
-                    && miller_rabin_test(&((&q + &delta) * BigUint::two() + BigUint::one()), 1)
+                if (&q + &delta).miller_rabin(1)
+                    && ((&q + &delta) * BigUint::two() + BigUint::one()).miller_rabin(1)
                 {
                     break;
                 }
             }
-            if miller_rabin_test(&(&q + &delta), SECURITY_LENGTH / 2)
-                && miller_rabin_test(
-                    &((&q + &delta) * BigUint::two() + BigUint::one()),
-                    SECURITY_LENGTH / 2,
-                )
+            if (&q + &delta).miller_rabin(SECURITY_LENGTH / 2)
+                && ((&q + &delta) * BigUint::two() + BigUint::one())
+                    .miller_rabin(SECURITY_LENGTH / 2)
             {
                 break;
             }
         }
         let q_final = &q + &delta;
         let p = &q_final * BigUint::two() + BigUint::one();
-        let g: u8 = match is_quadratic_residue(BigUint::two(), &p) {
+        let g: u8 = match BigUint::two().is_quadratic_residue(&p) {
             true => 2,
             false => 3,
         };
@@ -162,7 +159,7 @@ pub fn get_small_prime_group_members(
         && current < usize::pow(2, 31)
     {
         let is_prime = current.is_small_prime().unwrap();
-        if is_prime && is_quadratic_residue(&BigUint::from(current), ep.p()) {
+        if is_prime && BigUint::from(current).is_quadratic_residue(ep.p()) {
             res.push(current);
         }
         current += 2;
@@ -180,7 +177,7 @@ pub fn get_small_prime_group_members(
 ///
 /// Return a [ElgamalError] if the check is not positive. Else None
 pub fn check_p(p: &BigUint) -> Option<ElgamalError> {
-    check_prime(p).map(ElgamalError::CheckNumberTheory)
+    p.check_prime().map(ElgamalError::CheckNumberTheory)
 }
 
 /// Check q as part of encryption parameter
@@ -190,7 +187,7 @@ pub fn check_q(p: &BigUint, q: &BigUint) -> Option<ElgamalError> {
     if *p != q * 2u8 + 1u8 {
         return Some(ElgamalError::CheckRelationPQ);
     }
-    check_prime(q).map(ElgamalError::CheckNumberTheory)
+    q.check_prime().map(ElgamalError::CheckNumberTheory)
 }
 
 /// Check g as part of encryption parameter
@@ -200,7 +197,8 @@ pub fn check_g(p: &BigUint, g: &BigUint) -> Option<ElgamalError> {
     if g == BigUint::one() {
         return Some(ElgamalError::CheckNotOne);
     }
-    check_quadratic_residue(g, p).map(ElgamalError::CheckNumberTheory)
+    g.check_quadratic_residue(p)
+        .map(ElgamalError::CheckNumberTheory)
 }
 
 // Enum reprsenting the elgamal errors
