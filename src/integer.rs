@@ -4,14 +4,25 @@
 //! used in the client modules
 //!
 
-use num_bigint::{BigInt, BigUint, Sign};
-use num_traits::Num;
 use std::fmt::Debug;
 use std::sync::OnceLock;
 use thiserror::Error;
 
+#[cfg(feature = "num-bigint")]
+use num_bigint::{BigInt, BigUint, Sign};
+#[cfg(feature = "num-bigint")]
+use num_traits::Num;
+
+#[cfg(feature = "rug")]
+use rug::Integer;
+
+#[cfg(feature = "num-bigint")]
 /// Type alias for all the crate
 pub type MPInteger = BigUint;
+
+#[cfg(feature = "rug")]
+/// Type alias for all the crate
+pub type MPInteger = Integer;
 
 /// Trait to implement constant numbers
 pub trait Constants {
@@ -33,6 +44,9 @@ pub trait Operations {
         !self.is_even()
     }
 
+    /// Returns the byte representation in little-endian byte order
+    fn nb_bits(&self) -> usize;
+
     /// Calculate the exponentiate modulo: self^exp % modulus
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self;
 
@@ -53,8 +67,9 @@ pub trait Hexa: Sized {
     fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError>;
 
     /// Create object from hexadecimal &str. If not valid return an error
-    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError>;
-
+    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError> {
+        Self::from_hexa_string(s)
+    }
     /// Generate the hexadecimal String
     fn to_hexa(&self) -> String;
 }
@@ -68,7 +83,10 @@ pub enum MPIntegerError {
     ParseErrorWithSource {
         orig: String,
         fnname: String,
+        #[cfg(feature = "num-bigint")]
         source: num_bigint::ParseBigIntError,
+        #[cfg(feature = "rug")]
+        source: rug::integer::ParseIntegerError,
     },
 }
 
@@ -78,9 +96,9 @@ pub trait ByteLength {
     fn byte_length(&self) -> usize;
 }
 
-impl ByteLength for BigUint {
+impl ByteLength for MPInteger {
     fn byte_length(&self) -> usize {
-        let bits = self.bits() as usize;
+        let bits = self.nb_bits();
         let bytes = bits / 8;
         if bits % 8 == 0 {
             bytes
@@ -90,39 +108,44 @@ impl ByteLength for BigUint {
     }
 }
 
-static ZERO: OnceLock<BigUint> = OnceLock::new();
-static ONE: OnceLock<BigUint> = OnceLock::new();
-static TWO: OnceLock<BigUint> = OnceLock::new();
-static THREE: OnceLock<BigUint> = OnceLock::new();
-static FOR: OnceLock<BigUint> = OnceLock::new();
-static FIVE: OnceLock<BigUint> = OnceLock::new();
+static ZERO: OnceLock<MPInteger> = OnceLock::new();
+static ONE: OnceLock<MPInteger> = OnceLock::new();
+static TWO: OnceLock<MPInteger> = OnceLock::new();
+static THREE: OnceLock<MPInteger> = OnceLock::new();
+static FOR: OnceLock<MPInteger> = OnceLock::new();
+static FIVE: OnceLock<MPInteger> = OnceLock::new();
 
-impl Constants for BigUint {
+impl Constants for MPInteger {
     fn zero() -> &'static Self {
-        ZERO.get_or_init(|| BigUint::from(0u8))
+        ZERO.get_or_init(|| MPInteger::from(0u8))
     }
 
     fn one() -> &'static Self {
-        ONE.get_or_init(|| BigUint::from(1u8))
+        ONE.get_or_init(|| MPInteger::from(1u8))
     }
 
     fn two() -> &'static Self {
-        TWO.get_or_init(|| BigUint::from(2u8))
+        TWO.get_or_init(|| MPInteger::from(2u8))
     }
     fn three() -> &'static Self {
-        THREE.get_or_init(|| BigUint::from(3u8))
+        THREE.get_or_init(|| MPInteger::from(3u8))
     }
     fn four() -> &'static Self {
-        FOR.get_or_init(|| BigUint::from(4u8))
+        FOR.get_or_init(|| MPInteger::from(4u8))
     }
     fn five() -> &'static Self {
-        FIVE.get_or_init(|| BigUint::from(5u8))
+        FIVE.get_or_init(|| MPInteger::from(5u8))
     }
 }
 
+#[cfg(feature = "num-bigint")]
 impl Operations for BigUint {
     fn is_even(&self) -> bool {
         &(self % Self::two()) == Self::zero()
+    }
+
+    fn nb_bits(&self) -> usize {
+        self.bits() as usize
     }
 
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
@@ -148,6 +171,41 @@ impl Operations for BigUint {
     }
 }
 
+#[cfg(feature = "rug")]
+impl Operations for Integer {
+    fn is_even(&self) -> bool {
+        self.is_even()
+    }
+
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
+        MPInteger::from(self.pow_mod_ref(exp, modulus).unwrap())
+    }
+
+    fn mod_negate(&self, modulus: &Self) -> Self {
+        let bi = Integer::from(-self);
+        let modulus_bi = Integer::from(-modulus);
+        let mut neg = bi % &modulus_bi;
+        if neg < 0 {
+            neg += &modulus_bi.abs();
+        }
+        neg
+    }
+
+    fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self {
+        Integer::from(self * other) % modulus
+    }
+
+    fn mod_inverse(&self, modulus: &Self) -> Self {
+        let from = Integer::from(modulus - Self::two());
+        self.mod_exponentiate(&from, modulus)
+    }
+
+    fn nb_bits(&self) -> usize {
+        self.significant_bits() as usize
+    }
+}
+
+#[cfg(feature = "num-bigint")]
 impl Hexa for BigUint {
     fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError> {
         if !s.starts_with("0x") && !s.starts_with("0X") {
@@ -163,120 +221,130 @@ impl Hexa for BigUint {
         })
     }
 
-    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError> {
-        Self::from_hexa_string(s)
+    fn to_hexa(&self) -> String {
+        format!("{}{}", "0x", self.to_str_radix(16))
+    }
+}
+
+#[cfg(feature = "rug")]
+impl Hexa for Integer {
+    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError> {
+        if !s.starts_with("0x") && !s.starts_with("0X") {
+            return Err(MPIntegerError::ParseError {
+                orig: s.to_string(),
+                fnname: "from_hexa_string".to_string(),
+            });
+        };
+        Integer::parse_radix(&s[2..], 16)
+            .map(|n| Integer::from(n))
+            .map_err(|e| MPIntegerError::ParseErrorWithSource {
+                orig: s.to_string(),
+                fnname: "from_hexa_string".to_string(),
+                source: e,
+            })
     }
 
     fn to_hexa(&self) -> String {
-        format!("{}{}", "0x", self.to_str_radix(16))
+        format!("{}{}", "0x", self.to_string_radix(16))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use num_bigint::ToBigUint;
-    use num_traits::FromPrimitive;
 
     #[test]
     fn bit_length() {
-        assert_eq!(0.to_biguint().unwrap().bits(), 0);
-        assert_eq!(1.to_biguint().unwrap().bits(), 1);
-        assert_eq!(10.to_biguint().unwrap().bits(), 4);
+        assert_eq!(MPInteger::from(0u32).nb_bits(), 0);
+        assert_eq!(MPInteger::from(1u32).nb_bits(), 1);
+        assert_eq!(MPInteger::from(10u32).nb_bits(), 4);
     }
 
     #[test]
     fn byte_length() {
-        assert_eq!(0.to_biguint().unwrap().byte_length(), 0);
-        assert_eq!(3.to_biguint().unwrap().byte_length(), 1);
-        assert_eq!(23591.to_biguint().unwrap().byte_length(), 2);
-        assert_eq!(23592.to_biguint().unwrap().byte_length(), 2);
-        assert_eq!(4294967295u64.to_biguint().unwrap().byte_length(), 4);
-        assert_eq!(4294967296u64.to_biguint().unwrap().byte_length(), 5);
-    }
-
-    #[test]
-    fn from_str_radix() {
-        assert_eq!(
-            <BigUint>::from_str_radix("a", 16).unwrap(),
-            10.to_biguint().unwrap()
-        )
+        assert_eq!(MPInteger::from(0u32).byte_length(), 0);
+        assert_eq!(MPInteger::from(3u32).byte_length(), 1);
+        assert_eq!(MPInteger::from(23591u32).byte_length(), 2);
+        assert_eq!(MPInteger::from(23592u32).byte_length(), 2);
+        assert_eq!(MPInteger::from(4294967295u64).byte_length(), 4);
+        assert_eq!(MPInteger::from(4294967296u64).byte_length(), 5);
     }
 
     #[test]
     fn from_exa() {
         assert_eq!(
-            BigUint::from_hexa_string("0x0").unwrap(),
-            0.to_biguint().unwrap()
+            MPInteger::from_hexa_string("0x0").unwrap(),
+            MPInteger::from(0u32)
         );
         assert_eq!(
-            BigUint::from_hexa_string("0xa").unwrap(),
-            10.to_biguint().unwrap()
+            MPInteger::from_hexa_string("0xa").unwrap(),
+            MPInteger::from(10u32)
         );
         assert_eq!(
-            BigUint::from_hexa_string("0xab").unwrap(),
-            171.to_biguint().unwrap()
+            MPInteger::from_hexa_string("0xab").unwrap(),
+            MPInteger::from(171u32)
         );
         assert_eq!(
-            BigUint::from_hexa_string("0x12D9E8").unwrap(),
-            1235432.to_biguint().unwrap()
+            MPInteger::from_hexa_string("0x12D9E8").unwrap(),
+            MPInteger::from(1235432u32)
         );
-        assert!(BigUint::from_hexa_string("123").is_err());
-        assert!(BigUint::from_hexa_string("0xtt").is_err());
+        assert!(MPInteger::from_hexa_string("123").is_err());
+        assert!(MPInteger::from_hexa_string("0xtt").is_err());
         assert_eq!(
-            BigUint::from_hexa_slice("0x12D9E8").unwrap(),
-            1235432.to_biguint().unwrap()
+            MPInteger::from_hexa_slice("0x12D9E8").unwrap(),
+            MPInteger::from(1235432u32)
         );
     }
 
     #[test]
     fn to_exa() {
-        assert_eq!(0.to_biguint().unwrap().to_hexa(), "0x0");
-        assert_eq!(10.to_biguint().unwrap().to_hexa(), "0xa");
-        assert_eq!(171.to_biguint().unwrap().to_hexa(), "0xab");
-        assert_eq!(1235432.to_biguint().unwrap().to_hexa(), "0x12d9e8");
+        assert_eq!(MPInteger::from(0u32).to_hexa(), "0x0");
+        assert_eq!(MPInteger::from(10u32).to_hexa(), "0xa");
+        assert_eq!(MPInteger::from(171u32).to_hexa(), "0xab");
+        assert_eq!(MPInteger::from(1235432u32).to_hexa(), "0x12d9e8");
     }
 
     #[test]
     fn test_is_even_odd() {
-        assert!(BigUint::from(0u8).is_even());
-        assert!(BigUint::from(2u8).is_even());
-        assert!(!BigUint::from(3u8).is_even());
-        assert!(!BigUint::from(0u8).is_odd());
-        assert!(!BigUint::from(2u8).is_odd());
-        assert!(BigUint::from(3u8).is_odd());
+        assert!(MPInteger::from(0u8).is_even());
+        assert!(MPInteger::from(2u8).is_even());
+        assert!(!MPInteger::from(3u8).is_even());
+        assert!(!MPInteger::from(0u8).is_odd());
+        assert!(!MPInteger::from(2u8).is_odd());
+        assert!(MPInteger::from(3u8).is_odd());
     }
 
     #[test]
     fn test_mod_multiply() {
         assert_eq!(
-            BigUint::from(426u32).mod_multiply(&BigUint::from(964u32), &BigUint::from(235u32)),
-            BigUint::from(119u32)
+            MPInteger::from(426u32)
+                .mod_multiply(&MPInteger::from(964u32), &MPInteger::from(235u32)),
+            MPInteger::from(119u32)
         );
-        let a = BigUint::from_usize(10123465234878998).unwrap();
-        let b = BigUint::from_usize(65746311545646431).unwrap();
-        let m = BigUint::from_usize(10005412336548794).unwrap();
-        let res = BigUint::from_usize(4652135769797794).unwrap();
+        let a = MPInteger::from(10123465234878998usize);
+        let b = MPInteger::from(65746311545646431usize);
+        let m = MPInteger::from(10005412336548794usize);
+        let res = MPInteger::from(4652135769797794usize);
         assert_eq!(a.mod_multiply(&b, &m), res)
     }
 
     #[test]
     fn test_mod_negate() {
         assert_eq!(
-            BigUint::from(12u8).mod_negate(&BigUint::from(10u32)),
-            BigUint::from(8u32)
+            MPInteger::from(12u8).mod_negate(&MPInteger::from(10u32)),
+            MPInteger::from(8u32)
         );
     }
 
     #[test]
     fn test_mod_inverse() {
         assert_eq!(
-            BigUint::from(3u16).mod_inverse(&BigUint::from(11u16)),
-            BigUint::from(4u16)
+            MPInteger::from(3u16).mod_inverse(&MPInteger::from(11u16)),
+            MPInteger::from(4u16)
         );
         assert_eq!(
-            BigUint::from(10u16).mod_inverse(&BigUint::from(17u16)),
-            BigUint::from(12u16)
+            MPInteger::from(10u16).mod_inverse(&MPInteger::from(17u16)),
+            MPInteger::from(12u16)
         );
     }
 }

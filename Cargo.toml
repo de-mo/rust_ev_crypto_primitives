@@ -12,12 +12,21 @@ readme = "README.md"
 [dependencies]
 openssl-sys = "0.9"
 openssl = "0.10"
-miller_rabin = "1.1.1"
-num-traits = "0.2"
-num-bigint = "0.4"
 chrono = "0.4"
 thiserror = "1.0.40"
 data-encoding = "2.3"
+num-traits = "0.2"
+
+# Dependencies for usage with rug
+rug = {version="1.24", optional=true}
+rug-miller-rabin = {version="0.1", optional=true}
+
+# Dependencies for usage with num-bigint
+miller_rabin = {version = "1.1.1", optional = true}
+num-bigint = {version = "0.4", optional = true}
 
 [features]
+default=["rug"]
+num-bigint=["dep:miller_rabin", "dep:num-bigint"]
+rug=["dep:rug", "dep:rug-miller-rabin"]
 checks=[]

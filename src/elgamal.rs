@@ -59,8 +59,11 @@ impl EncryptionParameters {
         let q_b_hat = shake256(&ByteArray::from(seed)).map_err(ElgamalError::OpenSSLError)?;
         let q_b = q_b_hat.prepend_byte(2u8);
         let q_prime: MPInteger = q_b.into_mp_integer() >> 3;
-        let q = &q_prime - (&q_prime % 6u8) + MPInteger::five();
-        let rs: Vec<MPInteger> = SMALL_PRIMES.iter().map(|sp| &q % sp).collect();
+        let q = &q_prime - MPInteger::from(&q_prime % 6u8) + MPInteger::five();
+        let rs: Vec<MPInteger> = SMALL_PRIMES
+            .iter()
+            .map(|sp| MPInteger::from(&q % sp))
+            .collect();
         let mut delta = MPInteger::zero().clone();
         let jump = MPInteger::from(6u8);
         loop {
@@ -68,8 +71,9 @@ impl EncryptionParameters {
                 delta += &jump;
                 let mut i: usize = 0;
                 while i < rs.len() {
-                    if (&rs[i] + &delta) % SMALL_PRIMES[i] == *MPInteger::zero()
-                        || ((&rs[i] + &delta) * MPInteger::two() + MPInteger::one())
+                    let r_plus_delta = MPInteger::from(&rs[i] + &delta);
+                    if MPInteger::from(&r_plus_delta % SMALL_PRIMES[i]) == *MPInteger::zero()
+                        || MPInteger::from(&r_plus_delta * MPInteger::two() + MPInteger::one())
                             % SMALL_PRIMES[i]
                             == *MPInteger::zero()
                     {
@@ -79,21 +83,23 @@ impl EncryptionParameters {
                         i += 1;
                     }
                 }
-                if (&q + &delta).miller_rabin(1)
-                    && ((&q + &delta) * MPInteger::two() + MPInteger::one()).miller_rabin(1)
+                let q_plus_delta = MPInteger::from(&q + &delta);
+                if q_plus_delta.miller_rabin(1)
+                    && (q_plus_delta * MPInteger::two() + MPInteger::one()).miller_rabin(1)
                 {
                     break;
                 }
             }
-            if (&q + &delta).miller_rabin(SECURITY_LENGTH / 2)
-                && ((&q + &delta) * MPInteger::two() + MPInteger::one())
+            let q_plus_delta = MPInteger::from(&q + &delta);
+            if q_plus_delta.miller_rabin(SECURITY_LENGTH / 2)
+                && (q_plus_delta * MPInteger::two() + MPInteger::one())
                     .miller_rabin(SECURITY_LENGTH / 2)
             {
                 break;
             }
         }
-        let q_final = &q + &delta;
-        let p = &q_final * MPInteger::two() + MPInteger::one();
+        let q_final = q + &delta;
+        let p = MPInteger::from(&q_final * MPInteger::two()) + MPInteger::one();
         let g: u8 = match MPInteger::two().is_quadratic_residue(&p) {
             true => 2,
             false => 3,
@@ -184,7 +190,7 @@ pub fn check_p(p: &MPInteger) -> Option<ElgamalError> {
 ///
 /// Return a [ElgamalError] if the check is not positive. Else None
 pub fn check_q(p: &MPInteger, q: &MPInteger) -> Option<ElgamalError> {
-    if *p != q * 2u8 + 1u8 {
+    if *p != MPInteger::from(q * 2u8) + 1u8 {
         return Some(ElgamalError::CheckRelationPQ);
     }
     q.check_prime().map(ElgamalError::CheckNumberTheory)
@@ -241,7 +247,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_get_encryption_parameters() {
         let ep_res = EncryptionParameters::get_encryption_parameters("31");
         assert!(ep_res.is_ok());

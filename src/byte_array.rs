@@ -2,7 +2,6 @@
 
 use super::integer::{ByteLength, MPInteger};
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
-use num_bigint::ToBigUint;
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
@@ -74,9 +73,9 @@ impl ByteArray {
 
     /// ByteArray into MPInteger
     pub fn into_mp_integer(&self) -> MPInteger {
-        let mut x: MPInteger = 0.to_biguint().unwrap();
+        let mut x: MPInteger = MPInteger::from(0u32);
         for b in self.inner.clone() {
-            x = b + x * 256.to_biguint().unwrap()
+            x = b + x * MPInteger::from(256u32)
         }
         x
     }
@@ -238,9 +237,10 @@ impl From<&MPInteger> for ByteArray {
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();
         let mut d: Vec<u8> = Vec::new();
+        let nb_256 = MPInteger::from(256u16);
         for _i in 0..byte_length {
-            d.insert(0, (x.clone() % 256.to_biguint().unwrap()).to_bytes_le()[0]);
-            x /= 256.to_biguint().unwrap();
+            d.insert(0, u8::try_from(MPInteger::from(&x % &nb_256)).unwrap());
+            x /= &nb_256;
         }
         ByteArray::from(&d)
     }
@@ -302,28 +302,22 @@ mod test {
 
     #[test]
     fn from_biguint() {
+        assert_eq!(ByteArray::from(&MPInteger::from(0u32)).to_bytes(), b"\x00");
+        assert_eq!(ByteArray::from(&MPInteger::from(3u32)).to_bytes(), b"\x03");
         assert_eq!(
-            ByteArray::from(&0.to_biguint().unwrap()).to_bytes(),
-            b"\x00"
-        );
-        assert_eq!(
-            ByteArray::from(&3.to_biguint().unwrap()).to_bytes(),
-            b"\x03"
-        );
-        assert_eq!(
-            ByteArray::from(&23591.to_biguint().unwrap()).to_bytes(),
+            ByteArray::from(&MPInteger::from(23591u32)).to_bytes(),
             b"\x5c\x27"
         );
         assert_eq!(
-            ByteArray::from(&23592.to_biguint().unwrap()).to_bytes(),
+            ByteArray::from(&MPInteger::from(23592u32)).to_bytes(),
             b"\x5c\x28"
         );
         assert_eq!(
-            ByteArray::from(&4294967295u64.to_biguint().unwrap()).to_bytes(),
+            ByteArray::from(&MPInteger::from(4294967295u64)).to_bytes(),
             b"\xff\xff\xff\xff"
         );
         assert_eq!(
-            ByteArray::from(&4294967296u64.to_biguint().unwrap()).to_bytes(),
+            ByteArray::from(&MPInteger::from(4294967296u64)).to_bytes(),
             b"\x01\x00\x00\x00\x00"
         );
     }
@@ -362,27 +356,27 @@ mod test {
     fn to_biguint() {
         assert_eq!(
             ByteArray::from_bytes(b"\x00").into_mp_integer(),
-            0.to_biguint().unwrap()
+            MPInteger::from(0u32)
         );
         assert_eq!(
             ByteArray::from_bytes(b"\x03").into_mp_integer(),
-            3.to_biguint().unwrap()
+            MPInteger::from(3u32)
         );
         assert_eq!(
             ByteArray::from_bytes(b"\x5c\x27").into_mp_integer(),
-            23591.to_biguint().unwrap()
+            MPInteger::from(23591u32)
         );
         assert_eq!(
             ByteArray::from_bytes(b"\x5c\x28").into_mp_integer(),
-            23592.to_biguint().unwrap()
+            MPInteger::from(23592u32)
         );
         assert_eq!(
             ByteArray::from_bytes(b"\xff\xff\xff\xff").into_mp_integer(),
-            4294967295u64.to_biguint().unwrap()
+            MPInteger::from(4294967295u64)
         );
         assert_eq!(
             ByteArray::from_bytes(b"\x01\x00\x00\x00\x00").into_mp_integer(),
-            4294967296u64.to_biguint().unwrap()
+            MPInteger::from(4294967296u64)
         );
     }
 
