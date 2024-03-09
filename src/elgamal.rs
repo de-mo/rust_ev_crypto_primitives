@@ -5,7 +5,7 @@ use crate::{
     byte_array::ByteArray,
     integer::Constants,
     number_theory::{check_prime, check_quadratic_residue, NumberTheoryError},
-    number_theory::{is_quadratic_residue, is_small_prime, miller_rabin_test, SMALL_PRIMES},
+    number_theory::{is_quadratic_residue, miller_rabin_test, SmallPrimeTrait, SMALL_PRIMES},
     HashableMessage, SECURITY_LENGTH,
 };
 use num_bigint::BigUint;
@@ -161,7 +161,7 @@ pub fn get_small_prime_group_members(
         && &BigUint::from(current) < ep.p()
         && current < usize::pow(2, 31)
     {
-        let is_prime = is_small_prime(current).unwrap();
+        let is_prime = current.is_small_prime().unwrap();
         if is_prime && is_quadratic_residue(&BigUint::from(current), ep.p()) {
             res.push(current);
         }

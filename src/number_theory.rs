@@ -5,45 +5,54 @@ use miller_rabin;
 use num_bigint::BigUint;
 use thiserror::Error;
 
-/// Validate if the number is a small prime according to the algorithm specified by Swiss Post (Algorithm 8.3)
+/// Functionality on small primes
 ///
-/// # Error
-/// If preconditions are not satisfied
-pub fn is_small_prime(n: usize) -> Result<bool, NumberTheoryError> {
-    if n >= usize::pow(2, 31) {
-        return Err(NumberTheoryError::OutOfRange {
-            msg: "to big. Must be less thant 2^31".to_string(),
-            n,
-        });
-    }
-    if n == 0 {
-        return Err(NumberTheoryError::OutOfRange {
-            msg: "must be greater than 0".to_string(),
-            n,
-        });
-    }
-    if n == 1 {
-        return Ok(false);
-    }
-    if n == 2 || n == 3 {
-        return Ok(true);
-    }
-    if n % 2 == 0 || n % 3 == 0 {
-        return Ok(false);
-    }
-    let small_primes = SMALL_PRIMES.to_vec();
-    if n <= *small_primes.last().unwrap() {
-        return Ok(small_primes.contains(&n));
-    }
-    let mut i = NEXT_SMMALL_PRIME;
-    let limit = (f64::sqrt(n as f64) as usize) + 1;
-    while i <= limit {
-        if n % i == 0 || n % (i + 2) == 0 {
+/// The trait should be implemented on primitive types
+pub trait SmallPrimeTrait {
+    /// Validate if the number is a small prime according to the algorithm specified by Swiss Post (Algorithm 8.3)
+    ///
+    /// # Error
+    /// If preconditions are not satisfied
+    fn is_small_prime(&self) -> Result<bool, NumberTheoryError>;
+}
+
+impl SmallPrimeTrait for usize {
+    fn is_small_prime(&self) -> Result<bool, NumberTheoryError> {
+        if *self >= Self::pow(2, 31) {
+            return Err(NumberTheoryError::OutOfRange {
+                msg: "to big. Must be less thant 2^31".to_string(),
+                n: *self,
+            });
+        }
+        if *self == 0 {
+            return Err(NumberTheoryError::OutOfRange {
+                msg: "must be greater than 0".to_string(),
+                n: *self,
+            });
+        }
+        if *self == 1 {
             return Ok(false);
         }
-        i += 6;
+        if *self == 2 || *self == 3 {
+            return Ok(true);
+        }
+        if self % 2 == 0 || self % 3 == 0 {
+            return Ok(false);
+        }
+        let small_primes = SMALL_PRIMES.to_vec();
+        if self <= small_primes.last().unwrap() {
+            return Ok(small_primes.contains(self));
+        }
+        let mut i = NEXT_SMMALL_PRIME;
+        let limit = (f64::sqrt(*self as f64) as usize) + 1;
+        while i <= limit {
+            if self % i == 0 || self % (i + 2) == 0 {
+                return Ok(false);
+            }
+            i += 6;
+        }
+        Ok(true)
     }
-    Ok(true)
 }
 
 /// Calculate the jacobi symbol
@@ -168,19 +177,19 @@ mod test {
 
     #[test]
     fn test_is_small_prime() {
-        assert!(is_small_prime(0).is_err());
-        assert!(is_small_prime(usize::pow(2, 31)).is_err());
-        assert!(is_small_prime(2).unwrap());
-        assert!(is_small_prime(3).unwrap());
-        assert!(is_small_prime(5).unwrap());
-        assert!(is_small_prime(41).unwrap());
-        assert!(!is_small_prime(4).unwrap());
-        assert!(!is_small_prime(12).unwrap());
-        assert!(!is_small_prime(49).unwrap());
-        assert!(!is_small_prime(99).unwrap());
-        assert!(is_small_prime(104729).unwrap());
-        assert!(!is_small_prime(104730).unwrap());
-        assert!(is_small_prime(111317).unwrap());
+        assert!(0.is_small_prime().is_err());
+        assert!(usize::pow(2, 31).is_small_prime().is_err());
+        assert!(2.is_small_prime().unwrap());
+        assert!(3.is_small_prime().unwrap());
+        assert!(5.is_small_prime().unwrap());
+        assert!(41.is_small_prime().unwrap());
+        assert!(!4.is_small_prime().unwrap());
+        assert!(!12.is_small_prime().unwrap());
+        assert!(!49.is_small_prime().unwrap());
+        assert!(!99.is_small_prime().unwrap());
+        assert!(104729.is_small_prime().unwrap());
+        assert!(!104730.is_small_prime().unwrap());
+        assert!(111317.is_small_prime().unwrap());
     }
 
     #[test]

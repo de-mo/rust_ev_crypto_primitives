@@ -32,7 +32,7 @@ pub use elgamal::{
 };
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{BigUIntError, ByteLength, Constants, Hexa, Operations};
-pub use number_theory::is_small_prime;
+pub use number_theory::SmallPrimeTrait;
 pub use signature::{verify_signature, SignatureError};
 pub use zero_knowledge_proof::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};
 
