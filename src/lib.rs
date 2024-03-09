@@ -31,7 +31,7 @@ pub use elgamal::{
     check_g, check_p, check_q, get_small_prime_group_members, ElgamalError, EncryptionParameters,
 };
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
-pub use integer::{BigUIntError, ByteLength, Constants, Hexa, Operations};
+pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
 pub use number_theory::SmallPrimeTrait;
 pub use signature::{verify_signature, SignatureError};
 pub use zero_knowledge_proof::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};

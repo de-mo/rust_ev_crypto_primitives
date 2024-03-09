@@ -1,8 +1,8 @@
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use super::integer::ByteLength;
+use super::integer::{ByteLength, MPInteger};
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
-use num_bigint::{BigUint, ToBigUint};
+use num_bigint::ToBigUint;
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
@@ -72,9 +72,9 @@ impl ByteArray {
         ByteArray::from(&Vec::from(bytes))
     }
 
-    /// ByteArray into BigUint
-    pub fn into_biguint(&self) -> BigUint {
-        let mut x: BigUint = 0.to_biguint().unwrap();
+    /// ByteArray into MPInteger
+    pub fn into_mp_integer(&self) -> MPInteger {
+        let mut x: MPInteger = 0.to_biguint().unwrap();
         for b in self.inner.clone() {
             x = b + x * 256.to_biguint().unwrap()
         }
@@ -233,8 +233,8 @@ impl Display for ByteArray {
     }
 }
 
-impl From<&BigUint> for ByteArray {
-    fn from(value: &BigUint) -> Self {
+impl From<&MPInteger> for ByteArray {
+    fn from(value: &MPInteger) -> Self {
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();
         let mut d: Vec<u8> = Vec::new();
@@ -248,7 +248,7 @@ impl From<&BigUint> for ByteArray {
 
 impl From<&usize> for ByteArray {
     fn from(value: &usize) -> Self {
-        ByteArray::from(&BigUint::from(*value))
+        ByteArray::from(&MPInteger::from(*value))
     }
 }
 impl From<&Vec<u8>> for ByteArray {
@@ -361,27 +361,27 @@ mod test {
     #[test]
     fn to_biguint() {
         assert_eq!(
-            ByteArray::from_bytes(b"\x00").into_biguint(),
+            ByteArray::from_bytes(b"\x00").into_mp_integer(),
             0.to_biguint().unwrap()
         );
         assert_eq!(
-            ByteArray::from_bytes(b"\x03").into_biguint(),
+            ByteArray::from_bytes(b"\x03").into_mp_integer(),
             3.to_biguint().unwrap()
         );
         assert_eq!(
-            ByteArray::from_bytes(b"\x5c\x27").into_biguint(),
+            ByteArray::from_bytes(b"\x5c\x27").into_mp_integer(),
             23591.to_biguint().unwrap()
         );
         assert_eq!(
-            ByteArray::from_bytes(b"\x5c\x28").into_biguint(),
+            ByteArray::from_bytes(b"\x5c\x28").into_mp_integer(),
             23592.to_biguint().unwrap()
         );
         assert_eq!(
-            ByteArray::from_bytes(b"\xff\xff\xff\xff").into_biguint(),
+            ByteArray::from_bytes(b"\xff\xff\xff\xff").into_mp_integer(),
             4294967295u64.to_biguint().unwrap()
         );
         assert_eq!(
-            ByteArray::from_bytes(b"\x01\x00\x00\x00\x00").into_biguint(),
+            ByteArray::from_bytes(b"\x01\x00\x00\x00\x00").into_mp_integer(),
             4294967296u64.to_biguint().unwrap()
         );
     }

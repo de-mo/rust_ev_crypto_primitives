@@ -2,13 +2,16 @@
 //!
 //! The extended functionalities are implemented using Trait that have to be
 //! used in the client modules
-//! 
+//!
 
 use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::Num;
 use std::fmt::Debug;
-use thiserror::Error;
 use std::sync::OnceLock;
+use thiserror::Error;
+
+/// Type alias for all the crate
+pub type MPInteger = BigUint;
 
 /// Trait to implement constant numbers
 pub trait Constants {
@@ -47,10 +50,10 @@ pub trait Operations {
 /// Transformation from or to String in hexadecimal according to the specifications
 pub trait Hexa: Sized {
     /// Create object from hexadecimal String. If not valid return an error
-    fn from_hexa_string(s: &str) -> Result<Self, BigUIntError>;
+    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError>;
 
     /// Create object from hexadecimal &str. If not valid return an error
-    fn from_hexa_slice(s: &str) -> Result<Self, BigUIntError>;
+    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError>;
 
     /// Generate the hexadecimal String
     fn to_hexa(&self) -> String;
@@ -58,7 +61,7 @@ pub trait Hexa: Sized {
 
 // enum representing the errors with bigint
 #[derive(Error, Debug)]
-pub enum BigUIntError {
+pub enum MPIntegerError {
     #[error("Error parsing {orig} in BigUInt in method {fnname}")]
     ParseError { orig: String, fnname: String },
     #[error("Error parsing {orig} in BigUInt in method {fnname} caused by {source}")]
@@ -146,21 +149,21 @@ impl Operations for BigUint {
 }
 
 impl Hexa for BigUint {
-    fn from_hexa_string(s: &str) -> Result<Self, BigUIntError> {
+    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError> {
         if !s.starts_with("0x") && !s.starts_with("0X") {
-            return Err(BigUIntError::ParseError {
+            return Err(MPIntegerError::ParseError {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
             });
         };
-        <BigUint>::from_str_radix(&s[2..], 16).map_err(|e| BigUIntError::ParseErrorWithSource {
+        <BigUint>::from_str_radix(&s[2..], 16).map_err(|e| MPIntegerError::ParseErrorWithSource {
             orig: s.to_string(),
             fnname: "from_hexa_string".to_string(),
             source: e,
         })
     }
 
-    fn from_hexa_slice(s: &str) -> Result<Self, BigUIntError> {
+    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError> {
         Self::from_hexa_string(s)
     }
 
