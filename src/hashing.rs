@@ -2,8 +2,8 @@
 //!
 
 use super::{
-    byte_array::ByteArray,
     basic_crypto_functions::{sha3_256, BasisCryptoError},
+    byte_array::ByteArray,
 };
 use chrono::NaiveDateTime;
 use num_bigint::BigUint;
@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use thiserror::Error;
 
 /// Trait implementing defining an interface for objects implementing a recursive hash function.
-/// 
+///
 /// The enum [HashableMessage] implements the trait.
 pub trait RecursiveHashTrait {
     /// The type of the error in [try_hash]
@@ -30,7 +30,7 @@ pub trait RecursiveHashTrait {
     }
 
     /// Try recursive hash and return a variant HashableMessage::Hashed containing the hashed value
-    /// 
+    ///
     /// Return [Self::Error] if an error appears during the calculation
     fn try_to_hashed_hashable_message(&self) -> Result<HashableMessage<'_>, Self::Error> {
         Ok(HashableMessage::Hashed(self.try_hash()?))
@@ -54,7 +54,7 @@ pub trait RecursiveHashTrait {
 ///  
 /// For simplification for the consumer, the enum contains the possibility to reference String or &str and the possibility
 /// to reference to BigUint or usize
-/// 
+///
 /// Since [HashableMessage] implements the trait [RecursiveHashTrait], the trait must be used in a client module
 /// in order to hash the message.
 ///
@@ -134,7 +134,7 @@ impl<'a> HashableMessage<'a> {
         matches!(self, HashableMessage::Hashed(_))
     }
 
-    #[deprecated(since="0.2.0", note="please use `hash()` instead")]
+    #[deprecated(since = "0.2.0", note = "please use `hash()` instead")]
     pub fn recursive_hash(&self) -> ByteArray {
         self.hash()
     }
@@ -285,7 +285,7 @@ impl<'a> From<&'a Vec<usize>> for HashableMessage<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::super::{byte_array::Decode, num_bigint::Hexa};
+    use super::super::{byte_array::Decode, integer::Hexa};
     use super::*;
 
     #[test]

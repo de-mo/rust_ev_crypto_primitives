@@ -1,13 +1,12 @@
 //! Implementation of El Gamal functionalitiies and the structure for the Encryption parameters
 
 use crate::{
-    basic_crypto_functions::{ shake256, BasisCryptoError },
+    basic_crypto_functions::{shake256, BasisCryptoError},
     byte_array::ByteArray,
-    num_bigint::Constants,
-    number_theory::{ check_prime, check_quadratic_residue, NumberTheoryError },
-    number_theory::{ is_quadratic_residue, is_small_prime, miller_rabin_test, SMALL_PRIMES },
-    HashableMessage,
-    SECURITY_LENGTH,
+    integer::Constants,
+    number_theory::{check_prime, check_quadratic_residue, NumberTheoryError},
+    number_theory::{is_quadratic_residue, is_small_prime, miller_rabin_test, SMALL_PRIMES},
+    HashableMessage, SECURITY_LENGTH,
 };
 use num_bigint::BigUint;
 use thiserror::Error;
@@ -63,9 +62,7 @@ impl EncryptionParameters {
         let q_b = q_b_hat.prepend_byte(2u8);
         let q_prime: BigUint = q_b.into_biguint() >> 3;
         let q = &q_prime - (&q_prime % 6u8) + BigUint::five();
-        let rs: Vec<BigUint> = SMALL_PRIMES.iter()
-            .map(|sp| &q % sp)
-            .collect();
+        let rs: Vec<BigUint> = SMALL_PRIMES.iter().map(|sp| &q % sp).collect();
         let mut delta = BigUint::zero().clone();
         let jump = BigUint::from(6u8);
         loop {
@@ -73,10 +70,9 @@ impl EncryptionParameters {
                 delta += &jump;
                 let mut i: usize = 0;
                 while i < rs.len() {
-                    if
-                        (&rs[i] + &delta) % SMALL_PRIMES[i] == *BigUint::zero() ||
-                        ((&rs[i] + &delta) * BigUint::two() + BigUint::one()) % SMALL_PRIMES[i] ==
-                            *BigUint::zero()
+                    if (&rs[i] + &delta) % SMALL_PRIMES[i] == *BigUint::zero()
+                        || ((&rs[i] + &delta) * BigUint::two() + BigUint::one()) % SMALL_PRIMES[i]
+                            == *BigUint::zero()
                     {
                         delta += &jump;
                         i = 0;
@@ -84,18 +80,16 @@ impl EncryptionParameters {
                         i += 1;
                     }
                 }
-                if
-                    miller_rabin_test(&(&q + &delta), 1) &&
-                    miller_rabin_test(&((&q + &delta) * BigUint::two() + BigUint::one()), 1)
+                if miller_rabin_test(&(&q + &delta), 1)
+                    && miller_rabin_test(&((&q + &delta) * BigUint::two() + BigUint::one()), 1)
                 {
                     break;
                 }
             }
-            if
-                miller_rabin_test(&(&q + &delta), SECURITY_LENGTH / 2) &&
-                miller_rabin_test(
+            if miller_rabin_test(&(&q + &delta), SECURITY_LENGTH / 2)
+                && miller_rabin_test(
                     &((&q + &delta) * BigUint::two() + BigUint::one()),
-                    SECURITY_LENGTH / 2
+                    SECURITY_LENGTH / 2,
                 )
             {
                 break;
@@ -148,21 +142,24 @@ impl From<(&BigUint, &BigUint, &BigUint)> for EncryptionParameters {
 
 impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
     fn from(value: &'a EncryptionParameters) -> Self {
-        Self::from(vec![Self::from(value.p()), Self::from(value.q()), Self::from(value.g())])
+        Self::from(vec![
+            Self::from(value.p()),
+            Self::from(value.q()),
+            Self::from(value.g()),
+        ])
     }
 }
 
 // Get small prime group members according to the specifications of Swiss Post (Algorithm 8.2)
 pub fn get_small_prime_group_members(
     ep: &EncryptionParameters,
-    desired_number: usize
+    desired_number: usize,
 ) -> Result<Vec<usize>, ElgamalError> {
     let mut current = 5usize;
     let mut res = vec![];
-    while
-        res.len() < desired_number &&
-        &BigUint::from(current) < ep.p() &&
-        current < usize::pow(2, 31)
+    while res.len() < desired_number
+        && &BigUint::from(current) < ep.p()
+        && current < usize::pow(2, 31)
     {
         let is_prime = is_small_prime(current).unwrap();
         if is_prime && is_quadratic_residue(&BigUint::from(current), ep.p()) {
@@ -209,24 +206,23 @@ pub fn check_g(p: &BigUint, g: &BigUint) -> Option<ElgamalError> {
 // Enum reprsenting the elgamal errors
 #[derive(Error, Debug)]
 pub enum ElgamalError {
-    #[error(transparent)] OpenSSLError(#[from] BasisCryptoError),
-    #[error(
-        "To few number of small primes found. Expcted: {expected}, found: {found}"
-    )] TooFewSmallPrimeNumbers {
-        expected: usize,
-        found: usize,
-    },
-    #[error("Number {0} with value {1} is not prime")] NotPrime(String, BigUint),
+    #[error(transparent)]
+    OpenSSLError(#[from] BasisCryptoError),
+    #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
+    TooFewSmallPrimeNumbers { expected: usize, found: usize },
+    #[error("Number {0} with value {1} is not prime")]
+    NotPrime(String, BigUint),
     #[error("The relation p=2q+1 is not satisfied")]
     CheckRelationPQ,
     #[error("The value should not be one")]
     CheckNotOne,
-    #[error(transparent)] CheckNumberTheory(#[from] NumberTheoryError),
+    #[error(transparent)]
+    CheckNumberTheory(#[from] NumberTheoryError),
 }
 
 #[cfg(test)]
 mod test {
-    use super::super::num_bigint::Hexa;
+    use super::super::integer::Hexa;
     use super::*;
 
     #[test]
@@ -240,7 +236,10 @@ mod test {
             ).unwrap(),
             &BigUint::from(3u8),
         ));
-        assert_eq!(get_small_prime_group_members(&ep, 5).unwrap(), vec![5, 17, 19, 37, 41]);
+        assert_eq!(
+            get_small_prime_group_members(&ep, 5).unwrap(),
+            vec![5, 17, 19, 37, 41]
+        );
     }
 
     #[test]
@@ -311,23 +310,23 @@ mod test {
         let q_err_1 = BigUint::from(6u8);
         let q_err_2 = BigUint::from(11u8);
         let g_err = BigUint::from(2u8);
-        assert!(EncryptionParameters::from((&p, &q, &g)).check_encryption_parameters().is_none());
-        assert!(
-            EncryptionParameters::from((&p_err, &q, &g)).check_encryption_parameters().is_some()
-        );
-        assert!(
-            EncryptionParameters::from((&p, &q_err_1, &g)).check_encryption_parameters().is_some()
-        );
-        assert!(
-            EncryptionParameters::from((&p, &q_err_2, &g)).check_encryption_parameters().is_some()
-        );
-        assert!(
-            EncryptionParameters::from((&p, &q, &g_err)).check_encryption_parameters().is_some()
-        );
-        assert!(
-            EncryptionParameters::from((&p, &q, BigUint::one()))
-                .check_encryption_parameters()
-                .is_some()
-        );
+        assert!(EncryptionParameters::from((&p, &q, &g))
+            .check_encryption_parameters()
+            .is_none());
+        assert!(EncryptionParameters::from((&p_err, &q, &g))
+            .check_encryption_parameters()
+            .is_some());
+        assert!(EncryptionParameters::from((&p, &q_err_1, &g))
+            .check_encryption_parameters()
+            .is_some());
+        assert!(EncryptionParameters::from((&p, &q_err_2, &g))
+            .check_encryption_parameters()
+            .is_some());
+        assert!(EncryptionParameters::from((&p, &q, &g_err))
+            .check_encryption_parameters()
+            .is_some());
+        assert!(EncryptionParameters::from((&p, &q, BigUint::one()))
+            .check_encryption_parameters()
+            .is_some());
     }
 }

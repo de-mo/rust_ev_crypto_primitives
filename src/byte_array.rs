@@ -1,6 +1,6 @@
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use super::num_bigint::ByteLength;
+use super::integer::ByteLength;
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
 use num_bigint::{BigUint, ToBigUint};
 use num_traits::Pow;
@@ -14,7 +14,7 @@ pub struct ByteArray {
 }
 
 /// Trait to encode in string in different bases
-/// 
+///
 /// ```
 /// use rust_ev_crypto_primitives::Encode;
 /// use rust_ev_crypto_primitives::ByteArray;
@@ -33,7 +33,7 @@ pub trait Encode {
 }
 
 /// Trait to decode from string in different bases
-/// 
+///
 /// ```
 /// use rust_ev_crypto_primitives::Decode;
 /// use rust_ev_crypto_primitives::ByteArray;
@@ -43,19 +43,19 @@ pub trait Encode {
 /// ```
 pub trait Decode: Sized {
     /// Code from string in base16 according specifications. The letters are in upper.
-    /// 
+    ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
     fn base16_decode(s: &str) -> Result<Self, ByteArrayError>;
 
     /// Code from string in base32 according specifications.
-    /// 
+    ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
     fn base32_decode(s: &str) -> Result<Self, ByteArrayError>;
 
     /// Code from string in base32 according specifications.
-    /// 
+    ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
     fn base64_decode(s: &str) -> Result<Self, ByteArrayError>;
@@ -93,7 +93,7 @@ impl ByteArray {
     }
 
     /// Extend other to self
-    /// 
+    ///
     /// self will changed and extend. other is cloned at the end of self
     pub fn extend(&mut self, other: &ByteArray) -> &ByteArray {
         self.inner.extend(other.inner.clone());
@@ -101,7 +101,7 @@ impl ByteArray {
     }
 
     /// Append and return a new one
-    /// 
+    ///
     /// The new one is the concatenation of self and other. self and other remain unchanged
     pub fn append(&self, other: &ByteArray) -> ByteArray {
         let mut self_bytes = self.to_bytes();
@@ -118,7 +118,7 @@ impl ByteArray {
     }
 
     /// Cut the byte array to given bit length according to the specifications of Swiss Post (Algorithm 3.1)
-    /// 
+    ///
     /// # Error
     /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
     pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, ByteArrayError> {
@@ -330,15 +330,9 @@ mod test {
 
     #[test]
     fn from_string() {
-        assert_eq!(
-            ByteArray::from("ABC").to_bytes(),
-            b"\x41\x42\x43"
-        );
+        assert_eq!(ByteArray::from("ABC").to_bytes(), b"\x41\x42\x43");
         assert_eq!(ByteArray::from("Ä").to_bytes(), b"\xc3\x84");
-        assert_eq!(
-            ByteArray::from("1001").to_bytes(),
-            b"\x31\x30\x30\x31"
-        );
+        assert_eq!(ByteArray::from("1001").to_bytes(), b"\x31\x30\x30\x31");
         assert_eq!(ByteArray::from("1A").to_bytes(), b"\x31\x41");
     }
 

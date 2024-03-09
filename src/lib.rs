@@ -15,23 +15,25 @@
 //! performance. If the checks are performed during the usage of the crate, it is recommended, not to activate the feature
 //!
 
+mod basic_crypto_functions;
 pub mod byte_array;
 pub mod direct_trust;
 pub mod elgamal;
 pub mod hashing;
-pub mod num_bigint;
+pub mod integer;
 pub mod number_theory;
-mod basic_crypto_functions;
 pub mod signature;
 pub mod zero_knowledge_proof;
 
 pub use byte_array::{ByteArray, Decode, Encode};
-pub use direct_trust::{Keystore, DirectTrustCertificate, DirectTrustError};
-pub use elgamal::{get_small_prime_group_members, ElgamalError, EncryptionParameters, check_g, check_p, check_q};
-pub use hashing::{HashError, RecursiveHashTrait, HashableMessage};
-pub use num_bigint::{BigUIntError, ByteLength, Constants, Hexa, Operations};
+pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
+pub use elgamal::{
+    check_g, check_p, check_q, get_small_prime_group_members, ElgamalError, EncryptionParameters,
+};
+pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
+pub use integer::{BigUIntError, ByteLength, Constants, Hexa, Operations};
 pub use number_theory::is_small_prime;
-pub use signature::{SignatureError, verify_signature};
+pub use signature::{verify_signature, SignatureError};
 pub use zero_knowledge_proof::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};
 
 /// The length of the group parameter `p` according to the security level in the specifications
