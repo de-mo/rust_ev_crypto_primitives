@@ -17,24 +17,29 @@
 //! Crate implementing the cryptographic functions for E-Voting
 //!
 //! It is based on the specifications of Swiss Post, according to the following document version:
-//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.3.1
+//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.0
 //!
-//! The crate reduces actually at the necessary functions for the Verifier. The crate is grouped in modules releated to themes, like the specifications
+//! The crate reduces actually at the necessary functions for the Verifier. The crate is grouped in modules releated
+//! to themes, like the specifications
 //!
-//! The module [openssl_wrapper] contains a wrapper to openssl. Details about installation and functionalities can be found
-//! on the crate [openssl].
+//! The module `crate::openssl_wrapper` contains a wrapper to openssl. Details about installation and functionalities
+//! can be found on the crate [openssl].
 //!
-//! If a method should return an error, then each error type is specified per module and is transparent to the user of the crate.
+//! If a method should return an error, then each error type is specified per module and is transparent
+//! to the user of the crate.
 //!
-//! #Features
+//! # Features
+//!
 //! Following features are possible:
-//! - "rug": Use [rug::Integer] for mulitple precision numbers
-//! - "num-bigint": Use the [num-bigint::BigUint] for mulitple precision numbers
-//! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post. This reduces the
-//! performance. If the checks are performed during the usage of the crate, it is recommended, not to activate the feature
+//! - "rug": Use `Integer` of crate [sug](https://crates.io/crates/rug) for mulitple precision numbers
+//! - "num-bigint": Use the `BigUint`of crate [num-bigint](https://crates.io/crates/num-bigint) for mulitple precision
+//! numbers
+//! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post.
+//! This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
+//! not to activate the feature
 //!
-//! The feature "rug" is strongly more performant, but GMP must be installed for compilation. See the requirements and installation
-//! path in the crate documentation [rug](https://crates.io/crates/rug)
+//! The feature "rug" is strongly more performant, but GMP must be installed for compilation.
+//! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
 
 mod basic_crypto_functions;
 pub mod byte_array;

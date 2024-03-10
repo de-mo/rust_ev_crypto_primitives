@@ -14,7 +14,7 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Module to extend functionalities of BigUInt
+//! Module to extend functionalities of the used big integer (`BigUint` or `Integer`)
 //!
 //! The extended functionalities are implemented using Trait that have to be
 //! used in the client modules
@@ -42,11 +42,17 @@ pub type MPInteger = Integer;
 
 /// Trait to implement constant numbers
 pub trait Constants {
+    /// Zero
     fn zero() -> &'static Self;
+    /// One
     fn one() -> &'static Self;
+    /// Two
     fn two() -> &'static Self;
+    /// Three
     fn three() -> &'static Self;
+    /// Four
     fn four() -> &'static Self;
+    /// Five
     fn five() -> &'static Self;
 }
 
@@ -60,7 +66,7 @@ pub trait Operations {
         !self.is_even()
     }
 
-    /// Returns the byte representation in little-endian byte order
+    /// Returns the number of bits representing the number
     fn nb_bits(&self) -> usize;
 
     /// Calculate the exponentiate modulo: self^exp % modulus
@@ -73,7 +79,8 @@ pub trait Operations {
     fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self;
 
     /// Calculate the inverse modulo: self^(-1) % modulus
-    /// Get the correct answer only if modulus is prime
+    ///
+    /// Return the correct answer only if modulus is prime
     fn mod_inverse(&self, modulus: &Self) -> Self;
 }
 
@@ -90,7 +97,7 @@ pub trait Hexa: Sized {
     fn to_hexa(&self) -> String;
 }
 
-// enum representing the errors with bigint
+// enum representing the errors with big integer
 #[derive(Error, Debug)]
 pub enum MPIntegerError {
     #[error("Error parsing {orig} in BigUInt in method {fnname}")]
