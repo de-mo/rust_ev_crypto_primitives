@@ -16,12 +16,11 @@
 
 //! Module implementing the direct trust
 
-use thiserror::Error;
-
 use super::basic_crypto_functions::{
-    BasisCryptoError, {Keystore as SslKeystore, SigningCertificate},
+    BasisCryptoError, CertificateExtension, Keystore as SslKeystore, SigningCertificate,
 };
 use std::{fs, io, path::Path};
+use thiserror::Error;
 
 /// Struct representing a direct trust
 pub struct Keystore {
@@ -29,9 +28,11 @@ pub struct Keystore {
 }
 
 impl Keystore {
-    /// Create a new direct trust certificate reading the store at location for
-    /// the given authority
-    pub fn new(keystore_path: &Path, password_file_path: &Path) -> Result<Self, DirectTrustError> {
+    /// Read a direct trust keystore from pkcs12
+    pub fn from_pkcs12(
+        keystore_path: &Path,
+        password_file_path: &Path,
+    ) -> Result<Self, DirectTrustError> {
         let pwd = fs::read_to_string(password_file_path).map_err(|e| DirectTrustError::IO {
             msg: format!(
                 "Error reading password file {}",
@@ -40,9 +41,20 @@ impl Keystore {
             source: e,
         })?;
         Ok(Keystore {
-            keystore: SslKeystore::read_keystore(keystore_path, &pwd)
+            keystore: SslKeystore::from_pkcs12(keystore_path, &pwd)
                 .map_err(DirectTrustError::Keystore)?,
         })
+    }
+
+    /// Read a direct trust keystore from a directory, where the public key certificates are stored
+    pub fn from_directory(
+        keystore_path: &Path,
+        extension: &CertificateExtension,
+    ) -> Result<Self, DirectTrustError> {
+        let mut ks =
+            SslKeystore::from_directory(keystore_path).map_err(DirectTrustError::Keystore)?;
+        ks.set_certificate_extension(extension);
+        Ok(Self { keystore: ks })
     }
 
     pub fn certificate(&self, authority: &str) -> Result<DirectTrustCertificate, DirectTrustError> {
@@ -100,19 +112,29 @@ mod test {
     }
 
     #[test]
-    fn test_create() {
-        let dt = Keystore::new(
+    fn test_create_pkcs12() {
+        let dt = Keystore::from_pkcs12(
             &get_location().join(Path::new(KEYSTORE_FILE_NAME)),
             &get_location().join(Path::new(PASSWORD_FILE_NAME)),
         )
         .unwrap();
-        //let dt = DirectTrustCertificate::new(, &CertificateAuthority::Canton);
-        assert!(dt.certificate("canton").is_ok());
         assert!(dt.certificate("toto").is_err());
-        let dt_err = Keystore::new(
+        let dt_err = Keystore::from_pkcs12(
             Path::new("./toto"),
             &get_location().join(Path::new(PASSWORD_FILE_NAME)),
         );
+        assert!(dt_err.is_err());
+    }
+
+    #[test]
+    fn test_create_dir() {
+        let dt =
+            Keystore::from_directory(&get_location(), &CertificateExtension::default()).unwrap();
+        //let dt = DirectTrustCertificate::new(, &CertificateAuthority::Canton);
+        assert!(dt.certificate("canton").is_ok());
+        assert!(dt.certificate("toto").is_err());
+        let dt_err =
+            Keystore::from_directory(Path::new("./toto"), &CertificateExtension::default());
         assert!(dt_err.is_err());
     }
 }

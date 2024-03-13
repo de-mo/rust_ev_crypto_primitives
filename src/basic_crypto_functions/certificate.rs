@@ -30,10 +30,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Wrapper to the keystore give in a file
+/// Keystore to collect the public keys
+///
+/// The keystore can be a p12 file or a directory containing the certificates
+/// - In the first case, the CN of the certificates must contain the name of the authority
+/// - In the second case, the certificates must contain the valid structure, the file name represent the authority
+/// and the file extension is given bei [CertificateExtension] (`.cer`, or `.pem`).
 pub struct Keystore {
-    pcks12: ParsedPkcs12_2,
+    pcks12: Option<ParsedPkcs12_2>,
     path: PathBuf,
+    extension: CertificateExtension,
+}
+
+/// Possible extension of the X509 certificate
+#[derive(Clone)]
+pub enum CertificateExtension {
+    Cer,
+    Pem,
 }
 
 /// The signing certificate
@@ -51,7 +64,7 @@ impl Keystore {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn read_keystore(path: &Path, password: &str) -> Result<Keystore, BasisCryptoError> {
+    pub fn from_pkcs12(path: &Path, password: &str) -> Result<Keystore, BasisCryptoError> {
         let bytes = fs::read(path).map_err(|e| BasisCryptoError::IO {
             msg: format!("Error reading keystore file {:?}", path),
             source: e,
@@ -62,8 +75,9 @@ impl Keystore {
         })?;
         p12.parse2(password)
             .map(|p| Keystore {
-                pcks12: p,
+                pcks12: Some(p),
                 path: path.to_path_buf(),
+                extension: CertificateExtension::default(),
             })
             .map_err(|e| BasisCryptoError::Keystore {
                 msg: format!("Error parsing keystore file {:?}", path),
@@ -71,12 +85,51 @@ impl Keystore {
             })
     }
 
+    /// Keystore is a directory with the list of files withing the directory
+    ///
+    /// # Error
+    /// if somwthing is going wrong
+    pub fn from_directory(path: &Path) -> Result<Keystore, BasisCryptoError> {
+        if !path.is_dir() {
+            return Err(BasisCryptoError::Dir {
+                path: path.to_str().unwrap().to_string(),
+            });
+        }
+        Ok(Self {
+            pcks12: None,
+            path: path.to_path_buf(),
+            extension: CertificateExtension::default(),
+        })
+    }
+
+    /// Check if the keystore is based on p12
+    ///
+    /// If false, it is based on directory
+    pub fn is_pcks12(&self) -> bool {
+        self.pcks12.is_some()
+    }
+
+    pub fn set_certificate_extension(&mut self, ext: &CertificateExtension) {
+        self.extension = ext.to_owned();
+    }
+
     /// Get a given certificate from the keystore
     ///
     /// # Error
     /// if somwthing is going wrong
     pub fn get_certificate(&self, authority: &str) -> Result<SigningCertificate, BasisCryptoError> {
-        let cas = match self.pcks12.ca.as_ref() {
+        match self.is_pcks12() {
+            true => self.get_certificate_from_pcks12(authority),
+            false => self.get_certificate_from_dir(authority),
+        }
+    }
+
+    fn get_certificate_from_pcks12(
+        &self,
+        authority: &str,
+    ) -> Result<SigningCertificate, BasisCryptoError> {
+        let pcks12 = self.pcks12.as_ref().unwrap();
+        let cas = match pcks12.ca.as_ref() {
             Some(s) => s,
             None => {
                 return Err(BasisCryptoError::KeyStoreMissingCAList(
@@ -84,7 +137,10 @@ impl Keystore {
                 ));
             }
         };
+        println!("length: {:?}", cas.len());
         for x in cas.iter() {
+            println!("subject_name: {:?}", x.subject_name());
+            println!("issuer_name: {:?}", x.issuer_name());
             for e in x.issuer_name().entries() {
                 if e.object().to_string() == *"commonName"
                     && e.data().as_slice() == authority.as_bytes()
@@ -99,6 +155,27 @@ impl Keystore {
         Err(BasisCryptoError::KeyStoreMissingCA {
             path: self.path.to_path_buf(),
             name: authority.to_string(),
+        })
+    }
+
+    fn get_certificate_from_dir(
+        &self,
+        authority: &str,
+    ) -> Result<SigningCertificate, BasisCryptoError> {
+        let p = self
+            .path
+            .join(format!("{}{}", authority, self.extension.to_string()));
+        let buf = fs::read(&p).map_err(|e| BasisCryptoError::IO {
+            msg: format!("Error reading file {}", p.as_os_str().to_str().unwrap()),
+            source: e,
+        })?;
+        let cert = X509::from_pem(&buf).map_err(|e| BasisCryptoError::CertificateErrorPK {
+            name: authority.to_string(),
+            source: e,
+        })?;
+        Ok(SigningCertificate {
+            authority: authority.to_owned(),
+            x509: cert,
         })
     }
 }
@@ -166,6 +243,21 @@ impl PublicKey {
     }
 }
 
+impl Default for CertificateExtension {
+    fn default() -> Self {
+        Self::Cer
+    }
+}
+
+impl ToString for CertificateExtension {
+    fn to_string(&self) -> String {
+        match self {
+            CertificateExtension::Cer => ".cer".to_string(),
+            CertificateExtension::Pem => ".pem".to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -173,28 +265,70 @@ mod test {
     use std::path::PathBuf;
     use std::str;
 
-    const PASSWORD: &str = "testPassword";
+    const PASSWORD: &str = "aNtRM0fSwIy1TiWnii5ObhHu9zwnFbEh";
 
+    fn get_dir() -> PathBuf {
+        Path::new("./").join("test_data").join("direct-trust")
+    }
     fn get_file() -> PathBuf {
-        Path::new("./")
-            .join("test_data")
-            .join("direct-trust")
-            .join("public_keys_keystore_verifier.p12")
+        get_dir().join("public_keys_keystore_verifier.p12")
     }
 
     #[test]
-    fn test_create() {
-        let ks = Keystore::read_keystore(&get_file(), PASSWORD);
+    fn test_read_pem() {
+        let p = get_dir().join("canton.cer");
+        let buf = fs::read(p).unwrap();
+        let _x509 = X509::from_pem(&buf).unwrap();
+    }
+
+    #[test]
+    fn test_create_pkcs12() {
+        let ks = Keystore::from_pkcs12(&get_file(), PASSWORD);
         assert!(ks.is_ok());
-        let ks_err = Keystore::read_keystore(&get_file(), "toto");
+        assert!(ks.unwrap().is_pcks12());
+        let ks_err = Keystore::from_pkcs12(&get_file(), "toto");
         assert!(ks_err.is_err());
-        let ks_err2 = Keystore::read_keystore(Path::new("./toto.p12"), PASSWORD);
+        let ks_err2 = Keystore::from_pkcs12(Path::new("./toto.p12"), PASSWORD);
         assert!(ks_err2.is_err());
     }
 
     #[test]
-    fn get_certificate() {
-        let ks = Keystore::read_keystore(&get_file(), PASSWORD).unwrap();
+    fn test_create_dir() {
+        let ks = Keystore::from_directory(&get_dir());
+        assert!(ks.is_ok());
+        assert!(!ks.unwrap().is_pcks12());
+        let ks_err = Keystore::from_pkcs12(&get_file(), "toto");
+        assert!(ks_err.is_err());
+    }
+
+    #[test]
+    #[ignore = "not working with the actual p12, since CN not correctly set"]
+    fn get_certificate_for_pkcs12() {
+        let ks = Keystore::from_pkcs12(&get_file(), PASSWORD).unwrap();
+        let cert = ks.get_certificate("canton");
+        assert!(cert.is_ok());
+        assert_eq!(cert.unwrap().authority(), "canton");
+        let cert = ks.get_certificate("sdm_config");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("sdm_tally");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("voting_server");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("control_component_1");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("control_component_2");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("control_component_3");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("control_component_4");
+        assert!(cert.is_ok());
+        let cert = ks.get_certificate("toto");
+        assert!(cert.is_err());
+    }
+
+    #[test]
+    fn get_certificate_for_dir() {
+        let ks = Keystore::from_directory(&get_dir()).unwrap();
         let cert = ks.get_certificate("canton");
         assert!(cert.is_ok());
         assert_eq!(cert.unwrap().authority(), "canton");
@@ -218,14 +352,14 @@ mod test {
 
     #[test]
     fn digest() {
-        let ks = Keystore::read_keystore(&get_file(), PASSWORD).unwrap();
+        let ks = Keystore::from_directory(&get_dir()).unwrap();
         assert_eq!(
             ks.get_certificate("canton")
                 .unwrap()
                 .digest()
                 .unwrap()
                 .base16_encode(),
-            "51fcea9139ce3de992eeee1ef77d1e6461e747dff3e3fa52d23f855a319cc35e".to_uppercase()
+            "2B89BC7645ACE34DB5BFFBAB41727987236050F9CB5AD66BA1ED0A806EE8BC8C".to_uppercase()
         );
     }
 }

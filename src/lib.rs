@@ -51,6 +51,7 @@ pub mod number_theory;
 pub mod signature;
 pub mod zero_knowledge_proof;
 
+pub use basic_crypto_functions::CertificateExtension;
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
 pub use elgamal::{
