@@ -20,6 +20,7 @@
 //! used in the client modules
 //!
 
+use crate::{ByteArray, Decode, Encode};
 use std::fmt::Debug;
 use std::sync::OnceLock;
 use thiserror::Error;
@@ -236,7 +237,7 @@ impl Hexa for BigUint {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
             });
-        };
+        }
         <BigUint>::from_str_radix(&s[2..], 16).map_err(|e| MPIntegerError::ParseErrorWithSource {
             orig: s.to_string(),
             fnname: "from_hexa_string".to_string(),
@@ -257,9 +258,9 @@ impl Hexa for Integer {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
             });
-        };
+        }
         Integer::parse_radix(&s[2..], 16)
-            .map(|n| Integer::from(n))
+            .map(Integer::from)
             .map_err(|e| MPIntegerError::ParseErrorWithSource {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
@@ -269,6 +270,34 @@ impl Hexa for Integer {
 
     fn to_hexa(&self) -> String {
         format!("{}{}", "0x", self.to_string_radix(16))
+    }
+}
+
+impl Decode for MPInteger {
+    fn base16_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+        ByteArray::base16_decode(s).map(|b| b.into_mp_integer())
+    }
+
+    fn base32_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+        ByteArray::base32_decode(s).map(|b| b.into_mp_integer())
+    }
+
+    fn base64_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+        ByteArray::base64_decode(s).map(|b| b.into_mp_integer())
+    }
+}
+
+impl Encode for MPInteger {
+    fn base16_encode(&self) -> String {
+        ByteArray::from(self).base16_encode()
+    }
+
+    fn base32_encode(&self) -> String {
+        ByteArray::from(self).base32_encode()
+    }
+
+    fn base64_encode(&self) -> String {
+        ByteArray::from(self).base64_encode()
     }
 }
 
@@ -368,6 +397,60 @@ mod test {
         assert_eq!(
             MPInteger::from(10u16).mod_inverse(&MPInteger::from(17u16)),
             MPInteger::from(12u16)
+        );
+    }
+
+    #[test]
+    fn base16_encode() {
+        assert_eq!(MPInteger::from(0u8).base16_encode(), "00");
+        assert_eq!(MPInteger::from(10u8).base16_encode(), "0A");
+    }
+
+    #[test]
+    fn base16_decode() {
+        assert_eq!(
+            MPInteger::base16_decode("00").unwrap(),
+            MPInteger::from(0u8)
+        );
+        assert_eq!(
+            MPInteger::base16_decode("A1").unwrap(),
+            MPInteger::from(161u8)
+        );
+    }
+
+    #[test]
+    fn base32_encode() {
+        assert_eq!(MPInteger::from(0u8).base32_encode(), "AA======");
+        assert_eq!(MPInteger::from(10u8).base32_encode(), "BI======");
+    }
+
+    #[test]
+    fn base32_decode() {
+        assert_eq!(
+            MPInteger::base32_decode("AA======").unwrap(),
+            MPInteger::from(0u8)
+        );
+        assert_eq!(
+            MPInteger::base32_decode("BI======").unwrap(),
+            MPInteger::from(10u8)
+        );
+    }
+
+    #[test]
+    fn base64_encode() {
+        assert_eq!(MPInteger::from(0u8).base64_encode(), "AA==");
+        assert_eq!(MPInteger::from(10u8).base64_encode(), "Cg==");
+    }
+
+    #[test]
+    fn base64_decode() {
+        assert_eq!(
+            MPInteger::base64_decode("AA==").unwrap(),
+            MPInteger::from(0u8)
+        );
+        assert_eq!(
+            MPInteger::base64_decode("Cg==").unwrap(),
+            MPInteger::from(10u8)
         );
     }
 }
