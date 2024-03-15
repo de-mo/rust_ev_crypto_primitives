@@ -21,8 +21,9 @@ use crate::{
     byte_array::ByteArray,
     integer::{Constants, MPInteger},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait, SMALL_PRIMES},
-    HashableMessage, SECURITY_LENGTH,
+    HashableMessage, VerifyDomainTrait, SECURITY_LENGTH,
 };
+use anyhow::anyhow;
 use thiserror::Error;
 
 /// Encryption parameters for the ecryption system according to the specification of Swiss Post
@@ -127,20 +128,30 @@ impl EncryptionParameters {
         })
     }
 
-    /// Check the encryption parameters according to the domain definition in the specifications
-    ///
-    /// Return a [ElgamalError] if the check is not positive. Else None
-    pub fn check_encryption_parameters(&self) -> Option<ElgamalError> {
-        if let Some(e) = check_p(&self.p) {
-            return Some(e);
+    // Get small prime group members according to the specifications of Swiss Post (Algorithm 8.2)
+    pub fn get_small_prime_group_members(
+        &self,
+        desired_number: usize,
+    ) -> Result<Vec<usize>, ElgamalError> {
+        let mut current = 5usize;
+        let mut res = vec![];
+        while res.len() < desired_number
+            && &MPInteger::from(current) < self.p()
+            && current < usize::pow(2, 31)
+        {
+            let is_prime = current.is_small_prime().unwrap();
+            if is_prime && MPInteger::from(current).is_quadratic_residue(self.p()) {
+                res.push(current);
+            }
+            current += 2;
         }
-        if let Some(e) = check_q(&self.p, &self.q) {
-            return Some(e);
+        if res.len() != desired_number {
+            return Err(ElgamalError::TooFewSmallPrimeNumbers {
+                expected: desired_number,
+                found: res.len(),
+            });
         }
-        if let Some(e) = check_g(&self.p, &self.g) {
-            return Some(e);
-        }
-        None
+        Ok(res)
     }
 
     /// Transform the parameters to a tuple
@@ -169,43 +180,33 @@ impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
     }
 }
 
-// Get small prime group members according to the specifications of Swiss Post (Algorithm 8.2)
-pub fn get_small_prime_group_members(
-    ep: &EncryptionParameters,
-    desired_number: usize,
-) -> Result<Vec<usize>, ElgamalError> {
-    let mut current = 5usize;
-    let mut res = vec![];
-    while res.len() < desired_number
-        && &MPInteger::from(current) < ep.p()
-        && current < usize::pow(2, 31)
-    {
-        let is_prime = current.is_small_prime().unwrap();
-        if is_prime && MPInteger::from(current).is_quadratic_residue(ep.p()) {
-            res.push(current);
+impl VerifyDomainTrait for EncryptionParameters {
+    fn verifiy_domain(&self) -> Vec<anyhow::Error> {
+        let mut res = vec![];
+        if let Some(e) = check_p(&self.p) {
+            res.push(anyhow!(e).context(format!("p does not satisfy the requirements {}", self.p)));
         }
-        current += 2;
+        if let Some(e) = check_q(&self.p, &self.q) {
+            res.push(anyhow!(e).context(format!("q does not satisfy the requirements {}", self.q)));
+        }
+        if let Some(e) = check_g(&self.p, &self.g) {
+            res.push(anyhow!(e).context(format!("g does not satisfy the requirements {}", self.g)));
+        }
+        res
     }
-    if res.len() != desired_number {
-        return Err(ElgamalError::TooFewSmallPrimeNumbers {
-            expected: desired_number,
-            found: res.len(),
-        });
-    }
-    Ok(res)
 }
 
 /// Check p as part of encryption parameter
 ///
 /// Return a [ElgamalError] if the check is not positive. Else None
-pub fn check_p(p: &MPInteger) -> Option<ElgamalError> {
+fn check_p(p: &MPInteger) -> Option<ElgamalError> {
     p.check_prime().map(ElgamalError::CheckNumberTheory)
 }
 
 /// Check q as part of encryption parameter
 ///
 /// Return a [ElgamalError] if the check is not positive. Else None
-pub fn check_q(p: &MPInteger, q: &MPInteger) -> Option<ElgamalError> {
+fn check_q(p: &MPInteger, q: &MPInteger) -> Option<ElgamalError> {
     if *p != MPInteger::from(q * 2u8) + 1u8 {
         return Some(ElgamalError::CheckRelationPQ);
     }
@@ -215,7 +216,7 @@ pub fn check_q(p: &MPInteger, q: &MPInteger) -> Option<ElgamalError> {
 /// Check g as part of encryption parameter
 ///
 /// Return a [ElgamalError] if the check is not positive. Else None
-pub fn check_g(p: &MPInteger, g: &MPInteger) -> Option<ElgamalError> {
+fn check_g(p: &MPInteger, g: &MPInteger) -> Option<ElgamalError> {
     if g == MPInteger::one() {
         return Some(ElgamalError::CheckNotOne);
     }
@@ -257,7 +258,7 @@ mod test {
             &MPInteger::from(3u8),
         ));
         assert_eq!(
-            get_small_prime_group_members(&ep, 5).unwrap(),
+            ep.get_small_prime_group_members(5).unwrap(),
             vec![5, 17, 19, 37, 41]
         );
     }
@@ -330,22 +331,22 @@ mod test {
         let q_err_2 = MPInteger::from(11u8);
         let g_err = MPInteger::from(2u8);
         assert!(EncryptionParameters::from((&p, &q, &g))
-            .check_encryption_parameters()
-            .is_none());
-        assert!(EncryptionParameters::from((&p_err, &q, &g))
-            .check_encryption_parameters()
-            .is_some());
-        assert!(EncryptionParameters::from((&p, &q_err_1, &g))
-            .check_encryption_parameters()
-            .is_some());
-        assert!(EncryptionParameters::from((&p, &q_err_2, &g))
-            .check_encryption_parameters()
-            .is_some());
-        assert!(EncryptionParameters::from((&p, &q, &g_err))
-            .check_encryption_parameters()
-            .is_some());
-        assert!(EncryptionParameters::from((&p, &q, MPInteger::one()))
-            .check_encryption_parameters()
-            .is_some());
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p_err, &q, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q_err_1, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q_err_2, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q, &g_err))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q, MPInteger::one()))
+            .verifiy_domain()
+            .is_empty());
     }
 }

@@ -54,9 +54,7 @@ pub mod zero_knowledge_proof;
 pub use basic_crypto_functions::CertificateExtension;
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
-pub use elgamal::{
-    check_g, check_p, check_q, get_small_prime_group_members, ElgamalError, EncryptionParameters,
-};
+pub use elgamal::{ElgamalError, EncryptionParameters};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
 pub use number_theory::SmallPrimeTrait;
@@ -68,3 +66,18 @@ pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
 
 /// The security length according to the security level in the specifications
 pub const SECURITY_LENGTH: usize = 128;
+
+/// Trait for the verification of a the domain of a strucut
+///
+/// All pseudocode algorithms define the domain for each input. The trait implements
+/// the verification of the domain for a data structure
+///
+/// In the default implementation, nothing will be verified
+pub trait VerifyDomainTrait {
+    /// Verify the domain
+    ///
+    /// Return a vector of [anyhow::Error]. Empty if no error found
+    fn verifiy_domain(&self) -> Vec<anyhow::Error> {
+        vec![]
+    }
+}

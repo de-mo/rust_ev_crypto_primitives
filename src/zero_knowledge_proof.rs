@@ -17,10 +17,10 @@
 //! Implementation of the necessary algorithms used for the zero-knowledge proofs of Swiss Post:
 //! - [verify_schnorr]
 //! - [verify_exponentiation]
-use crate::RecursiveHashTrait;
+use crate::{RecursiveHashTrait, VerifyDomainTrait};
 
 use super::{
-    elgamal::{check_p, check_q, ElgamalError, EncryptionParameters},
+    elgamal::{ElgamalError, EncryptionParameters},
     hashing::HashableMessage,
     integer::{MPInteger, Operations},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
@@ -44,15 +44,13 @@ pub fn verify_schnorr(
     i_aux: &Vec<String>,
 ) -> Result<bool, ZeroKnowledgeProofError> {
     if cfg!(feature = "checks") {
-        if let Some(e) = ep.check_encryption_parameters() {
-            return Err(ZeroKnowledgeProofError::CheckElgamal(e));
+        let domain_errs = ep.verifiy_domain();
+        if !domain_errs.is_empty() {
+            return Err(ZeroKnowledgeProofError::CheckElgamal(domain_errs));
         }
         if let Some(e) = y.check_quadratic_residue(ep.p()) {
             return Err(ZeroKnowledgeProofError::CheckNumberTheory(e));
         }
-        //if let Some(e) = check_is_power_of(y, g, p) {
-        //     return Err(ZeroKnowledgeProofError::CheckNumberTheory(e))
-        //}
     }
     let x = compute_phi_schnorr(ep, z);
     let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
@@ -97,11 +95,9 @@ pub fn verify_exponentiation(
 ) -> Result<bool, ZeroKnowledgeProofError> {
     // Check of input parameters
     if cfg!(feature = "checks") {
-        if let Some(e) = check_p(ep.p()) {
-            return Err(ZeroKnowledgeProofError::CheckElgamal(e));
-        }
-        if let Some(e) = check_q(ep.p(), ep.q()) {
-            return Err(ZeroKnowledgeProofError::CheckElgamal(e));
+        let domain_errs = ep.verifiy_domain();
+        if !domain_errs.is_empty() {
+            return Err(ZeroKnowledgeProofError::CheckElgamal(domain_errs));
         }
         if gs.len() != ys.len() {
             return Err(ZeroKnowledgeProofError::CheckListSameSize(
@@ -152,8 +148,8 @@ pub fn verify_exponentiation(
 pub enum ZeroKnowledgeProofError {
     #[error(transparent)]
     CheckNumberTheory(#[from] NumberTheoryError),
-    #[error(transparent)]
-    CheckElgamal(#[from] ElgamalError),
+    #[error("Error checking the elgamal parameters")]
+    CheckElgamal(Vec<anyhow::Error>),
     #[error("The list {0} must have the same length as the list {1}")]
     CheckListSameSize(String, String),
 }
