@@ -123,7 +123,7 @@ impl SmallPrimeTrait for usize {
         if self <= small_primes.last().unwrap() {
             return Ok(small_primes.contains(self));
         }
-        let mut i = NEXT_SMMALL_PRIME;
+        let mut i = 5;
         let limit = (f64::sqrt(*self as f64) as usize) + 1;
         while i <= limit {
             if self % i == 0 || self % (i + 2) == 0 {
@@ -254,6 +254,7 @@ mod test {
         assert!(!12.is_small_prime().unwrap());
         assert!(!49.is_small_prime().unwrap());
         assert!(!99.is_small_prime().unwrap());
+        assert!(!104725.is_small_prime().unwrap());
         assert!(104729.is_small_prime().unwrap());
         assert!(!104730.is_small_prime().unwrap());
         assert!(111317.is_small_prime().unwrap());

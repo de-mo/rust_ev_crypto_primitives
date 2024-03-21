@@ -20,7 +20,7 @@
 use crate::{RecursiveHashTrait, VerifyDomainTrait};
 
 use super::{
-    elgamal::{ElgamalError, EncryptionParameters},
+    elgamal::EncryptionParameters,
     hashing::HashableMessage,
     integer::{MPInteger, Operations},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
