@@ -115,6 +115,7 @@ pub enum HashableMessage<'a> {
     RStr(&'a str),
     String(String),
     Composite(Vec<HashableMessage<'a>>),
+    CompositeR(Vec<&'a HashableMessage<'a>>),
     Hashed(ByteArray),
 }
 
@@ -139,6 +140,10 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::String(s) => ByteArray::from(s.as_str()).prepend_byte(2u8),
             HashableMessage::RStr(s) => ByteArray::from(*s).prepend_byte(2u8),
             HashableMessage::Composite(c) => c
+                .iter()
+                .map(|h| h.hash())
+                .fold(ByteArray::from_bytes(b"\x03"), |acc, b| acc.append(&b)),
+            HashableMessage::CompositeR(c) => c
                 .iter()
                 .map(|h| h.hash())
                 .fold(ByteArray::from_bytes(b"\x03"), |acc, b| acc.append(&b)),
@@ -245,7 +250,8 @@ impl<'a> From<Vec<HashableMessage<'a>>> for HashableMessage<'a> {
 }
 impl<'a> From<&'a Vec<HashableMessage<'a>>> for HashableMessage<'a> {
     fn from(value: &'a Vec<HashableMessage<'a>>) -> Self {
-        HashableMessage::Composite(value.clone())
+        let res: Vec<&HashableMessage> = value.iter().collect();
+        HashableMessage::CompositeR(res)
     }
 }
 
