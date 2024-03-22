@@ -225,7 +225,6 @@ impl<'a> From<&'a str> for HashableMessage<'a> {
 impl<'a> From<&'a NaiveDateTime> for HashableMessage<'a> {
     fn from(value: &'a NaiveDateTime) -> Self {
         let s = value.format("%Y-%m-%dT%H:%M").to_string();
-        println!("s = {:?}", s);
         HashableMessage::String(s)
     }
 }

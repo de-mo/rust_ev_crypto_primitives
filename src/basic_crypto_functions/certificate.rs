@@ -137,10 +137,10 @@ impl Keystore {
                 ));
             }
         };
-        println!("length: {:?}", cas.len());
+        // println!("length: {:?}", cas.len());
         for x in cas.iter() {
-            println!("subject_name: {:?}", x.subject_name());
-            println!("issuer_name: {:?}", x.issuer_name());
+            // println!("subject_name: {:?}", x.subject_name());
+            // println!("issuer_name: {:?}", x.issuer_name());
             for e in x.issuer_name().entries() {
                 if e.object().to_string() == *"commonName"
                     && e.data().as_slice() == authority.as_bytes()
