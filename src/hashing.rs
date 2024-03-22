@@ -298,6 +298,13 @@ impl<'a> From<&'a Vec<usize>> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<&'a Vec<Vec<MPInteger>>> for HashableMessage<'a> {
+    fn from(value: &'a Vec<Vec<MPInteger>>) -> Self {
+        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
+        HashableMessage::from(l)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::super::{byte_array::Decode, integer::Hexa};
@@ -440,5 +447,22 @@ mod test {
         let r = HashableMessage::Composite(l).hash();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
+    }
+
+    #[test]
+    fn test_vec_vec_integer() {
+        let data = vec![
+            vec![MPInteger::from(2)],
+            vec![MPInteger::from(3), MPInteger::from(4)],
+            vec![MPInteger::from(5)],
+        ];
+        let mut res: Vec<HashableMessage> = vec![];
+        let v1 = vec![MPInteger::from(2)];
+        let v2 = vec![MPInteger::from(3), MPInteger::from(4)];
+        let v3 = vec![MPInteger::from(5)];
+        res.push(HashableMessage::from(&v1));
+        res.push(HashableMessage::from(&v2));
+        res.push(HashableMessage::from(&v3));
+        assert_eq!(HashableMessage::from(&data), HashableMessage::from(res))
     }
 }
