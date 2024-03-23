@@ -67,17 +67,51 @@ pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
 /// The security length according to the security level in the specifications
 pub const SECURITY_LENGTH: usize = 128;
 
+/// Structure containing the verifications for the generic object T
+pub struct DomainVerifications<T: Sized> {
+    verification_fns: Vec<Box<dyn Fn(&T) -> Vec<anyhow::Error>>>,
+}
+
 /// Trait for the verification of a the domain of a strucut
 ///
 /// All pseudocode algorithms define the domain for each input. The trait implements
 /// the verification of the domain for a data structure
 ///
 /// In the default implementation, nothing will be verified
-pub trait VerifyDomainTrait {
+///
+/// It is possible to implement the function `verifiy_domain` or the function `new_domain_verifications`
+pub trait VerifyDomainTrait: Sized {
+    /// Create the new list of verications containing all the necessary verifications
+    /// for the object implementing the trait
+    fn new_domain_verifications() -> DomainVerifications<Self> {
+        DomainVerifications::default()
+    }
+
     /// Verify the domain
     ///
     /// Return a vector of [anyhow::Error]. Empty if no error found
     fn verifiy_domain(&self) -> Vec<anyhow::Error> {
-        vec![]
+        let verifications = Self::new_domain_verifications();
+        verifications.iter().map(|f| f(&self)).flatten().collect()
+    }
+}
+
+impl<T> Default for DomainVerifications<T> {
+    fn default() -> Self {
+        Self {
+            verification_fns: Default::default(),
+        }
+    }
+}
+
+impl<T> DomainVerifications<T> {
+    /// Add Verification function to the structure
+    fn add_verification(&mut self, fct: impl Fn(&T) -> Vec<anyhow::Error> + 'static) {
+        self.verification_fns.push(Box::new(fct))
+    }
+
+    /// Iterate over ale the functions
+    fn iter(&self) -> std::slice::Iter<'_, Box<dyn Fn(&T) -> Vec<anyhow::Error>>> {
+        self.verification_fns.iter()
     }
 }

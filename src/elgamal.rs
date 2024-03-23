@@ -21,7 +21,7 @@ use crate::{
     byte_array::ByteArray,
     integer::{Constants, MPInteger},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait, SMALL_PRIMES},
-    HashableMessage, VerifyDomainTrait, SECURITY_LENGTH,
+    DomainVerifications, HashableMessage, VerifyDomainTrait, SECURITY_LENGTH,
 };
 use anyhow::anyhow;
 use thiserror::Error;
@@ -158,6 +158,58 @@ impl EncryptionParameters {
     pub fn as_tuple(&self) -> (&MPInteger, &MPInteger, &MPInteger) {
         (&self.p, &self.q, &self.g)
     }
+
+    /// Check p as part of encryption parameter
+    ///
+    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
+    pub fn validate_p(&self) -> Vec<anyhow::Error> {
+        if let Some(e) = self.p.check_prime().map(ElgamalError::CheckNumberTheory) {
+            return vec![
+                anyhow!(e).context(format!("p does not satisfy the requirements {}", self.p))
+            ];
+        }
+        vec![]
+    }
+
+    /// Check q as part of encryption parameter
+    ///
+    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
+    pub fn validate_q(&self) -> Vec<anyhow::Error> {
+        let mut res = vec![];
+        if self.p != MPInteger::from(&self.q * 2u8) + 1u8 {
+            res.push(
+                anyhow!(ElgamalError::CheckRelationPQ)
+                    .context(format!("p: {}", &self.p))
+                    .context(format!("q: {}", &self.q)),
+            );
+        }
+        if let Some(e) = self.q.check_prime().map(ElgamalError::CheckNumberTheory) {
+            return vec![
+                anyhow!(e).context(format!("q does not satisfy the requirements {}", self.q))
+            ];
+        }
+        res
+    }
+
+    /// Check g as part of encryption parameter
+    ///
+    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
+    pub fn validate_g(&self) -> Vec<anyhow::Error> {
+        if &self.g == MPInteger::one() {
+            return vec![anyhow!(ElgamalError::CheckNotOne)
+                .context(format!("g does not satisfy the requirements {}", self.g))];
+        }
+        if let Some(e) = self
+            .g
+            .check_quadratic_residue(&self.p)
+            .map(ElgamalError::CheckNumberTheory)
+        {
+            return vec![
+                anyhow!(e).context(format!("g does not satisfy the requirements {}", self.g))
+            ];
+        }
+        vec![]
+    }
 }
 
 impl From<(&MPInteger, &MPInteger, &MPInteger)> for EncryptionParameters {
@@ -181,47 +233,13 @@ impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
 }
 
 impl VerifyDomainTrait for EncryptionParameters {
-    fn verifiy_domain(&self) -> Vec<anyhow::Error> {
-        let mut res = vec![];
-        if let Some(e) = check_p(&self.p) {
-            res.push(anyhow!(e).context(format!("p does not satisfy the requirements {}", self.p)));
-        }
-        if let Some(e) = check_q(&self.p, &self.q) {
-            res.push(anyhow!(e).context(format!("q does not satisfy the requirements {}", self.q)));
-        }
-        if let Some(e) = check_g(&self.p, &self.g) {
-            res.push(anyhow!(e).context(format!("g does not satisfy the requirements {}", self.g)));
-        }
+    fn new_domain_verifications() -> crate::DomainVerifications<Self> {
+        let mut res = DomainVerifications::default();
+        res.add_verification(EncryptionParameters::validate_p);
+        res.add_verification(EncryptionParameters::validate_q);
+        res.add_verification(EncryptionParameters::validate_g);
         res
     }
-}
-
-/// Check p as part of encryption parameter
-///
-/// Return a [ElgamalError] if the check is not positive. Else None
-fn check_p(p: &MPInteger) -> Option<ElgamalError> {
-    p.check_prime().map(ElgamalError::CheckNumberTheory)
-}
-
-/// Check q as part of encryption parameter
-///
-/// Return a [ElgamalError] if the check is not positive. Else None
-fn check_q(p: &MPInteger, q: &MPInteger) -> Option<ElgamalError> {
-    if *p != MPInteger::from(q * 2u8) + 1u8 {
-        return Some(ElgamalError::CheckRelationPQ);
-    }
-    q.check_prime().map(ElgamalError::CheckNumberTheory)
-}
-
-/// Check g as part of encryption parameter
-///
-/// Return a [ElgamalError] if the check is not positive. Else None
-fn check_g(p: &MPInteger, g: &MPInteger) -> Option<ElgamalError> {
-    if g == MPInteger::one() {
-        return Some(ElgamalError::CheckNotOne);
-    }
-    g.check_quadratic_residue(p)
-        .map(ElgamalError::CheckNumberTheory)
 }
 
 // Enum reprsenting the elgamal errors
@@ -282,39 +300,50 @@ mod test {
 
     #[test]
     fn test_check_p() {
-        let p = MPInteger::from_hexa_string(
-            "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
-        ).unwrap();
-        assert!(check_p(&p).is_none());
-        let p = MPInteger::from(6u8);
-        assert!(check_p(&p).is_some())
+        let mut ep = EncryptionParameters::from((
+            &MPInteger::from_hexa_string(
+                "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
+            ).unwrap(),
+            &MPInteger::from_hexa_string(
+                "0x5FFB3E665707B0D9C5D3856B9B67D4751425AEB6575F97F697E446856FFCF159105FECE66D2CDE9DEA958966FE67A0D51ECDFC0FCAD3EACA293485FA2FBCC9DF3B055DE51F14B82EA39D3331C6E6B753C331E06DC8F1F0558EFF0D7F928C0EA6961DD02CFC898ECAE9BFA18919F5113B702964B06E58987CEFFEE05F4BBE4CA3F3D702F528B5540D92947F781B12D67E7A4AE1D5AEAF8BB703789C1574B52381908496060E0150CB55A6D1069B02DA73952E7E8B67C9C0E41A89F5E8C5452510DFCADC3276D26010A2C1F4CD18C07BD2B0F8CEA28DE21AA73D1426E3F5862D02EE2C42B636E4679D2BDA16C336C2FA29E8DEC663088BFDB035205785077BB6B01E3D183E05C42A1AAEAC1B3BA635D8911C704C033C15243DDCC44570EDAA6F651FF61BA698664D391698292C2834E9095B17EB3AC38819BE50BA08F417FBF3F3DBAA7A64F9D0E24D50AF0685074D82D17544010B68295BC07340B46519B184E9E0C01513C57E78E07C7D19C0E0A2ED0432449110DCB0766B6A30B2F02BDAAF75"
+            ).unwrap(),
+            &MPInteger::from(3u8),
+        ));
+        assert!(ep.validate_p().is_empty());
+        ep.set_p(&MPInteger::from(6u8));
+        assert!(!ep.validate_p().is_empty());
     }
 
     #[test]
     fn test_check_q() {
-        let p = MPInteger::from_hexa_string(
-            "0xBFF67CCCAE0F61B38BA70AD736CFA8EA284B5D6CAEBF2FED2FC88D0ADFF9E2B220BFD9CCDA59BD3BD52B12CDFCCF41AA3D9BF81F95A7D59452690BF45F7993BE760ABBCA3E29705D473A66638DCD6EA78663C0DB91E3E0AB1DFE1AFF25181D4D2C3BA059F9131D95D37F431233EA2276E052C960DCB130F9DFFDC0BE977C9947E7AE05EA516AA81B2528FEF03625ACFCF495C3AB5D5F176E06F1382AE96A470321092C0C1C02A196AB4DA20D3605B4E72A5CFD16CF9381C83513EBD18A8A4A21BF95B864EDA4C0214583E99A3180F7A561F19D451BC4354E7A284DC7EB0C5A05DC58856C6DC8CF3A57B42D866D85F453D1BD8CC61117FB606A40AF0A0EF76D603C7A307C0B8854355D5836774C6BB12238E09806782A487BB9888AE1DB54DECA3FEC374D30CC9A722D3052585069D212B62FD6758710337CA17411E82FF7E7E7B754F4C9F3A1C49AA15E0D0A0E9B05A2EA880216D052B780E68168CA336309D3C1802A278AFCF1C0F8FA3381C145DA0864892221B960ECD6D46165E057B55EEB"
-        ).unwrap();
-        let q = MPInteger::from_hexa_string(
-            "0x5FFB3E665707B0D9C5D3856B9B67D4751425AEB6575F97F697E446856FFCF159105FECE66D2CDE9DEA958966FE67A0D51ECDFC0FCAD3EACA293485FA2FBCC9DF3B055DE51F14B82EA39D3331C6E6B753C331E06DC8F1F0558EFF0D7F928C0EA6961DD02CFC898ECAE9BFA18919F5113B702964B06E58987CEFFEE05F4BBE4CA3F3D702F528B5540D92947F781B12D67E7A4AE1D5AEAF8BB703789C1574B52381908496060E0150CB55A6D1069B02DA73952E7E8B67C9C0E41A89F5E8C5452510DFCADC3276D26010A2C1F4CD18C07BD2B0F8CEA28DE21AA73D1426E3F5862D02EE2C42B636E4679D2BDA16C336C2FA29E8DEC663088BFDB035205785077BB6B01E3D183E05C42A1AAEAC1B3BA635D8911C704C033C15243DDCC44570EDAA6F651FF61BA698664D391698292C2834E9095B17EB3AC38819BE50BA08F417FBF3F3DBAA7A64F9D0E24D50AF0685074D82D17544010B68295BC07340B46519B184E9E0C01513C57E78E07C7D19C0E0A2ED0432449110DCB0766B6A30B2F02BDAAF75"
-        ).unwrap();
-        assert!(check_q(&p, &q).is_none());
-        let p1 = MPInteger::from(13u8);
-        let q1 = MPInteger::from(6u8);
-        let p2 = MPInteger::from(11u8);
-        let q2 = MPInteger::from(7u8);
-        assert!(check_q(&p1, &q1).is_some());
-        assert!(check_q(&p2, &q2).is_some());
+        let mut ep = EncryptionParameters::from((
+            &MPInteger::from(15usize),
+            &MPInteger::from(7usize),
+            &MPInteger::from(3u8),
+        ));
+        assert!(ep.validate_q().is_empty());
+        ep.set_p(&MPInteger::from(13u8));
+        ep.set_q(&MPInteger::from(6u8));
+        assert!(!ep.validate_q().is_empty());
+        ep.set_p(&MPInteger::from(11u8));
+        ep.set_q(&MPInteger::from(7u8));
+        assert!(!ep.validate_q().is_empty());
     }
 
     #[test]
     fn test_check_g() {
-        let p = MPInteger::from(11u8);
-        let g_ok = MPInteger::from(3u8);
-        let g_err = MPInteger::from(2u8);
-        assert!(check_g(&p, &g_ok).is_none());
-        assert!(check_g(&p, &g_err).is_some());
-        assert!(check_g(&p, MPInteger::one()).is_some())
+        let mut ep = EncryptionParameters::from((
+            &MPInteger::from(11u8),
+            &MPInteger::from_hexa_string(
+                "0x5FFB3E665707B0D9C5D3856B9B67D4751425AEB6575F97F697E446856FFCF159105FECE66D2CDE9DEA958966FE67A0D51ECDFC0FCAD3EACA293485FA2FBCC9DF3B055DE51F14B82EA39D3331C6E6B753C331E06DC8F1F0558EFF0D7F928C0EA6961DD02CFC898ECAE9BFA18919F5113B702964B06E58987CEFFEE05F4BBE4CA3F3D702F528B5540D92947F781B12D67E7A4AE1D5AEAF8BB703789C1574B52381908496060E0150CB55A6D1069B02DA73952E7E8B67C9C0E41A89F5E8C5452510DFCADC3276D26010A2C1F4CD18C07BD2B0F8CEA28DE21AA73D1426E3F5862D02EE2C42B636E4679D2BDA16C336C2FA29E8DEC663088BFDB035205785077BB6B01E3D183E05C42A1AAEAC1B3BA635D8911C704C033C15243DDCC44570EDAA6F651FF61BA698664D391698292C2834E9095B17EB3AC38819BE50BA08F417FBF3F3DBAA7A64F9D0E24D50AF0685074D82D17544010B68295BC07340B46519B184E9E0C01513C57E78E07C7D19C0E0A2ED0432449110DCB0766B6A30B2F02BDAAF75"
+            ).unwrap(),
+            &MPInteger::from(3u8),
+        ));
+        assert!(ep.validate_g().is_empty());
+        ep.set_g(&MPInteger::from(2u8));
+        assert!(!ep.validate_g().is_empty());
+        ep.set_g(&MPInteger::one());
+        assert!(!ep.validate_g().is_empty());
     }
 
     #[test]
