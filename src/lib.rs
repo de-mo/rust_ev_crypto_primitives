@@ -67,9 +67,11 @@ pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
 /// The security length according to the security level in the specifications
 pub const SECURITY_LENGTH: usize = 128;
 
+type DomainVerificationFunctionBoxed<T> = Box<dyn Fn(&T) -> Vec<anyhow::Error>>;
+
 /// Structure containing the verifications for the generic object T
 pub struct DomainVerifications<T: Sized> {
-    verification_fns: Vec<Box<dyn Fn(&T) -> Vec<anyhow::Error>>>,
+    verification_fns: Vec<DomainVerificationFunctionBoxed<T>>,
 }
 
 /// Trait for the verification of a the domain of a strucut
@@ -92,7 +94,7 @@ pub trait VerifyDomainTrait: Sized {
     /// Return a vector of [anyhow::Error]. Empty if no error found
     fn verifiy_domain(&self) -> Vec<anyhow::Error> {
         let verifications = Self::new_domain_verifications();
-        verifications.iter().map(|f| f(&self)).flatten().collect()
+        verifications.iter().flat_map(|f| f(self)).collect()
     }
 }
 
@@ -107,11 +109,11 @@ impl<T> Default for DomainVerifications<T> {
 impl<T> DomainVerifications<T> {
     /// Add Verification function to the structure
     fn add_verification(&mut self, fct: impl Fn(&T) -> Vec<anyhow::Error> + 'static) {
-        self.verification_fns.push(Box::new(fct))
+        self.verification_fns.push(Box::new(fct));
     }
 
     /// Iterate over ale the functions
-    fn iter(&self) -> std::slice::Iter<'_, Box<dyn Fn(&T) -> Vec<anyhow::Error>>> {
+    fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
         self.verification_fns.iter()
     }
 }

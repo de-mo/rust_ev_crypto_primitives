@@ -161,52 +161,41 @@ impl EncryptionParameters {
 
     /// Check p as part of encryption parameter
     ///
-    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
-    pub fn validate_p(&self) -> Vec<anyhow::Error> {
+    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    pub fn validate_p(&self) -> Vec<ElgamalError> {
         if let Some(e) = self.p.check_prime().map(ElgamalError::CheckNumberTheory) {
-            return vec![
-                anyhow!(e).context(format!("p does not satisfy the requirements {}", self.p))
-            ];
+            return vec![e];
         }
         vec![]
     }
 
     /// Check q as part of encryption parameter
     ///
-    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
-    pub fn validate_q(&self) -> Vec<anyhow::Error> {
+    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    pub fn validate_q(&self) -> Vec<ElgamalError> {
         let mut res = vec![];
         if self.p != MPInteger::from(&self.q * 2u8) + 1u8 {
-            res.push(
-                anyhow!(ElgamalError::CheckRelationPQ)
-                    .context(format!("p: {}", &self.p))
-                    .context(format!("q: {}", &self.q)),
-            );
+            res.push(ElgamalError::CheckRelationPQ);
         }
         if let Some(e) = self.q.check_prime().map(ElgamalError::CheckNumberTheory) {
-            return vec![
-                anyhow!(e).context(format!("q does not satisfy the requirements {}", self.q))
-            ];
+            res.push(e);
         }
         res
     }
 
     /// Check g as part of encryption parameter
     ///
-    /// Return a [Vec<anyhow::Error>] if the check is not positive. Else None
-    pub fn validate_g(&self) -> Vec<anyhow::Error> {
+    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    pub fn validate_g(&self) -> Vec<ElgamalError> {
         if &self.g == MPInteger::one() {
-            return vec![anyhow!(ElgamalError::CheckNotOne)
-                .context(format!("g does not satisfy the requirements {}", self.g))];
+            return vec![ElgamalError::CheckNotOne];
         }
         if let Some(e) = self
             .g
             .check_quadratic_residue(&self.p)
             .map(ElgamalError::CheckNumberTheory)
         {
-            return vec![
-                anyhow!(e).context(format!("g does not satisfy the requirements {}", self.g))
-            ];
+            return vec![e];
         }
         vec![]
     }
@@ -235,9 +224,27 @@ impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
 impl VerifyDomainTrait for EncryptionParameters {
     fn new_domain_verifications() -> crate::DomainVerifications<Self> {
         let mut res = DomainVerifications::default();
-        res.add_verification(EncryptionParameters::validate_p);
-        res.add_verification(EncryptionParameters::validate_q);
-        res.add_verification(EncryptionParameters::validate_g);
+        res.add_verification(|ep| {
+            let mut res = vec![];
+            for e in EncryptionParameters::validate_p(ep) {
+                res.push(anyhow!(e).context(format!("p does not satisfy the requirements")))
+            }
+            res
+        });
+        res.add_verification(|ep| {
+            let mut res = vec![];
+            for e in EncryptionParameters::validate_q(ep) {
+                res.push(anyhow!(e).context(format!("q does not satisfy the requirements")))
+            }
+            res
+        });
+        res.add_verification(|ep| {
+            let mut res = vec![];
+            for e in EncryptionParameters::validate_g(ep) {
+                res.push(anyhow!(e).context(format!("g does not satisfy the requirements")))
+            }
+            res
+        });
         res
     }
 }
@@ -342,7 +349,7 @@ mod test {
         assert!(ep.validate_g().is_empty());
         ep.set_g(&MPInteger::from(2u8));
         assert!(!ep.validate_g().is_empty());
-        ep.set_g(&MPInteger::one());
+        ep.set_g(MPInteger::one());
         assert!(!ep.validate_g().is_empty());
     }
 
