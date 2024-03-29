@@ -265,7 +265,7 @@ mod test {
     use std::path::PathBuf;
     use std::str;
 
-    const PASSWORD: &str = "aNtRM0fSwIy1TiWnii5ObhHu9zwnFbEh";
+    const PASSWORD: &str = "OEqNVCv5UB81fEq7OB8wDIGKUYzpnQwZ";
 
     fn get_dir() -> PathBuf {
         Path::new("./").join("test_data").join("direct-trust")
@@ -302,7 +302,6 @@ mod test {
     }
 
     #[test]
-    #[ignore = "not working with the actual p12, since CN not correctly set"]
     fn get_certificate_for_pkcs12() {
         let ks = Keystore::from_pkcs12(&get_file(), PASSWORD).unwrap();
         let cert = ks.get_certificate("canton");
