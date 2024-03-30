@@ -185,7 +185,7 @@ impl SigningCertificate {
     ///
     /// # Error
     /// if somwthing is going wrong
-    pub fn get_public_key(&self) -> Result<PublicKey, BasisCryptoError> {
+    pub fn public_key(&self) -> Result<PublicKey, BasisCryptoError> {
         self.x509
             .public_key()
             .map(PublicKey)
@@ -351,14 +351,15 @@ mod test {
 
     #[test]
     fn digest() {
-        let ks = Keystore::from_directory(&get_dir()).unwrap();
+        let ks = Keystore::from_pkcs12(&get_file(), PASSWORD).unwrap();
         assert_eq!(
             ks.get_certificate("canton")
                 .unwrap()
                 .digest()
                 .unwrap()
-                .base16_encode(),
-            "2B89BC7645ACE34DB5BFFBAB41727987236050F9CB5AD66BA1ED0A806EE8BC8C".to_uppercase()
+                .base16_encode()
+                .to_lowercase(),
+            "37dc2ff6d555fee32d0469c365ed47bdd5a5448ef38a9edd0f05e0b055a12162"
         );
     }
 }
