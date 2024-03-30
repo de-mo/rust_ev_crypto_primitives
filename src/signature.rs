@@ -56,13 +56,11 @@ pub fn verify_signature(
     }
 
     // Get public key
-    let pkey = cert
-        .get_public_key()
-        .map_err(|e| SignatureError::Certificate {
-            name: ca_id.to_string(),
-            error: e,
-            action: "reading public key".to_string(),
-        })?;
+    let pkey = cert.public_key().map_err(|e| SignatureError::Certificate {
+        name: ca_id.to_string(),
+        error: e,
+        action: "reading public key".to_string(),
+    })?;
     let pub_key = pkey.pkey_public().as_ref();
 
     // Calculate hash
