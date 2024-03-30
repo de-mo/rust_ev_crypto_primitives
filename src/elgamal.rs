@@ -227,21 +227,21 @@ impl VerifyDomainTrait for EncryptionParameters {
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_p(ep) {
-                res.push(anyhow!(e).context(format!("p does not satisfy the requirements")))
+                res.push(anyhow!(e).context("p does not satisfy the requirements".to_string()))
             }
             res
         });
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_q(ep) {
-                res.push(anyhow!(e).context(format!("q does not satisfy the requirements")))
+                res.push(anyhow!(e).context("q does not satisfy the requirements".to_string()))
             }
             res
         });
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_g(ep) {
-                res.push(anyhow!(e).context(format!("g does not satisfy the requirements")))
+                res.push(anyhow!(e).context("g does not satisfy the requirements".to_string()))
             }
             res
         });
