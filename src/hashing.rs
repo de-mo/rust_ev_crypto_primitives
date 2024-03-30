@@ -458,14 +458,14 @@ mod test {
     #[test]
     fn test_vec_vec_integer() {
         let data = vec![
-            vec![MPInteger::from(2)],
-            vec![MPInteger::from(3), MPInteger::from(4)],
-            vec![MPInteger::from(5)],
+            vec![MPInteger::from(2u8)],
+            vec![MPInteger::from(3u8), MPInteger::from(4u8)],
+            vec![MPInteger::from(5u8)],
         ];
         let mut res: Vec<HashableMessage> = vec![];
-        let v1 = vec![MPInteger::from(2)];
-        let v2 = vec![MPInteger::from(3), MPInteger::from(4)];
-        let v3 = vec![MPInteger::from(5)];
+        let v1 = vec![MPInteger::from(2u8)];
+        let v2 = vec![MPInteger::from(3u8), MPInteger::from(4u8)];
+        let v3 = vec![MPInteger::from(5u8)];
         res.push(HashableMessage::from(&v1));
         res.push(HashableMessage::from(&v2));
         res.push(HashableMessage::from(&v3));
