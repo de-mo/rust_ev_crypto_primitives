@@ -371,9 +371,9 @@ dependencies = [
 
 [[package]]
 name = "rug"
-version = "1.24.0"
+version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76a82fd85950d103ad075f104d10c77d71640830c6a959a418380be380eaf7cd"
+checksum = "a8df4099c6fa90a1a7f5ddc0c7fba50991080fa2084d5a78808a5a3cab406bb9"
 dependencies = [
  "az",
  "gmp-mpfr-sys",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "rust_ev_crypto_primitives"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "chrono",
