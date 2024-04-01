@@ -108,12 +108,12 @@ impl<T> Default for DomainVerifications<T> {
 
 impl<T> DomainVerifications<T> {
     /// Add Verification function to the structure
-    fn add_verification(&mut self, fct: impl Fn(&T) -> Vec<anyhow::Error> + 'static) {
+    pub fn add_verification(&mut self, fct: impl Fn(&T) -> Vec<anyhow::Error> + 'static) {
         self.verification_fns.push(Box::new(fct));
     }
 
     /// Iterate over ale the functions
-    fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
         self.verification_fns.iter()
     }
 }
