@@ -311,6 +311,20 @@ impl<'a> From<&'a Vec<Vec<MPInteger>>> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<&'a Vec<Vec<usize>>> for HashableMessage<'a> {
+    fn from(value: &'a Vec<Vec<usize>>) -> Self {
+        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
+        HashableMessage::from(l)
+    }
+}
+
+impl<'a> From<&'a Vec<Vec<String>>> for HashableMessage<'a> {
+    fn from(value: &'a Vec<Vec<String>>) -> Self {
+        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
+        HashableMessage::from(l)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::super::{byte_array::Decode, integer::Hexa};
