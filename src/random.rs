@@ -1,4 +1,4 @@
-// Copyright © 2023 Denis Morel
+// Copyright © 2024 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Lesser General Public License as published by the Free
@@ -14,26 +14,16 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-use crate::{BasisCryptoError, ByteArray};
-use openssl::rand::rand_bytes;
+//! Module that implement random functions
+//!
+use crate::{
+    basic_crypto_functions::random_bytes as basic_random_bytes, BasisCryptoError, ByteArray,
+};
 
 /// Random bytes of give size
+///
+/// # Error
+/// If an error appears creating the random bytes
 pub fn random_bytes(size: usize) -> Result<ByteArray, BasisCryptoError> {
-    let mut buf = vec![0u8; size];
-    rand_bytes(&mut buf).map_err(|e| BasisCryptoError::RandomError {
-        msg: "Call rand_bytes in random_bytes".to_string(),
-        source: e,
-    })?;
-    Ok(ByteArray::from_bytes(&buf))
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_size() {
-        assert_eq!(random_bytes(32).unwrap().len(), 32);
-        assert_eq!(random_bytes(16).unwrap().len(), 16);
-    }
+    basic_random_bytes(size)
 }

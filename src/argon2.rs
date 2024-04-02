@@ -1,3 +1,21 @@
+// Copyright © 2024 Denis Morel
+
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option) any
+// later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+// details.
+//
+// You should have received a copy of the GNU Lesser General Public License and
+// a copy of the GNU General Public License along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+
+//! Module that implement key derivation functions with argon2id
+//!
 use crate::basic_crypto_functions::{argon2_has_password, random_bytes, BasisCryptoError};
 use crate::ByteArray;
 
@@ -12,6 +30,8 @@ const TEST_PARALLELISM: u32 = 4;
 const TEST_ITERATIONS: u32 = 1;
 const OUTPUT_SIZE: usize = 32;
 
+/// Object containing the parameters and the methods creating the key derivation functions
+/// with argon2id
 pub struct Argon2id {
     memory_usage_parameter: u32,
     parallelism_parameter: u32,
@@ -20,6 +40,7 @@ pub struct Argon2id {
 }
 
 impl Argon2id {
+    /// New object with standard parameters (see specifications of Swiss Post)
     pub fn new_standard() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(STANDARD_MEMORY_EXPONENT),
@@ -29,6 +50,7 @@ impl Argon2id {
         }
     }
 
+    /// New object with less parameters (see specifications of Swiss Post)
     pub fn new_less() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(LESS_MEMORY_EXPONENT),
@@ -38,6 +60,7 @@ impl Argon2id {
         }
     }
 
+    /// New object with test parameters (see specifications of Swiss Post)
     pub fn new_test() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(TEST_MEMORY_EXPONENT),
@@ -47,6 +70,7 @@ impl Argon2id {
         }
     }
 
+    /// GenArgon2id according the specifications of Swiss Post
     pub fn gen_argon2id(
         &self,
         input_keying_material: &ByteArray,
@@ -55,6 +79,7 @@ impl Argon2id {
         Ok((self.get_argon2id(input_keying_material, &s)?, s))
     }
 
+    /// GetArgon2id according the specifications of Swiss Post
     pub fn get_argon2id(
         &self,
         input_keying_material: &ByteArray,
