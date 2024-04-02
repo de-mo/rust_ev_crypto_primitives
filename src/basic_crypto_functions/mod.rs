@@ -16,12 +16,16 @@
 
 //! Module to wrap the openssl library for crypto functions
 
+mod argon2;
 mod certificate;
 mod hash;
+mod rand;
 mod signature;
 
+pub use argon2::*;
 pub use certificate::*;
 pub use hash::*;
+pub use rand::*;
 pub use signature::*;
 
 use openssl::error::ErrorStack;
@@ -53,4 +57,11 @@ pub enum BasisCryptoError {
     SignatureVerify { msg: String, source: ErrorStack },
     #[error("Hash error caused by {source}: {msg}")]
     HashError { msg: String, source: ErrorStack },
+    #[error("Argon2 error caused by {argon2_error_source}: {msg}")]
+    Argon2Error {
+        msg: String,
+        argon2_error_source: Argon2Error,
+    },
+    #[error("Random error caused by {source}: {msg}")]
+    RandomError { msg: String, source: ErrorStack },
 }

@@ -41,6 +41,7 @@
 //! The feature "rug" is strongly more performant, but GMP must be installed for compilation.
 //! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
 
+pub mod argon2;
 mod basic_crypto_functions;
 pub mod byte_array;
 pub mod direct_trust;
@@ -51,7 +52,8 @@ pub mod number_theory;
 pub mod signature;
 pub mod zero_knowledge_proof;
 
-pub use basic_crypto_functions::CertificateExtension;
+pub use argon2::Argon2id;
+pub use basic_crypto_functions::{BasisCryptoError, CertificateExtension};
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
 pub use elgamal::{ElgamalError, EncryptionParameters};
