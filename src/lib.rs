@@ -112,6 +112,22 @@ impl<T> DomainVerifications<T> {
         self.verification_fns.push(Box::new(fct));
     }
 
+    /// Add a verification return a vector of vector of errors
+    pub fn add_verification_with_vec_of_vec_errors(
+        &mut self,
+        fct: impl Fn(&T) -> Vec<Vec<anyhow::Error>> + 'static,
+    ) {
+        self.add_verification(move |t| {
+            let mut res = vec![];
+            for r in fct(t) {
+                for e in r {
+                    res.push(e)
+                }
+            }
+            res
+        })
+    }
+
     /// Iterate over ale the functions
     pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
         self.verification_fns.iter()
