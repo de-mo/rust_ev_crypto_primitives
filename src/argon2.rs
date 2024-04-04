@@ -32,6 +32,16 @@ const OUTPUT_SIZE: usize = 32;
 
 /// Object containing the parameters and the methods creating the key derivation functions
 /// with argon2id
+///
+/// # Usage (example)
+/// ```
+/// use rust_ev_crypto_primitives::{Argon2id, ByteArray, Decode};
+/// let key = ByteArray::base64_decode("dGVzdCBwYXNzd29yZA==").unwrap();
+/// let salt = ByteArray::base64_decode("1YBBD3ZMrqhZr5bLsddvSA==").unwrap();
+/// let expected_tag = ByteArray::base64_decode("qYOoULGijoHNdsDaz6PqnVrTriSLuTB74cGtqHEbO7o=").unwrap();
+/// let tag = Argon2id::new_test().get_argon2id(&key, &salt).unwrap();
+/// assert_eq!(tag, expected_tag);
+/// ```
 pub struct Argon2id {
     memory_usage_parameter: u32,
     parallelism_parameter: u32,
