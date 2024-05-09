@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "rust_ev_crypto_primitives"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "argon2",
