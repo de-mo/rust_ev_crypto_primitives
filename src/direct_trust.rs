@@ -57,29 +57,40 @@ impl Keystore {
         Ok(Self { keystore: ks })
     }
 
-    pub fn certificate(&self, authority: &str) -> Result<DirectTrustCertificate, DirectTrustError> {
+    /// Read the public certificate with the authority given as parameter
+    pub fn public_certificate(
+        &self,
+        authority: &str,
+    ) -> Result<DirectTrustCertificate, DirectTrustError> {
         let cert = self
             .keystore
-            .get_certificate(&String::from(authority))
+            .get_public_certificate(&String::from(authority))
             .map_err(DirectTrustError::Certificate)?;
-        Ok(DirectTrustCertificate {
-            authority: authority.to_string(),
-            cert,
-        })
+        Ok(DirectTrustCertificate { cert })
+    }
+
+    /// Read the secret key and associated certificate
+    ///
+    /// Return an error if no secret key found in the keystore
+    pub fn secret_key_certificate(&self) -> Result<DirectTrustCertificate, DirectTrustError> {
+        let cert = self
+            .keystore
+            .get_secret_certificate()
+            .map_err(DirectTrustError::Certificate)?;
+        Ok(DirectTrustCertificate { cert })
     }
 }
 
 /// Struct representing a direct trust certificate
 #[derive(Clone)]
 pub struct DirectTrustCertificate {
-    authority: String,
     cert: SigningCertificate,
 }
 
 impl DirectTrustCertificate {
     /// Get authority of the certificate
-    pub fn authority(&self) -> &String {
-        &self.authority
+    pub fn authority(&self) -> &str {
+        self.cert.authority()
     }
 
     /// Get the certificate of the authority
@@ -104,8 +115,10 @@ mod test {
     use super::*;
     use std::path::PathBuf;
 
-    const KEYSTORE_FILE_NAME: &str = "public_keys_keystore_verifier.p12";
-    const PASSWORD_FILE_NAME: &str = "public_keys_keystore_verifier_pw.txt";
+    const VERIFIER_KEYSTORE_FILE_NAME: &str = "public_keys_keystore_verifier.p12";
+    const VERIFIER_PASSWORD_FILE_NAME: &str = "public_keys_keystore_verifier_pw.txt";
+    const CANTON_KEYSTORE_FILE_NAME: &str = "signing_keystore_canton.p12";
+    const CANTON_PASSWORD_FILE_NAME: &str = "signing_pw_canton.txt";
 
     fn get_location() -> PathBuf {
         Path::new("./").join("test_data").join("direct-trust")
@@ -114,14 +127,22 @@ mod test {
     #[test]
     fn test_create_pkcs12() {
         let dt = Keystore::from_pkcs12(
-            &get_location().join(Path::new(KEYSTORE_FILE_NAME)),
-            &get_location().join(Path::new(PASSWORD_FILE_NAME)),
+            &get_location().join(Path::new(VERIFIER_KEYSTORE_FILE_NAME)),
+            &get_location().join(Path::new(VERIFIER_PASSWORD_FILE_NAME)),
         )
         .unwrap();
-        assert!(dt.certificate("toto").is_err());
+        assert!(dt.public_certificate("canton").is_ok());
+        assert!(dt.public_certificate("toto").is_err());
+        assert!(dt.secret_key_certificate().is_err());
+        let dt = Keystore::from_pkcs12(
+            &get_location().join(Path::new(CANTON_KEYSTORE_FILE_NAME)),
+            &get_location().join(Path::new(CANTON_PASSWORD_FILE_NAME)),
+        )
+        .unwrap();
+        assert!(dt.secret_key_certificate().is_ok());
         let dt_err = Keystore::from_pkcs12(
             Path::new("./toto"),
-            &get_location().join(Path::new(PASSWORD_FILE_NAME)),
+            &get_location().join(Path::new(VERIFIER_PASSWORD_FILE_NAME)),
         );
         assert!(dt_err.is_err());
     }
@@ -131,8 +152,8 @@ mod test {
         let dt =
             Keystore::from_directory(&get_location(), &CertificateExtension::default()).unwrap();
         //let dt = DirectTrustCertificate::new(, &CertificateAuthority::Canton);
-        assert!(dt.certificate("canton").is_ok());
-        assert!(dt.certificate("toto").is_err());
+        assert!(dt.public_certificate("canton").is_ok());
+        assert!(dt.public_certificate("toto").is_err());
         let dt_err =
             Keystore::from_directory(Path::new("./toto"), &CertificateExtension::default());
         assert!(dt_err.is_err());

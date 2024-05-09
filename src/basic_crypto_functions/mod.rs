@@ -41,6 +41,12 @@ pub enum BasisCryptoError {
     IO { msg: String, source: io::Error },
     #[error("Keystore error {msg} caused by {source}")]
     Keystore { msg: String, source: ErrorStack },
+    #[error("Keystore has a wrong format: {0}")]
+    KeystoreWrongFormat(String),
+    #[error("Keystore {0} has no secret key")]
+    KeyStoreMissingSecretKey(PathBuf),
+    #[error("Keystore {0} has no certificate for the secret key")]
+    KeyStoreMissingCertSecretKey(PathBuf),
     #[error("Keystore {0} has no list of CA")]
     KeyStoreMissingCAList(PathBuf),
     #[error("The ca with name {name} is not present in the Keystore {path}")]
@@ -53,8 +59,12 @@ pub enum BasisCryptoError {
     CertificateDigest { msg: String, source: ErrorStack },
     #[error("PublicKey error caused by {source}: {msg}")]
     PublicKeyError { msg: String, source: ErrorStack },
+    #[error("Secretkey error caused by {source}: {msg}")]
+    SecretKeyError { msg: String, source: ErrorStack },
     #[error("{msg} caused by {source}")]
     SignatureVerify { msg: String, source: ErrorStack },
+    #[error("{msg} caused by {source}")]
+    Sign { msg: String, source: ErrorStack },
     #[error("Hash error caused by {source}: {msg}")]
     HashError { msg: String, source: ErrorStack },
     #[error("Argon2 error caused by {argon2_error_source}: {msg}")]
