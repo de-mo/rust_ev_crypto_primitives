@@ -26,6 +26,7 @@ use openssl::{
     x509::X509,
 };
 use std::{
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
 };
@@ -116,7 +117,7 @@ impl Keystore {
     }
 
     pub fn set_certificate_extension(&mut self, ext: &CertificateExtension) {
-        self.extension = ext.to_owned();
+        ext.clone_into(&mut self.extension);
     }
 
     /// Get a given certificate from the keystore
@@ -172,9 +173,7 @@ impl Keystore {
         &self,
         authority: &str,
     ) -> Result<SigningCertificate, BasisCryptoError> {
-        let p = self
-            .path
-            .join(format!("{}{}", authority, self.extension.to_string()));
+        let p = self.path.join(format!("{}{}", authority, self.extension));
         let buf = fs::read(&p).map_err(|e| BasisCryptoError::IO {
             msg: format!("Error reading file {}", p.as_os_str().to_str().unwrap()),
             source: e,
@@ -315,12 +314,16 @@ impl Default for CertificateExtension {
     }
 }
 
-impl ToString for CertificateExtension {
-    fn to_string(&self) -> String {
-        match self {
-            CertificateExtension::Cer => ".cer".to_string(),
-            CertificateExtension::Pem => ".pem".to_string(),
-        }
+impl Display for CertificateExtension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                CertificateExtension::Cer => ".cer".to_string(),
+                CertificateExtension::Pem => ".pem".to_string(),
+            }
+        )
     }
 }
 

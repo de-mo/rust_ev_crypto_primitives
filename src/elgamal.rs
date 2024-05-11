@@ -54,21 +54,21 @@ impl EncryptionParameters {
     ///
     /// This method should only be used in special cases, e.g. for moking
     pub fn set_p(&mut self, p: &MPInteger) {
-        self.p = p.clone();
+        self.p.clone_from(p);
     }
 
     /// Set the parameter `q`.
     ///
     /// This method should only be used in special cases, e.g. for moking
     pub fn set_q(&mut self, q: &MPInteger) {
-        self.q = q.clone();
+        self.q.clone_from(q);
     }
 
     /// Set the parameter `g`.
     ///
     /// This method should only be used in special cases, e.g. for moking
     pub fn set_g(&mut self, g: &MPInteger) {
-        self.g = g.clone();
+        self.g.clone_from(g);
     }
 
     // GetEncryptionParameters according to the specification of Swiss Post (Algorithm 8.1)
