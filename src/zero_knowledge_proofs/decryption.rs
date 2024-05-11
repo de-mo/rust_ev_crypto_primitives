@@ -21,6 +21,8 @@ use crate::{
     EncryptionParameters, HashableMessage, RecursiveHashTrait,
 };
 
+use super::Cyphertext;
+
 // Enum representing the errors in zero knowledge proofs
 #[derive(Error, Debug)]
 pub enum DecryptionProofError {
@@ -52,13 +54,13 @@ fn compute_phi_decryption(
 
 pub fn verify_decryption(
     ep: &EncryptionParameters,
-    (gamma, phis): (&MPInteger, &[MPInteger]),
+    upper_c: &Cyphertext,
     pks: &[MPInteger],
     ms: &[MPInteger],
     i_aux: &[String],
     (e, zs): (&MPInteger, &[MPInteger]),
 ) -> Result<bool, DecryptionProofError> {
-    let l = phis.len();
+    let l = upper_c.phis.len();
     let k = pks.len();
     if l == 0 {
         return Err(DecryptionProofError::LPositive(l));
@@ -72,13 +74,15 @@ pub fn verify_decryption(
     if l > k {
         return Err(DecryptionProofError::LSmallerOrEqualK(l, k));
     }
-    let xs = compute_phi_decryption(ep, zs, gamma);
-    let fs = vec![ep.p(), ep.q(), ep.g(), gamma];
+    let xs = compute_phi_decryption(ep, zs, &upper_c.gamma);
+    let fs = vec![ep.p(), ep.q(), ep.g(), &upper_c.gamma];
     let ys: Vec<MPInteger> = pks
         .iter()
         .cloned()
         .chain(
-            phis.iter()
+            upper_c
+                .phis
+                .iter()
                 .zip(ms.iter())
                 .map(|(phi, m)| phi.mod_divide(m, ep.p())),
         )
@@ -90,7 +94,7 @@ pub fn verify_decryption(
         .collect();
     let mut h_aux: Vec<HashableMessage> = vec![
         HashableMessage::from("DecryptionProof"),
-        HashableMessage::from(phis),
+        HashableMessage::from(&upper_c.phis),
         HashableMessage::from(ms),
     ];
     if !i_aux.is_empty() {
@@ -178,7 +182,7 @@ mod test {
             .collect();
         let res = verify_decryption(
             &EncryptionParameters::from((&p, &q, &g)),
-            (&gamma, &phis),
+            &Cyphertext::from_expanded(&gamma, &phis),
             &pks,
             &ms,
             &[],
@@ -246,7 +250,7 @@ mod test {
             .collect();
         let res = verify_decryption(
             &EncryptionParameters::from((&p, &q, &g)),
-            (&gamma, &phis),
+            &Cyphertext::from_expanded(&gamma, &phis),
             &pks,
             &ms,
             &[],

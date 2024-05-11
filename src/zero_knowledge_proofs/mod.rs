@@ -32,6 +32,8 @@ pub use exponentiation::verify_exponentiation;
 pub use plaintext_equality::verify_plaintext_equality;
 pub use schnorr_proofs::verify_schnorr;
 
+use crate::integer::MPInteger;
+
 // enum representing the errors during the algorithms for zero knowledge proof
 #[derive(Error, Debug)]
 pub enum ZeroKnowledgeProofError {
@@ -41,4 +43,18 @@ pub enum ZeroKnowledgeProofError {
     ExponentiationError(#[from] exponentiation::ExponentiationError),
     #[error(transparent)]
     DecryptionProofError(#[from] decryption::DecryptionProofError),
+}
+
+pub struct Cyphertext {
+    pub gamma: MPInteger,
+    pub phis: Vec<MPInteger>,
+}
+
+impl Cyphertext {
+    pub fn from_expanded(gamma: &MPInteger, phis: &[MPInteger]) -> Self {
+        Self {
+            gamma: gamma.clone(),
+            phis: phis.to_vec(),
+        }
+    }
 }
