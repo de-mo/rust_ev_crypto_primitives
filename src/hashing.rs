@@ -262,6 +262,13 @@ impl<'a> From<&'a Vec<String>> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<&'a [String]> for HashableMessage<'a> {
+    fn from(value: &'a [String]) -> Self {
+        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
+        HashableMessage::from(l)
+    }
+}
+
 impl<'a> From<&'a Vec<&'a String>> for HashableMessage<'a> {
     fn from(value: &'a Vec<&'a String>) -> Self {
         let l: Vec<HashableMessage> = value.iter().map(|s| HashableMessage::from(*s)).collect();
@@ -286,6 +293,13 @@ impl<'a> From<&'a Vec<MPInteger>> for HashableMessage<'a> {
 impl<'a> From<&'a Vec<&'a MPInteger>> for HashableMessage<'a> {
     fn from(value: &'a Vec<&'a MPInteger>) -> Self {
         let l: Vec<HashableMessage> = value.iter().map(|n| HashableMessage::from(*n)).collect();
+        HashableMessage::from(l)
+    }
+}
+
+impl<'a> From<&'a [MPInteger]> for HashableMessage<'a> {
+    fn from(value: &'a [MPInteger]) -> Self {
+        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
         HashableMessage::from(l)
     }
 }
