@@ -17,12 +17,16 @@
 //! Implementation of the necessary algorithms used for the zero-knowledge proofs of Swiss Post:
 //! - [verify_schnorr]
 //! - [verify_exponentiation]
+//! - [verify_decryption]
+//! - [verifiy_shuffle]
 
+mod decryption;
 mod exponentiation;
 mod schnorr_proofs;
 
 use thiserror::Error;
 
+pub use decryption::verify_decryption;
 pub use exponentiation::verify_exponentiation;
 pub use schnorr_proofs::verify_schnorr;
 
@@ -33,4 +37,6 @@ pub enum ZeroKnowledgeProofError {
     SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
     #[error(transparent)]
     ExponentiationError(#[from] exponentiation::ExponentiationError),
+    #[error(transparent)]
+    DecryptionProofError(#[from] decryption::DecryptionProofError),
 }

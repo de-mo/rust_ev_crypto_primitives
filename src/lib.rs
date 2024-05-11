@@ -63,7 +63,9 @@ pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
 pub use number_theory::SmallPrimeTrait;
 pub use random::random_bytes;
 pub use signature::{sign, verify_signature, SignatureError};
-pub use zero_knowledge_proofs::{verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError};
+pub use zero_knowledge_proofs::{
+    verify_decryption, verify_exponentiation, verify_schnorr, ZeroKnowledgeProofError,
+};
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
