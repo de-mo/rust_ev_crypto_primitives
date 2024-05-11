@@ -22,12 +22,14 @@
 
 mod decryption;
 mod exponentiation;
+mod plaintext_equality;
 mod schnorr_proofs;
 
 use thiserror::Error;
 
 pub use decryption::verify_decryption;
 pub use exponentiation::verify_exponentiation;
+pub use plaintext_equality::verify_plaintext_equality;
 pub use schnorr_proofs::verify_schnorr;
 
 // enum representing the errors during the algorithms for zero knowledge proof
