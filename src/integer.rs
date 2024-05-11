@@ -58,7 +58,7 @@ pub trait Constants {
 }
 
 /// Trait to extend operations of BigUInt
-pub trait Operations {
+pub trait Operations: Sized {
     /// Test if is even
     fn is_even(&self) -> bool;
 
@@ -83,6 +83,10 @@ pub trait Operations {
     ///
     /// Return the correct answer only if modulus is prime
     fn mod_inverse(&self, modulus: &Self) -> Self;
+
+    fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Self {
+        self.mod_multiply(&divisor.mod_inverse(modulus), modulus)
+    }
 }
 
 /// Transformation from or to String in hexadecimal according to the specifications
