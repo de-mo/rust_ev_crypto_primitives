@@ -21,7 +21,8 @@ use crate::{
     byte_array::ByteArray,
     integer::{Constants, MPInteger},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait, SMALL_PRIMES},
-    DomainVerifications, HashableMessage, VerifyDomainTrait, SECURITY_LENGTH,
+    DomainVerifications, HashableMessage, VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH,
+    SECURITY_STRENGTH,
 };
 use anyhow::anyhow;
 use thiserror::Error;
@@ -73,7 +74,8 @@ impl EncryptionParameters {
 
     // GetEncryptionParameters according to the specification of Swiss Post (Algorithm 8.1)
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
-        let q_b_hat = shake256(&ByteArray::from(seed)).map_err(ElgamalError::OpenSSLError)?;
+        let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
+            .map_err(ElgamalError::OpenSSLError)?;
         let q_b = q_b_hat.prepend_byte(2u8);
         let q_prime: MPInteger = q_b.into_mp_integer() >> 3;
         let q = &q_prime - MPInteger::from(&q_prime % 6u8) + MPInteger::five();
@@ -108,9 +110,9 @@ impl EncryptionParameters {
                 }
             }
             let q_plus_delta = MPInteger::from(&q + &delta);
-            if q_plus_delta.miller_rabin(SECURITY_LENGTH / 2)
+            if q_plus_delta.miller_rabin(SECURITY_STRENGTH / 2)
                 && (q_plus_delta * MPInteger::two() + MPInteger::one())
-                    .miller_rabin(SECURITY_LENGTH / 2)
+                    .miller_rabin(SECURITY_STRENGTH / 2)
             {
                 break;
             }

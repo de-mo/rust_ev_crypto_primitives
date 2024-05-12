@@ -52,7 +52,7 @@ pub fn verify_plaintext_equality(
         HashableMessage::from(&c_prime),
         HashableMessage::from(&h_aux),
     ])
-    .hash()
+    .recursive_hash()
     .into_mp_integer();
     &e_prime == e
 }

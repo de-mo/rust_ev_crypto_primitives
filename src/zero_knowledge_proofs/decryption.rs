@@ -106,7 +106,7 @@ pub fn verify_decryption(
         HashableMessage::from(&c_primes),
         HashableMessage::from(h_aux),
     ])
-    .hash()
+    .recursive_hash()
     .into_mp_integer();
     Ok(&e_prime == e)
 }

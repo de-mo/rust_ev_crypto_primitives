@@ -100,7 +100,7 @@ pub fn verify_exponentiation(
         HashableMessage::from(&c_prime_s),
         h_aux,
     ];
-    let e_prime = HashableMessage::from(&l_final).hash().into_mp_integer();
+    let e_prime = HashableMessage::from(&l_final).recursive_hash().into_mp_integer();
     Ok(&e_prime == e)
 }
 

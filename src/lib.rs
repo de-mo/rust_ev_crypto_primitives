@@ -71,8 +71,11 @@ pub use zero_knowledge_proofs::{
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
 
+/// The length of the group parameter `q` according to the security level in the specifications
+pub const GROUP_PARAMETER_Q_LENGTH: usize = 3071;
+
 /// The security length according to the security level in the specifications
-pub const SECURITY_LENGTH: usize = 128;
+pub const SECURITY_STRENGTH: usize = 128;
 
 type DomainVerificationFunctionBoxed<T> = Box<dyn Fn(&T) -> Vec<anyhow::Error>>;
 
