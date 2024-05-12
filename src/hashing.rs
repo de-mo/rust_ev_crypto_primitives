@@ -181,7 +181,7 @@ impl<'a> HashableMessage<'a> {
                 Ok(res)
             }
             HashableMessage::Hashed(b) => Ok(b.clone()),
-            HashableMessage::HashedOfLength(b) => {
+            HashableMessage::HashedOfLength(_) => {
                 Err(HashError::WrongHashed("RecursiveHashOfLength".to_string()))
             }
         }
@@ -213,7 +213,7 @@ impl<'a> HashableMessage<'a> {
                 }
                 Ok(res)
             }
-            HashableMessage::Hashed(b) => Err(HashError::WrongHashed("RecursiveHash".to_string())),
+            HashableMessage::Hashed(_) => Err(HashError::WrongHashed("RecursiveHash".to_string())),
             HashableMessage::HashedOfLength(b) => Ok(b.clone()),
         }
     }

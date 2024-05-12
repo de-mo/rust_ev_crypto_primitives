@@ -16,8 +16,6 @@
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use crate::Constants;
-
 use super::integer::{ByteLength, MPInteger};
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
 use num_traits::Pow;
