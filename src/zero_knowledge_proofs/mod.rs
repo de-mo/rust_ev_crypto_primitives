@@ -32,7 +32,7 @@ pub use exponentiation::verify_exponentiation;
 pub use plaintext_equality::verify_plaintext_equality;
 pub use schnorr_proofs::verify_schnorr;
 
-use crate::integer::MPInteger;
+use crate::{integer::MPInteger, HashableMessage};
 
 // enum representing the errors during the algorithms for zero knowledge proof
 #[derive(Error, Debug)]
@@ -56,5 +56,20 @@ impl Cyphertext {
             gamma: gamma.clone(),
             phis: phis.to_vec(),
         }
+    }
+}
+
+impl<'a> From<&'a Cyphertext> for HashableMessage<'a> {
+    fn from(value: &'a Cyphertext) -> Self {
+        HashableMessage::from(vec![
+            HashableMessage::from(&value.gamma),
+            HashableMessage::from(
+                value
+                    .phis
+                    .iter()
+                    .map(HashableMessage::from)
+                    .collect::<Vec<HashableMessage<'a>>>(),
+            ),
+        ])
     }
 }

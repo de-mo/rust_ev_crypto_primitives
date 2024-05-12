@@ -79,6 +79,11 @@ pub trait Operations: Sized {
     /// Calculate the exponentiate modulo: self*other % modulus
     fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self;
 
+    /// Calculate the exponentiate modulo: self*other % modulus
+    fn mod_square(&self, modulus: &Self) -> Self {
+        self.mod_multiply(self, modulus)
+    }
+
     /// Calculate the inverse modulo: self^(-1) % modulus
     ///
     /// Return the correct answer only if modulus is prime
@@ -194,6 +199,10 @@ impl Operations for BigUint {
         (self * other) % modulus
     }
 
+    fn mod_square(&self, modulus: &Self) -> Self {
+        self.mod_multiply(self, modulus)
+    }
+
     fn mod_inverse(&self, modulus: &Self) -> Self {
         self.mod_exponentiate(&(modulus - Self::two()), modulus)
     }
@@ -221,6 +230,10 @@ impl Operations for Integer {
 
     fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self {
         Integer::from(self * other) % modulus
+    }
+
+    fn mod_square(&self, modulus: &Self) -> Self {
+        self.mod_exponentiate(MPInteger::two(), modulus)
     }
 
     fn mod_inverse(&self, modulus: &Self) -> Self {

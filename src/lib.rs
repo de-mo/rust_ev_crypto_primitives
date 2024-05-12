@@ -1,5 +1,5 @@
 // Copyright © 2023 Denis Morel
-
+//
 // This program is free software: you can redistribute it and/or modify it under
 // the terms of the GNU Lesser General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
@@ -48,6 +48,7 @@ pub mod direct_trust;
 pub mod elgamal;
 pub mod hashing;
 pub mod integer;
+pub mod mix_net;
 pub mod number_theory;
 pub mod random;
 pub mod signature;
