@@ -17,7 +17,8 @@
 use crate::{
     integer::MPInteger,
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
-    EncryptionParameters, HashableMessage, Operations, RecursiveHashTrait, VerifyDomainTrait,
+    EncryptionParameters, HashError, HashableMessage, Operations, RecursiveHashTrait,
+    VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -28,6 +29,8 @@ pub enum SchnorrProofError {
     CheckNumberTheory(#[from] NumberTheoryError),
     #[error("Error checking the elgamal parameters")]
     CheckElgamal(Vec<anyhow::Error>),
+    #[error(transparent)]
+    HashError(#[from] HashError),
 }
 
 /// Compute Phi Schnorr according to specifications of Swiss Post (Algorithm 10.1)
@@ -73,6 +76,7 @@ pub fn verify_schnorr(
     ];
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
+        .map_err(SchnorrProofError::HashError)?
         .into_mp_integer();
     Ok(&e_prime == e)
 }

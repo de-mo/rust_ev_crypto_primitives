@@ -40,7 +40,7 @@ pub enum ZeroKnowledgeProofError {
     #[error(transparent)]
     SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
     #[error(transparent)]
-    ExponentiationError(#[from] exponentiation::ExponentiationError),
+    ExponentiationError(#[from] exponentiation::ExponentiationProofError),
     #[error(transparent)]
     DecryptionProofError(#[from] decryption::DecryptionProofError),
 }

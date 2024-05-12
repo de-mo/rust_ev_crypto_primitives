@@ -17,7 +17,8 @@
 use crate::{
     integer::MPInteger,
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
-    EncryptionParameters, HashableMessage, Operations, RecursiveHashTrait, VerifyDomainTrait,
+    EncryptionParameters, HashError, HashableMessage, Operations, RecursiveHashTrait,
+    VerifyDomainTrait,
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -25,13 +26,15 @@ use thiserror::Error;
 // Enum representing the errors in zero knowledge proofs
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum ExponentiationError {
+pub enum ExponentiationProofError {
     #[error(transparent)]
     CheckNumberTheory(#[from] NumberTheoryError),
     #[error("Error checking the elgamal parameters")]
     CheckElgamal(Vec<anyhow::Error>),
     #[error("The list {0} must have the same length as the list {1}")]
     CheckListSameSize(String, String),
+    #[error(transparent)]
+    HashError(#[from] HashError),
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
@@ -53,27 +56,27 @@ pub fn verify_exponentiation(
     ys: &Vec<MPInteger>,
     (e, z): (&MPInteger, &MPInteger),
     i_aux: &Vec<String>,
-) -> Result<bool, ExponentiationError> {
+) -> Result<bool, ExponentiationProofError> {
     // Check of input parameters
     if cfg!(feature = "checks") {
         let domain_errs = ep.verifiy_domain();
         if !domain_errs.is_empty() {
-            return Err(ExponentiationError::CheckElgamal(domain_errs));
+            return Err(ExponentiationProofError::CheckElgamal(domain_errs));
         }
         if gs.len() != ys.len() {
-            return Err(ExponentiationError::CheckListSameSize(
+            return Err(ExponentiationProofError::CheckListSameSize(
                 "gs".to_string(),
                 "ys".to_string(),
             ));
         }
         for g in gs.iter() {
             if let Some(e) = g.check_quadratic_residue(ep.p()) {
-                return Err(ExponentiationError::CheckNumberTheory(e));
+                return Err(ExponentiationProofError::CheckNumberTheory(e));
             }
         }
         for y in ys.iter() {
             if let Some(e) = y.check_quadratic_residue(ep.p()) {
-                return Err(ExponentiationError::CheckNumberTheory(e));
+                return Err(ExponentiationProofError::CheckNumberTheory(e));
             }
         }
     }
@@ -100,7 +103,10 @@ pub fn verify_exponentiation(
         HashableMessage::from(&c_prime_s),
         h_aux,
     ];
-    let e_prime = HashableMessage::from(&l_final).recursive_hash().into_mp_integer();
+    let e_prime = HashableMessage::from(&l_final)
+        .recursive_hash()
+        .map_err(ExponentiationProofError::HashError)?
+        .into_mp_integer();
     Ok(&e_prime == e)
 }
 

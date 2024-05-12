@@ -1,7 +1,31 @@
+// Copyright © 2023 Denis Morel
+
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by the Free
+// Software Foundation, either version 3 of the License, or (at your option) any
+// later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+// details.
+//
+// You should have received a copy of the GNU Lesser General Public License and
+// a copy of the GNU General Public License along with this program. If not, see
+// <https://www.gnu.org/licenses/>.
+
 use crate::{
     integer::{MPInteger, Operations},
-    EncryptionParameters, HashableMessage, RecursiveHashTrait,
+    EncryptionParameters, HashError, HashableMessage, RecursiveHashTrait,
 };
+use thiserror::Error;
+
+// Enum representing the errors in zero knowledge proofs
+#[derive(Error, Debug)]
+pub enum PlaintextProofError {
+    #[error(transparent)]
+    HashError(#[from] HashError),
+}
 
 fn compute_phi_plaintext_equality(
     ep: &EncryptionParameters,
@@ -25,7 +49,7 @@ pub fn verify_plaintext_equality(
     h_prime: &MPInteger,
     (e, (z_0, z_1)): (&MPInteger, (&MPInteger, &MPInteger)),
     i_aux: &[String],
-) -> bool {
+) -> Result<bool, PlaintextProofError> {
     let xs = compute_phi_plaintext_equality(ep, (z_0, z_1), h, h_prime);
     let fs = vec![ep.p(), ep.q(), ep.g(), h, h_prime];
     let ys = [
@@ -53,8 +77,9 @@ pub fn verify_plaintext_equality(
         HashableMessage::from(&h_aux),
     ])
     .recursive_hash()
+    .map_err(PlaintextProofError::HashError)?
     .into_mp_integer();
-    &e_prime == e
+    Ok(&e_prime == e)
 }
 
 #[cfg(test)]
@@ -114,7 +139,8 @@ mod test {
             (&e, (&z_0, &z_1)),
             &[],
         );
-        assert!(res);
+        assert!(res.is_ok());
+        assert!(res.unwrap());
     }
 
     #[test]
@@ -173,6 +199,7 @@ mod test {
                 "Test string 3".to_string(),
             ],
         );
-        assert!(res);
+        assert!(res.is_ok());
+        assert!(res.unwrap());
     }
 }

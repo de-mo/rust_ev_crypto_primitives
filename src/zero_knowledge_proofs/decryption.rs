@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::{
     integer::{MPInteger, Operations},
-    EncryptionParameters, HashableMessage, RecursiveHashTrait,
+    EncryptionParameters, HashError, HashableMessage, RecursiveHashTrait,
 };
 
 use super::Cyphertext;
@@ -38,6 +38,8 @@ pub enum DecryptionProofError {
     LSmallerOrEqualK(usize, usize),
     #[error("l must be positive")]
     LPositive(usize),
+    #[error(transparent)]
+    HashError(#[from] HashError),
 }
 
 fn compute_phi_decryption(
@@ -107,6 +109,7 @@ pub fn verify_decryption(
         HashableMessage::from(h_aux),
     ])
     .recursive_hash()
+    .map_err(DecryptionProofError::HashError)?
     .into_mp_integer();
     Ok(&e_prime == e)
 }

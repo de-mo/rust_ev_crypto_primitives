@@ -34,52 +34,24 @@ pub trait RecursiveHashTrait {
     /// Try recursive hash
     ///
     /// Return [HashError] if an error appears during the calculation
-    fn try_recursive_hash(&self) -> Result<ByteArray, HashError>;
-
-    /// Recursive hash
-    ///
-    /// Panic if an error appears during the calculation
-    fn recursive_hash(&self) -> ByteArray {
-        self.try_recursive_hash().unwrap()
-    }
+    fn recursive_hash(&self) -> Result<ByteArray, HashError>;
 
     /// Try recursive hash and return a variant HashableMessage::Hashed containing the hashed value
     ///
     /// Return [HashError] if an error appears during the calculation
-    fn try_to_hashed_hashable_message(&self) -> Result<HashableMessage<'_>, HashError> {
-        Ok(HashableMessage::Hashed(self.try_recursive_hash()?))
-    }
-
-    /// Recursive hash and return a variant HashableMessage::Hashed containing the hashed value
-    ///
-    /// Panic if an error appears during the calculation
-    fn to_hashed_hashable_message(&self) -> HashableMessage<'_> {
-        self.try_to_hashed_hashable_message().unwrap()
+    fn to_hashed_hashable_message(&self) -> Result<HashableMessage<'_>, HashError> {
+        Ok(HashableMessage::Hashed(self.recursive_hash()?))
     }
 
     /// Try recursive hash of length: Computes the hash value of multiple inputs to a given bit length
     ///
     /// Return [HashError] if an error appears during the calculation
-    fn try_recursive_hash_of_length(&self, length: usize) -> Result<ByteArray, HashError>;
-
-    /// Recursive hash
-    ///
-    /// Panic if an error appears during the calculation
-    fn recursive_hash_of_length(&self, length: usize) -> ByteArray {
-        self.try_recursive_hash_of_length(length).unwrap()
-    }
+    fn recursive_hash_of_length(&self, length: usize) -> Result<ByteArray, HashError>;
 
     /// Try recursive hash to Zq: Computes the hash value of multiple inputs uniformly into Z_q
     ///
     /// Return [HashError] if an error appears during the calculation
-    fn try_recursive_hash_to_zq(&self, q: &MPInteger) -> Result<MPInteger, HashError>;
-
-    /// Recursive hash
-    ///
-    /// Panic if an error appears during the calculation
-    fn recursive_hash_to_zq(&self, q: &MPInteger) -> MPInteger {
-        self.try_recursive_hash_to_zq(q).unwrap()
-    }
+    fn recursive_hash_to_zq(&self, q: &MPInteger) -> Result<MPInteger, HashError>;
 }
 
 /// Enum to represent an element that is hashable
@@ -101,7 +73,7 @@ pub trait RecursiveHashTrait {
 /// use rust_ev_crypto_primitives::ByteArray;
 /// use rust_ev_crypto_primitives::Decode;
 /// use rust_ev_crypto_primitives::{HashableMessage, RecursiveHashTrait};
-/// let r = HashableMessage::from("test string").hash();
+/// let r = HashableMessage::from("test string").recursive_hash().unwrap();
 /// let expected = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
 /// assert_eq!(r, expected);
 /// ```
@@ -113,16 +85,16 @@ pub trait RecursiveHashTrait {
 /// let mut l: Vec<HashableMessage> = vec![];
 /// l.push(HashableMessage::from("common reference string"));
 /// l.push(HashableMessage::from(&(2 as usize)));
-/// HashableMessage::from(l).hash();
+/// HashableMessage::from(l).recursive_hash().unwrap();
 /// ```
 ///
 /// If you decide to calculate intermediate hash values, and store the in the message (to avoid big structures),
 /// use the variant [HashableMessage::Hashed]
 /// ```
 /// use rust_ev_crypto_primitives::{HashableMessage, RecursiveHashTrait};
-/// let b = HashableMessage::from(2 as usize).hash();
+/// let b = HashableMessage::from(2 as usize).recursive_hash().unwrap();
 /// let hm = HashableMessage::Hashed(b.clone());
-/// assert_eq!(hm.hash(), b);
+/// assert_eq!(hm.recursive_hash().unwrap(), b);
 /// ```
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,14 +141,14 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::Composite(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.try_recursive_hash()?);
+                    res = res.append(&e.recursive_hash()?);
                 }
                 Ok(res)
             }
             HashableMessage::CompositeR(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.try_recursive_hash()?);
+                    res = res.append(&e.recursive_hash()?);
                 }
                 Ok(res)
             }
@@ -202,14 +174,14 @@ impl<'a> HashableMessage<'a> {
             HashableMessage::Composite(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.try_recursive_hash_of_length(length)?);
+                    res = res.append(&e.recursive_hash_of_length(length)?);
                 }
                 Ok(res)
             }
             HashableMessage::CompositeR(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.try_recursive_hash_of_length(length)?);
+                    res = res.append(&e.recursive_hash_of_length(length)?);
                 }
                 Ok(res)
             }
@@ -224,7 +196,7 @@ impl<'a> HashableMessage<'a> {
 }
 
 impl<'a> RecursiveHashTrait for HashableMessage<'a> {
-    fn try_recursive_hash(&self) -> Result<ByteArray, HashError> {
+    fn recursive_hash(&self) -> Result<ByteArray, HashError> {
         let b = self.to_hashable_byte_array()?;
         Ok(match self.is_hashed() {
             true => b,
@@ -232,7 +204,7 @@ impl<'a> RecursiveHashTrait for HashableMessage<'a> {
         })
     }
 
-    fn try_recursive_hash_of_length(&self, length: usize) -> Result<ByteArray, HashError> {
+    fn recursive_hash_of_length(&self, length: usize) -> Result<ByteArray, HashError> {
         let mut upper_l = length / 8;
         if length % 8 > 0 {
             upper_l += 1;
@@ -247,7 +219,7 @@ impl<'a> RecursiveHashTrait for HashableMessage<'a> {
         })
     }
 
-    fn try_recursive_hash_to_zq(&self, q: &MPInteger) -> Result<MPInteger, HashError> {
+    fn recursive_hash_to_zq(&self, q: &MPInteger) -> Result<MPInteger, HashError> {
         let hashable_q = HashableMessage::from(q);
         let hashable_message = HashableMessage::from("RecursiveHash");
         let mut parameters = vec![&hashable_q, &hashable_message];
@@ -265,7 +237,7 @@ impl<'a> RecursiveHashTrait for HashableMessage<'a> {
             _ => parameters.push(self),
         }
         let h_prime = HashableMessage::from(parameters)
-            .try_recursive_hash_of_length(GROUP_PARAMETER_Q_LENGTH + 2 * SECURITY_STRENGTH)?
+            .recursive_hash_of_length(GROUP_PARAMETER_Q_LENGTH + 2 * SECURITY_STRENGTH)?
             .into_mp_integer();
         Ok(h_prime.modulo(q))
     }
@@ -453,7 +425,7 @@ mod test {
         let b = ByteArray::base64_decode(
             "t+FRYortKmq/cViAnPTzx2LnFg84tNpWp4TZBFGQz+8yTnc4kmz75fS/jY2MMddj2gbICrsRhetPfHtXV/WVhJDP1H18GbtCFY2VVPe0a87VXE15/V8k1mE8McODmi3fipona8+/och3xWKE2rec1MKzKT0g6eXq8CrGCsyT7YdEIqUuyyOP7uWrat2DX9GgdT0Kj3jlN9K5W7edjcrsZCwenyO4KbXCeAvzhzffi7MA0BM0oNC9hkXL+nOmFg/+OTxIy7vKBg8P+OxtMb61zO7X8vC7CIAXFjvGDfRaDssbzSibBsu/6iGtCOGEfz9zeNVs7ZRkDW7w09N75p0AYw=="
         ).unwrap();
-        let r = HashableMessage::from(&b).recursive_hash();
+        let r = HashableMessage::from(&b).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("0SHVZ9hTTmR+NRhanLPF/qPg3NmQbXyAzLYw9QVxYOg=").unwrap();
         assert_eq!(r, e);
     }
@@ -463,7 +435,7 @@ mod test {
         let i = MPInteger::from_hexa_string(
             "0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF324E7738926CFBE5F4BF8D8D8C31D763DA06C80ABB1185EB4F7C7B5757F5958490CFD47D7C19BB42158D9554F7B46BCED55C4D79FD5F24D6613C31C3839A2DDF8A9A276BCFBFA1C877C56284DAB79CD4C2B3293D20E9E5EAF02AC60ACC93ED874422A52ECB238FEEE5AB6ADD835FD1A0753D0A8F78E537D2B95BB79D8DCAEC642C1E9F23B829B5C2780BF38737DF8BB300D01334A0D0BD8645CBFA73A6160FFE393C48CBBBCA060F0FF8EC6D31BEB5CCEED7F2F0BB088017163BC60DF45A0ECB1BCD289B06CBBFEA21AD08E1847F3F7378D56CED94640D6EF0D3D37BE69D0063"
         ).unwrap();
-        let r = HashableMessage::from(&i).recursive_hash();
+        let r = HashableMessage::from(&i).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("YXHR0NvojiUMGz7RCTcO48ZQ1uqRtS64goB6XMFW01E=").unwrap();
         assert_eq!(r, e);
     }
@@ -471,14 +443,16 @@ mod test {
     #[test]
     fn test_string() {
         let s = "test string".to_string();
-        let r = HashableMessage::from(&s).recursive_hash();
+        let r = HashableMessage::from(&s).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
         assert_eq!(r, e);
     }
 
     #[test]
     fn test_str() {
-        let r = HashableMessage::from("test string").recursive_hash();
+        let r = HashableMessage::from("test string")
+            .recursive_hash()
+            .unwrap();
         let e = ByteArray::base64_decode("m1a11iWW/Tcihy/IChyY51AO8UdZe48f5oRFh7RL+JQ=").unwrap();
         assert_eq!(r, e);
     }
@@ -494,7 +468,7 @@ mod test {
             .iter()
             .map(|e| MPInteger::from_hexa_slice(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash();
+        let r = HashableMessage::from(&bis).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("Qn1sWr2uZ87jwjeEoJa9zS6dc6S92oC0X83yxpyv2ZA=").unwrap();
         assert_eq!(r, e);
     }
@@ -508,7 +482,7 @@ mod test {
             .iter()
             .map(|e| MPInteger::from_hexa_slice(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash();
+        let r = HashableMessage::from(&bis).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("+e9LVZg0L5uHLbnUv8pIVVm28y+QZMtfG1edAFx2oPM=").unwrap();
         assert_eq!(r, e);
     }
@@ -527,7 +501,7 @@ mod test {
         l.push(HashableMessage::from(&bi2));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("rHGUCWqWKTj9KBY3GgSeNEXZfraTDK+ZGIhlSxpVs5c=").unwrap();
         assert_eq!(r, e);
     }
@@ -554,7 +528,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -581,7 +555,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -591,7 +565,7 @@ mod test {
         let mut nl: Vec<HashableMessage> = vec![];
         let bu1 = MPInteger::from_hexa_string("0x4").unwrap();
         nl.push(HashableMessage::Hashed(
-            HashableMessage::from(&bu1).recursive_hash(),
+            HashableMessage::from(&bu1).recursive_hash().unwrap(),
         ));
         let bu2 = MPInteger::from_hexa_string(
             "0x3896D05A527747E840CEB0A10454DE39955529297AC4CB21010E9287A21F826FA7221215E1C7EE8362223DF51215A7F4CD14F158980154EE0794B599639A6FBC171A97F376A4DD95945C476F0DC6836FCEA68C9B28F901CE7F30DC03F406947E6245BF741650F5164BFC24F4B23948A5D6642C36D61016E63E943DB9717335EEB04373BFAE10BB4FB20EA9FD1BE48CA9A02B8E8C6639AD8E43D714ED16D4764D258E9A70BABD5497C09E148052C1C6A965F18F71F7B03385178B4991AA790611FA3B98E9C2F1EE1E0369F496A1D6928D718650513439D01898AAB87BC968F76D9DB8089809142A0C79A84C689D02314CEDE64F4C9615B79D49D2BE641BE8D4AB"
@@ -610,7 +584,7 @@ mod test {
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
         l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash();
+        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -638,7 +612,7 @@ mod test {
             "0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF3380470C368DF93ADCD920EF5B23A4D23EFEFDCB31961F5830DB2395DFC26130A2724E1682619277886F289E9FA88A5C5AE9BA6C9E5C43CE3EA97FEB95D0557393BED3DD0DA578A446C741B578A432F361BD5B43B7F3485AB88909C1579A0D7F4A7BBDE783641DC7FAB3AF84BC83A56CD3C3DE2DCDEA5862C9BE9F6F261D3C9CB20CE6B"
         ).unwrap();
         let s = "test string".to_string();
-        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q);
+        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q).unwrap();
         let e = MPInteger::from_hexa_string(
             "0x687EF94C9F5D22F5547A017BB693FE7A2B655AD995EB29B03729BE8F7649EFBA67BC64450362B3F02A19D9868658546D627D348D490FBCC523C735B0BAC53486C740EFB0D1F63163A644C611938F8F7572210AE04A4C6873FADC80A40A55180EC0043B3FD0F787190406FF0277BEF5C1D4BBCE921865183465BDE79CBAE939AAA6C961BCDAD0DAEC05D270C1BC37EF770D002B9E1E7528191882D736E2772ACE46BB0741C11A44EE062CDC9A43265DA47A7C6CFB32256707F2F82B9A4B9E7942E780A17DCDDC7153851F65AC269FE9F0751F526093CB5A84A640B6409FCD52F9D08331AF68A8AC38C9B2A607E6D7BFE7E49CBBA2275B9D27CC81C4EBC9FF67FAE4B3AA5BC5DAE2751F2539B9971FBD1D9A5A78E0EE2AFBC870E4F2037580887024AB53CF66996852507DBF1CCD06B0B2309F10F8031E8EF23D5225717FC78E118E01383E6222CCE26EFD7EB516D75AC9F8F1585FF19C5A540D36E94187CDC167E60767EF8851B15A327FD71DCF05D97D22958B8FD4DC47019C44BF400DB689C"
         ).unwrap();
@@ -651,7 +625,7 @@ mod test {
             "0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF3380470C368DF93ADCD920EF5B23A4D23EFEFDCB31961F5830DB2395DFC26130A2724E1682619277886F289E9FA88A5C5AE9BA6C9E5C43CE3EA97FEB95D0557393BED3DD0DA578A446C741B578A432F361BD5B43B7F3485AB88909C1579A0D7F4A7BBDE783641DC7FAB3AF84BC83A56CD3C3DE2DCDEA5862C9BE9F6F261D3C9CB20CE6B"
         ).unwrap();
         let s = ByteArray::base64_decode("q83vASNFZ4k=").unwrap();
-        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q);
+        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q).unwrap();
         let e = MPInteger::from_hexa_string(
             "0x384A8B51CBB6A6B5A7475AF118698633368E65349C00C2170D98DF51155942805F6CD42F5EAA6E71D952D090BD9A14846B5772D1360ABBD478BEBC306255FDDAD04082957FB4C04D8C1BBB17107DE5ACC5E456F834E01B562FBCDC5A961B52442F81BD3BEBF5C33229202425CDD36609012F7ECA22FAF45962DB0DF27764C7A7114EAFA2C054501DC5FECD01A1E40A54CCE52BABEFB86C398C8B4D913CCC977F5086A53784976B9A2FDC5B14AB5650630D1F00B2E5DB31404EBA7077EF8D028EE73D0A78BA8E5F482FDD364B28D68DB1641EDB18728156BF8018FF8DBAB45B068E599B4758E6B63C390FA5D4B307C64C8CD44A2D788BD76E0DC0DEECA0CDDDF760CAC77B90AE99FC13AAEDDCAA3053DBAF086B31DAA493D49409C373B796F0330A41ED5F7265BE2E3ED998F9E1B846E76E12DDF6DB2D2F1A161B65F92F19DBE8DA0DAFA61A16EAF8774D61DE2B8489B3644F43D0D16FBCAE73787ECD5A3E4AFCD761DF11351A03A158889E4E360187627CA1D76224CE53E502D86C8420C2ABBD"
         ).unwrap();
@@ -666,7 +640,7 @@ mod test {
         let s = MPInteger::from_hexa_string(
             "0xE0D1E56B15F4DB2B84162354AC2518FB020BDC0AEB1E0ED0FDE5E989EA38696BA821AEF776EEE28C9296B712577933812E2DDFD6F17192329E21CE964407E137DE522B745C807EBEC8EEB2CE9896B76FA926CD592A33CF32816C55ABBB90FD67DDBC2BD4EA633B3B8CA888C9F76773120EBC92C6327A2067B4B596BD403B2450E811EFB5499C7C7C91994395F9C6C57ABA124D1AA649272C72C7FE71049F6794B059A5ACB1E6B3092DCCE5224740C5E38C382FE98480D3CDAC483D5E9CD7A1B9F7B9BC52A66B0B7231510108BBE22CE53EDE06C44CFDC0657E0BACBFA6B9EF7B1A5F74C5D3FB39C388E67F10DCD5C15EB0DB79B52CC9B9DA3EAA5530242BBE19BAAC5BCC9AEFD03DD6BDB1943562D03D1E0EF3C320A2FCA83D718E92BC807424D0CF3D753FC49C6EB8453754E26C072B00232166848ECC4F7AA137BD068EE4110917FE752E83FC332333055C67680BC78C9E8F77C918B9C695BDB4BBFB9B9AFF85C5D77D5106B682640CD159B7FFD7BDBC5ECC908D47CD73ECF95B35D385D19"
         ).unwrap();
-        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q);
+        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q).unwrap();
         let e = MPInteger::from_hexa_string(
             "0x54A8D780AFDEEA94AB69D8BE217D75F3EE504AA35E2315451B0B1628D40577932845754774D443E390FEAE84C1E23F9CDE749CDE420923AE79B9E2FD588BC8A6A49C4FB1C4A360C6FD8BFFF387C76D84E52F0F3F990F43E7F92E3A90BE6A0972CE71CC62B41A900752BC4747F3E9F2E3B0855EA31EE31D0B475C296B49B70D37A1A07E66DF9B26A68EDF2B2A9AFCE721785BA76BAA4CB2806547573C53FFE8BA9862F0D8A07DBC7D8761BEFF5E6542C5EC94ECF954628DF01161FD4AA735356FA3F3C6442C240E6F348184C078C6B104E90D83D1567A847C7CD1F06D856534DDCC7CE91EE2D946ED0E1BD24C73F599766FBC0A0779BCD739D4EA3A950058CB2383367D13F7DA3965D26E6243A04C132867D52905B1FBC8240CAFEDF2F357DDD68B8D210224D6E13AE379BAFA144FB6F4ABD9083B4B10AD8936AC671B6BFF75B96A8733E8F36836AF695EED60722AD5C98D9C62CB3EE3DA580DBD15441A03FAB53F2DF2D589598F5B42E2C8044C3A2B51DE6192ED6ABBA919B6B7AB5A3085CADB"
         ).unwrap();
@@ -687,7 +661,7 @@ mod test {
                 ).unwrap()
             )
         ];
-        let r = HashableMessage::from(&v).recursive_hash_to_zq(&q);
+        let r = HashableMessage::from(&v).recursive_hash_to_zq(&q).unwrap();
         let e = MPInteger::from_hexa_string(
             "0x34B564EAF73C3E0CD6D957052933E542013D4AB46C35B769F7038D6F719FDF037272D7E930002437FA7594B011DB9A652D7BF640282D96BF6C720B574D2DB8CBE387ABD7FB09E0902ECB1C9FEB20792426DB9DBE8D477065F74C950A82FC51E68A3D5094F6F55DE05B4E6876D9A7BFFA5F4C4221C93953D3FC7B80C53E0BCA164A058EB2291478E58C53AF2D5A32F6CD292C9650EEEA5D847E3D5C78B9A2182D15B5FD7480CDC7CD561E273CD6F5AE8350C988CD52DABC658AD15347B9A0E4C2EECE1462C267A5A2F3196356D3BAA5EB9952BC48AE8B8B85946E2F8C34D03014DB1DC55B0F147FECA4B3F5AE04B0350105CD8D8764F44558262AB59344FD4084754473BE90D36B718141E05B7467565A95CFFDE16860F06440A736446152BFEF5D36262F85FE719E9493652A3426FEB1AFBF636C5911C5C00C0F1FE2135FCF35C599B4905A8C3D659631EC4E1FF26D177D391C2A76D1F9E116143B00D5A6DEAFBD1CCD7B02D71FB08195860079934A4C18F4C3FB59790B83F5C71F00E1FA9D7F"
         ).unwrap();
@@ -712,7 +686,7 @@ mod test {
                 ]
             )
         ];
-        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q);
+        let r = HashableMessage::from(&s).recursive_hash_to_zq(&q).unwrap();
         let e = MPInteger::from_hexa_string(
             "0x1674E16AA33640F120B61D420DDF2CD8608B0E45815467C897E42BCBBE3EC864351DA4AF6AAC9A1DBC79D5CD475D1A189A8632431F6754D75DCE3B063C3F0DB7A85266927559A480F04A86A6DB7778EB5DFBBEC459C865EF19B1D3C2CA7B6CEAFFC6F7B2183BD70AED9A053C3B0CBDC118BED8CB163EDE885A62E130B78C6EF2D0C4C8DCE46AB123F9225008953A299DAD05A5DE12431DB812C3FD6597751F6C5BB02E6C193EA6900DB682DF51F86E8D08E08EB362B3859CC0401205AA53FE9A2156B1B70D365C7168B26B3957BBBAEC976E878E4EB2937679391416D815EAAC2AB916063AB550F76CC3066772640CFAAB0DDD9393AC67B12605D5EB0792818478251891A1D75FD56CE8F3B68E5165A6BDA2ECCC5E09734359BC36BA6055308D5AA059EF1C7DAED51CE28ACAB30CD8BB5B94B0D69A87A1B90C5D26A8693083B80475B3857AF06C58EC5013804AC7EA57AAA16D4E474AC3B4F4EBBC6C5766CC20B130F23AE29D1E352E2B6E86083C11BA50FFF1770452AC11058FD7854408F3C5"
         ).unwrap();

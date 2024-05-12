@@ -65,7 +65,7 @@ pub fn verify_signature(
 
     // Calculate hash
     let h = HashableMessage::from(vec![message.to_owned(), additional_context.to_owned()])
-        .try_recursive_hash()
+        .recursive_hash()
         .map_err(SignatureError::Hash)?;
 
     // Verify signature
@@ -111,7 +111,7 @@ pub fn sign(
 
     // Calculate hash
     let h = HashableMessage::from(vec![message.to_owned(), additional_context.to_owned()])
-        .try_recursive_hash()
+        .recursive_hash()
         .map_err(SignatureError::Hash)?;
 
     // Verify signature
