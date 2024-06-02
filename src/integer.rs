@@ -20,13 +20,13 @@
 //! used in the client modules
 //!
 
-use crate::{ByteArray, Decode, Encode};
+use crate::{ ByteArray, Decode, Encode };
 use std::fmt::Debug;
 use std::sync::OnceLock;
 use thiserror::Error;
 
 #[cfg(feature = "num-bigint")]
-use num_bigint::{BigInt, BigUint, Sign};
+use num_bigint::{ BigInt, BigUint, Sign };
 #[cfg(feature = "num-bigint")]
 use num_traits::Num;
 
@@ -79,7 +79,15 @@ pub trait Operations: Sized {
     /// Calculate the exponentiate modulo: self*other % modulus
     fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self;
 
-    /// Calculate the exponentiate modulo: self*other % modulus
+    /// multiply all elements of other with self (scalar product)
+    fn mod_scalar_multiply(&self, others: &[Self], modulus: &Self) -> Vec<Self> {
+        others
+            .iter()
+            .map(|other| self.mod_multiply(other, modulus))
+            .collect()
+    }
+
+    /// Calculate the multiplication modulo: self*other % modulus
     fn mod_square(&self, modulus: &Self) -> Self {
         self.mod_multiply(self, modulus)
     }
@@ -99,21 +107,29 @@ pub trait Hexa: Sized {
     /// Create object from hexadecimal String. If not valid return an error
     fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError>;
 
-    /// Create object from hexadecimal &str. If not valid return an error
-    fn from_hexa_slice(s: &str) -> Result<Self, MPIntegerError> {
-        Self::from_hexa_string(s)
-    }
     /// Generate the hexadecimal String
     fn to_hexa(&self) -> String;
+
+    fn from_hexa_string_slice(vs: &[String]) -> Result<Vec<Self>, MPIntegerError> {
+        let mut decoded = vs.iter().map(|s| Self::from_hexa_string(s.as_str()));
+        let decoded_2 = decoded.clone();
+        match decoded.find(|e| e.is_err()) {
+            Some(e) => Err(e.err().unwrap()),
+            None => Ok(decoded_2.map(|e| e.unwrap()).collect()),
+        }
+    }
 }
 
 // enum representing the errors with big integer
 #[derive(Error, Debug)]
 pub enum MPIntegerError {
-    #[error("Error parsing {orig} in BigUInt in method {fnname}")]
-    ParseError { orig: String, fnname: String },
-    #[error("Error parsing {orig} in BigUInt in method {fnname} caused by {source}")]
-    ParseErrorWithSource {
+    #[error("Error parsing {orig} in BigUInt in method {fnname}")] ParseError {
+        orig: String,
+        fnname: String,
+    },
+    #[error(
+        "Error parsing {orig} in BigUInt in method {fnname} caused by {source}"
+    )] ParseErrorWithSource {
         orig: String,
         fnname: String,
         #[cfg(feature = "num-bigint")]
@@ -341,27 +357,23 @@ mod test {
 
     #[test]
     fn from_exa() {
-        assert_eq!(
-            MPInteger::from_hexa_string("0x0").unwrap(),
-            MPInteger::from(0u32)
-        );
-        assert_eq!(
-            MPInteger::from_hexa_string("0xa").unwrap(),
-            MPInteger::from(10u32)
-        );
-        assert_eq!(
-            MPInteger::from_hexa_string("0xab").unwrap(),
-            MPInteger::from(171u32)
-        );
-        assert_eq!(
-            MPInteger::from_hexa_string("0x12D9E8").unwrap(),
-            MPInteger::from(1235432u32)
-        );
+        assert_eq!(MPInteger::from_hexa_string("0x0").unwrap(), MPInteger::from(0u32));
+        assert_eq!(MPInteger::from_hexa_string("0xa").unwrap(), MPInteger::from(10u32));
+        assert_eq!(MPInteger::from_hexa_string("0xab").unwrap(), MPInteger::from(171u32));
+        assert_eq!(MPInteger::from_hexa_string("0x12D9E8").unwrap(), MPInteger::from(1235432u32));
         assert!(MPInteger::from_hexa_string("123").is_err());
         assert!(MPInteger::from_hexa_string("0xtt").is_err());
+        assert_eq!(MPInteger::from_hexa_string("0x12D9E8").unwrap(), MPInteger::from(1235432u32));
+    }
+
+    #[test]
+    fn from_exa_string_slice() {
         assert_eq!(
-            MPInteger::from_hexa_slice("0x12D9E8").unwrap(),
-            MPInteger::from(1235432u32)
+            MPInteger::from_hexa_string_slice(&["0x0".to_string(), "0xa".to_string()]).unwrap(),
+            vec![MPInteger::from(0u32), MPInteger::from(10u32)]
+        );
+        assert!(
+            MPInteger::from_hexa_string_slice(&["123".to_string(), "0xa".to_string()]).is_err()
         );
     }
 
@@ -386,8 +398,10 @@ mod test {
     #[test]
     fn test_mod_multiply() {
         assert_eq!(
-            MPInteger::from(426u32)
-                .mod_multiply(&MPInteger::from(964u32), &MPInteger::from(235u32)),
+            MPInteger::from(426u32).mod_multiply(
+                &MPInteger::from(964u32),
+                &MPInteger::from(235u32)
+            ),
             MPInteger::from(119u32)
         );
         let a = MPInteger::from(10123465234878998usize);
@@ -425,14 +439,8 @@ mod test {
 
     #[test]
     fn base16_decode() {
-        assert_eq!(
-            MPInteger::base16_decode("00").unwrap(),
-            MPInteger::from(0u8)
-        );
-        assert_eq!(
-            MPInteger::base16_decode("A1").unwrap(),
-            MPInteger::from(161u8)
-        );
+        assert_eq!(MPInteger::base16_decode("00").unwrap(), MPInteger::from(0u8));
+        assert_eq!(MPInteger::base16_decode("A1").unwrap(), MPInteger::from(161u8));
     }
 
     #[test]
@@ -443,14 +451,8 @@ mod test {
 
     #[test]
     fn base32_decode() {
-        assert_eq!(
-            MPInteger::base32_decode("AA======").unwrap(),
-            MPInteger::from(0u8)
-        );
-        assert_eq!(
-            MPInteger::base32_decode("BI======").unwrap(),
-            MPInteger::from(10u8)
-        );
+        assert_eq!(MPInteger::base32_decode("AA======").unwrap(), MPInteger::from(0u8));
+        assert_eq!(MPInteger::base32_decode("BI======").unwrap(), MPInteger::from(10u8));
     }
 
     #[test]
@@ -461,13 +463,7 @@ mod test {
 
     #[test]
     fn base64_decode() {
-        assert_eq!(
-            MPInteger::base64_decode("AA==").unwrap(),
-            MPInteger::from(0u8)
-        );
-        assert_eq!(
-            MPInteger::base64_decode("Cg==").unwrap(),
-            MPInteger::from(10u8)
-        );
+        assert_eq!(MPInteger::base64_decode("AA==").unwrap(), MPInteger::from(0u8));
+        assert_eq!(MPInteger::base64_decode("Cg==").unwrap(), MPInteger::from(10u8));
     }
 }
