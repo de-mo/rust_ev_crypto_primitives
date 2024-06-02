@@ -32,44 +32,10 @@ pub use exponentiation::verify_exponentiation;
 pub use plaintext_equality::verify_plaintext_equality;
 pub use schnorr_proofs::verify_schnorr;
 
-use crate::{integer::MPInteger, HashableMessage};
-
 // enum representing the errors during the algorithms for zero knowledge proof
 #[derive(Error, Debug)]
 pub enum ZeroKnowledgeProofError {
-    #[error(transparent)]
-    SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
-    #[error(transparent)]
-    ExponentiationError(#[from] exponentiation::ExponentiationProofError),
-    #[error(transparent)]
-    DecryptionProofError(#[from] decryption::DecryptionProofError),
-}
-
-pub struct Cyphertext {
-    pub gamma: MPInteger,
-    pub phis: Vec<MPInteger>,
-}
-
-impl Cyphertext {
-    pub fn from_expanded(gamma: &MPInteger, phis: &[MPInteger]) -> Self {
-        Self {
-            gamma: gamma.clone(),
-            phis: phis.to_vec(),
-        }
-    }
-}
-
-impl<'a> From<&'a Cyphertext> for HashableMessage<'a> {
-    fn from(value: &'a Cyphertext) -> Self {
-        HashableMessage::from(vec![
-            HashableMessage::from(&value.gamma),
-            HashableMessage::from(
-                value
-                    .phis
-                    .iter()
-                    .map(HashableMessage::from)
-                    .collect::<Vec<HashableMessage<'a>>>(),
-            ),
-        ])
-    }
+    #[error(transparent)] SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
+    #[error(transparent)] ExponentiationError(#[from] exponentiation::ExponentiationProofError),
+    #[error(transparent)] DecryptionProofError(#[from] decryption::DecryptionProofError),
 }

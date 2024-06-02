@@ -21,18 +21,8 @@ mod commitments;
 mod matrix;
 mod shuffle;
 
-use arguments::{
-    verify_shuffle_argument, ShuffleArgument, VerifyShuffleArgumentError,
-    VerifyShuffleArgumentResult,
-};
-use commitments::{get_commitment_matrix, CommitmentError, CommitmentKey};
-use matrix::Matrix;
-pub use shuffle::{verify_shuffle, VerifyShuffleResult};
-use thiserror::Error;
+pub use shuffle::{ verify_shuffle, VerifyShuffleResult, ShuffleError };
 
-#[derive(Error, Debug)]
-/// MixNet Error
-pub enum MixNetError {
-    #[error(transparent)]
-    ShuffleError(#[from] shuffle::ShuffleError),
+pub trait MixNetResultTrait: std::fmt::Display {
+    fn is_ok(&self) -> bool;
 }

@@ -14,15 +14,23 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
+use std::fmt::Display;
+
 use super::{
-    arguments::{verify_shuffle_argument, VerifyShuffleArgumentResult},
-    CommitmentKey, Matrix, ShuffleArgument,
+    arguments::{
+        verify_shuffle_argument,
+        ArgumentContext,
+        ShuffleArgumentVerifyInput,
+        ShuffleStatement,
+        VerifyShuffleArgumentResult,
+        ShuffleArgumentError,
+        ShuffleArgument,
+    },
+    commitments::{ CommitmentKey, CommitmentError },
+    matrix::Matrix,
+    MixNetResultTrait,
 };
-use crate::{
-    integer::{Constants, MPInteger},
-    zero_knowledge_proofs::Cyphertext,
-    EncryptionParameters,
-};
+use crate::{ integer::{ Constants, MPInteger }, Ciphertext, EncryptionParameters };
 use thiserror::Error;
 
 /// The result of the verification of the shuffle
@@ -36,18 +44,15 @@ pub enum ShuffleError {
     DifferentCyphertextPrimeLen,
     #[error(
         "In the cypthertexts {0} at position {1}, the size of phis {2} is not the same than the expected size {3}"
-    )]
-    NotSameLInCyphertexts(String, usize, usize, usize),
+    )] NotSameLInCyphertexts(String, usize, usize, usize),
     #[error("Wrong size of N. Must be greater or equal that 2 and less or equal than q")]
     WrongCyphertextPrimeLen,
-    #[error("l={0} must be smaller or equal to k={1}")]
-    LSmallerOrEqualK(usize, usize),
-    #[error("l must be positive")]
-    LPositive(usize),
-    #[error(transparent)]
-    VerifiableCommitmentKeyError(#[from] super::CommitmentError),
-    #[error(transparent)]
-    VerifyShuffleArgumentError(#[from] super::VerifyShuffleArgumentError),
+    #[error("l={0} must be smaller or equal to k={1}")] LSmallerOrEqualK(usize, usize),
+    #[error("l must be positive")] LPositive(usize),
+    #[error("CommitmentError: {0}")] VerifiableCommitmentKeyError(#[from] CommitmentError),
+    #[error("VerifyShuffleArgumentError: {0}")] VerifyShuffleArgumentError(
+        #[from] ShuffleArgumentError,
+    ),
 }
 
 /// Verify Shuffle according to the specification of Swiss Post (algorithm 9.2)
@@ -57,10 +62,10 @@ pub enum ShuffleError {
 /// An error is something goes wrong
 pub fn verify_shuffle(
     ep: &EncryptionParameters,
-    upper_cs: &[Cyphertext],
-    upper_c_primes: &[Cyphertext],
+    upper_cs: &[Ciphertext],
+    upper_c_primes: &[Ciphertext],
     shuffle_argument: &ShuffleArgument,
-    pks: &[MPInteger],
+    pks: &[MPInteger]
 ) -> Result<VerifyShuffleResult, ShuffleError> {
     let upper_n = upper_cs.len();
     if upper_n < 2 || upper_n > MPInteger::from(ep.q() - MPInteger::three()) {
@@ -79,31 +84,40 @@ pub fn verify_shuffle(
     }
     for (i, c) in upper_cs.iter().enumerate() {
         if c.phis.len() != l {
-            return Err(ShuffleError::NotSameLInCyphertexts(
-                "C".to_string(),
-                i,
-                c.phis.len(),
-                l,
-            ));
+            return Err(ShuffleError::NotSameLInCyphertexts("C".to_string(), i, c.phis.len(), l));
         }
     }
     for (i, c) in upper_c_primes.iter().enumerate() {
         if c.phis.len() != l {
-            return Err(ShuffleError::NotSameLInCyphertexts(
-                "C".to_string(),
-                i,
-                c.phis.len(),
-                l,
-            ));
+            return Err(ShuffleError::NotSameLInCyphertexts("C".to_string(), i, c.phis.len(), l));
         }
     }
-    let (m, n) = Matrix::get_matrix_dimensions(upper_n);
-    let ck = CommitmentKey::get_verifiable_commitment_key(ep, n)
-        .map_err(ShuffleError::VerifiableCommitmentKeyError)?;
-    let shuffle_statement = (upper_cs, upper_c_primes);
-    verify_shuffle_argument(ep, pks, &ck, shuffle_statement, shuffle_argument, (m, n))
+    let (_m, n) = Matrix::<MPInteger>::get_matrix_dimensions(upper_n);
+    let ck = CommitmentKey::get_verifiable_commitment_key(ep, n).map_err(
+        ShuffleError::VerifiableCommitmentKeyError
+    )?;
+    let context = ArgumentContext::new(ep, pks, &ck);
+    let shuffle_statement = ShuffleStatement::new(upper_cs, upper_c_primes)?;
+    verify_shuffle_argument(
+        &context,
+        &ShuffleArgumentVerifyInput::new(&context, &shuffle_statement, shuffle_argument).map_err(
+            ShuffleError::VerifyShuffleArgumentError
+        )?
+    )
         .map(|r| VerifyShuffleResult {
             verify_shuffle_argument_result: r,
         })
         .map_err(ShuffleError::VerifyShuffleArgumentError)
+}
+
+impl MixNetResultTrait for VerifyShuffleResult {
+    fn is_ok(&self) -> bool {
+        self.verify_shuffle_argument_result.is_ok()
+    }
+}
+
+impl Display for VerifyShuffleResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.verify_shuffle_argument_result.fmt(f)
+    }
 }

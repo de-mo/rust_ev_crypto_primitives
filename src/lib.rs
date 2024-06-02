@@ -55,19 +55,23 @@ pub mod signature;
 pub mod zero_knowledge_proofs;
 
 pub use argon2::Argon2id;
-pub use basic_crypto_functions::{BasisCryptoError, CertificateExtension};
-pub use byte_array::{ByteArray, Decode, Encode};
-pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
-pub use elgamal::{ElgamalError, EncryptionParameters};
-pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
-pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
+pub use basic_crypto_functions::{ BasisCryptoError, CertificateExtension };
+pub use byte_array::{ ByteArray, Decode, Encode };
+pub use direct_trust::{ DirectTrustCertificate, DirectTrustError, Keystore };
+pub use elgamal::{ Ciphertext, ElgamalError, EncryptionParameters };
+pub use hashing::{ HashError, HashableMessage, RecursiveHashTrait };
+pub use integer::{ ByteLength, Constants, Hexa, MPIntegerError, Operations };
 pub use number_theory::SmallPrimeTrait;
 pub use random::random_bytes;
-pub use signature::{sign, verify_signature, SignatureError};
+pub use signature::{ sign, verify_signature, SignatureError };
 pub use zero_knowledge_proofs::{
-    verify_decryption, verify_exponentiation, verify_plaintext_equality, verify_schnorr,
+    verify_decryption,
+    verify_exponentiation,
+    verify_plaintext_equality,
+    verify_schnorr,
     ZeroKnowledgeProofError,
 };
+pub use mix_net::{ verify_shuffle, VerifyShuffleResult, ShuffleError };
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
@@ -105,7 +109,10 @@ pub trait VerifyDomainTrait: Sized {
     /// Return a vector of [anyhow::Error]. Empty if no error found
     fn verifiy_domain(&self) -> Vec<anyhow::Error> {
         let verifications = Self::new_domain_verifications();
-        verifications.iter().flat_map(|f| f(self)).collect()
+        verifications
+            .iter()
+            .flat_map(|f| f(self))
+            .collect()
     }
 }
 
@@ -119,20 +126,20 @@ impl<T> Default for DomainVerifications<T> {
 
 impl<T> DomainVerifications<T> {
     /// Add Verification function to the structure
-    pub fn add_verification(&mut self, fct: impl Fn(&T) -> Vec<anyhow::Error> + 'static) {
+    pub fn add_verification(&mut self, fct: impl (Fn(&T) -> Vec<anyhow::Error>) + 'static) {
         self.verification_fns.push(Box::new(fct));
     }
 
     /// Add a verification return a vector of vector of errors
     pub fn add_verification_with_vec_of_vec_errors(
         &mut self,
-        fct: impl Fn(&T) -> Vec<Vec<anyhow::Error>> + 'static,
+        fct: impl (Fn(&T) -> Vec<Vec<anyhow::Error>>) + 'static
     ) {
         self.add_verification(move |t| {
             let mut res = vec![];
             for r in fct(t) {
                 for e in r {
-                    res.push(e)
+                    res.push(e);
                 }
             }
             res
@@ -142,5 +149,28 @@ impl<T> DomainVerifications<T> {
     /// Iterate over ale the functions
     pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
         self.verification_fns.iter()
+    }
+}
+
+#[cfg(test)]
+mod test_json_data {
+    use serde_json::Value;
+    use crate::{ integer::MPInteger, Hexa };
+
+    pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
+        array
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    pub fn json_array_value_to_array_mpinteger(array: &Value) -> Vec<MPInteger> {
+        MPInteger::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
+    }
+
+    pub fn json_value_to_mpinteger(value: &Value) -> MPInteger {
+        MPInteger::from_hexa_string(value.as_str().unwrap()).unwrap()
     }
 }

@@ -16,19 +16,29 @@
 
 use thiserror::Error;
 
-use crate::{integer::MPInteger, Constants};
+use crate::{ integer::MPInteger, Ciphertext, HashableMessage };
 
-pub struct Matrix(Vec<Vec<MPInteger>>);
+#[derive(Debug, Clone)]
+pub struct Matrix<T> where T: Clone + Default + std::fmt::Debug {
+    data: Vec<T>,
+    nb_rows: usize,
+    nb_columns: usize,
+}
 
 #[derive(Error, Debug)]
 pub enum MatrixError {
-    #[error("The size {0} of the vector must the product of m={1} et n={2}")]
-    WrongVectorSize(usize, usize, usize),
+    #[error("The size {0} of the vector must the product of m={1} et n={2}")] WrongVectorSize(
+        usize,
+        usize,
+        usize,
+    ),
     #[error("The Matrix is malformed")]
     MalformedMatrix,
+    #[error("The Matrices have different size")]
+    NotSameSize,
 }
 
-impl Matrix {
+impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     pub fn get_matrix_dimensions(upper_n: usize) -> (usize, usize) {
         let mut m = 1;
         let mut n = upper_n;
@@ -45,21 +55,14 @@ impl Matrix {
     }
 
     fn new(m: usize, n: usize) -> Self {
-        let v = vec![MPInteger::one().clone(); n];
-        Self(vec![v.clone(); m])
+        Self { data: vec![T::default(); n * m], nb_rows: m, nb_columns: n }
     }
 
-    pub fn to_matrix(v: &[MPInteger], (m, n): (usize, usize)) -> Result<Self, MatrixError> {
+    pub fn to_matrix(v: &[T], (m, n): (usize, usize)) -> Result<Self, MatrixError> {
         if v.len() != m * n {
             return Err(MatrixError::WrongVectorSize(v.len(), m, n));
         }
-        let mut res = Self::new(m, n);
-        for i in 1..m {
-            for j in 1..n {
-                res.set_elt(&v[n * i + j], i, j)
-            }
-        }
-        Ok(res)
+        Ok(Self { data: v.to_vec(), nb_rows: m, nb_columns: n })
     }
 
     pub fn transpose(&self) -> Result<Self, MatrixError> {
@@ -69,53 +72,193 @@ impl Matrix {
         let m = self.nb_rows();
         let n = self.nb_columns();
         let mut res = Self::new(n, m);
-        for i in 1..m {
-            for j in 1..n {
-                res.set_elt(self.elt(i, j), j, i)
+        for i in 0..m {
+            for j in 0..n {
+                res.set_elt(self.elt(i, j), j, i);
             }
         }
         Ok(res)
     }
 
-    pub fn elt(&self, i: usize, j: usize) -> &MPInteger {
-        &self.0[j][i]
+    fn pos_in_vec(&self, i: usize, j: usize) -> usize {
+        return i * self.nb_columns() + j;
     }
 
-    pub fn set_elt(&mut self, value: &MPInteger, i: usize, j: usize) {
-        self.0[j][i].clone_from(value)
+    pub fn elt(&self, i: usize, j: usize) -> &T {
+        &self.data[self.pos_in_vec(i, j)]
+    }
+
+    pub fn set_elt(&mut self, value: &T, i: usize, j: usize) {
+        let pos = self.pos_in_vec(i, j);
+        self.data[pos].clone_from(value)
     }
 
     pub fn nb_rows(&self) -> usize {
-        self.0[0].len()
+        self.nb_rows
     }
 
     pub fn nb_columns(&self) -> usize {
-        self.0.len()
+        self.nb_columns
     }
 
-    pub fn column(&self, j: usize) -> &[MPInteger] {
-        &self.0[j]
+    pub fn columns_iter(&self) -> impl Iterator<Item = Vec<&T>> + '_ {
+        ColIter { matrix: self, index: 0 }
+    }
+
+    pub fn columns_cloned_iter(&self) -> impl Iterator<Item = Vec<T>> + '_ {
+        self.columns_iter().map(|e| e.into_iter().cloned().collect::<Vec<T>>())
+    }
+
+    pub fn rows_iter(&self) -> impl Iterator<Item = Vec<&T>> + '_ {
+        RowIter { matrix: self, index: 0 }
+    }
+
+    pub fn rows_cloned_iter(&self) -> impl Iterator<Item = Vec<T>> + '_ {
+        self.rows_iter().map(|e| e.into_iter().cloned().collect::<Vec<T>>())
+    }
+
+    pub fn column(&self, j: usize) -> Vec<&T> {
+        self.data.iter().skip(j).step_by(self.nb_columns).collect()
+    }
+
+    pub fn row(&self, i: usize) -> Vec<&T> {
+        self.data.iter().skip(self.pos_in_vec(i, 0)).take(self.nb_columns()).collect()
+    }
+
+    #[allow(dead_code)]
+    pub fn row_cloned(&self, i: usize) -> Vec<T> {
+        self.row(i).into_iter().cloned().collect()
+    }
+
+    #[allow(dead_code)]
+    pub fn column_cloned(&self, i: usize) -> Vec<T> {
+        self.column(i).into_iter().cloned().collect()
     }
 
     pub fn is_malformed(&self) -> bool {
-        let expected = self.nb_rows();
-        for c in self.0.iter() {
-            if c.len() != expected {
-                return false;
-            }
-        }
-        true
+        self.nb_columns * self.nb_rows != self.data.len()
+    }
+
+    #[allow(dead_code)]
+    pub fn iter(&self) -> impl Iterator<Item = &T> + '_ {
+        self.data.iter()
     }
 }
 
+impl Matrix<MPInteger> {
+    #[allow(dead_code)]
+    pub fn entrywise_product(&self, other: &Self) -> Result<Self, MatrixError> {
+        if self.nb_rows() != other.nb_rows() || self.nb_columns() != other.nb_columns() {
+            return Err(MatrixError::NotSameSize);
+        }
+        let mut res = Self::new(self.nb_rows(), self.nb_columns());
+        for i in 1..self.nb_rows() {
+            for j in 1..self.nb_columns() {
+                res.set_elt(&MPInteger::from(self.elt(i, j) * other.elt(i, j)), j, i);
+            }
+        }
+        Ok(res)
+    }
+}
+
+impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
+    fn from(value: &'a Matrix<Ciphertext>) -> Self {
+        HashableMessage::from(
+            value
+                .rows_iter()
+                .map(|c_i| HashableMessage::from(c_i))
+                .collect::<Vec<_>>()
+        )
+    }
+}
+
+impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+
+struct RowIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+    matrix: &'a Matrix<T>,
+    index: usize,
+}
+
+impl<'a, T> Iterator for RowIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+    type Item = Vec<&'a T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.matrix.nb_rows() {
+            let i = self.index;
+            self.index += 1;
+            return Some(self.matrix.row(i));
+        }
+        None
+    }
+}
+
+struct ColIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+    matrix: &'a Matrix<T>,
+    index: usize,
+}
+
+impl<'a, T> Iterator for ColIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+    type Item = Vec<&'a T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.matrix.nb_columns() {
+            let i = self.index;
+            self.index += 1;
+            return Some(self.matrix.column(i));
+        }
+        None
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_get_matrix_dimensions() {
-        assert_eq!(Matrix::get_matrix_dimensions(12), (3, 4));
-        assert_eq!(Matrix::get_matrix_dimensions(18), (3, 6));
-        assert_eq!(Matrix::get_matrix_dimensions(23), (1, 23));
+        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(12), (3, 4));
+        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(18), (3, 6));
+        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(23), (1, 23));
+    }
+
+    #[test]
+    fn test_matrix() {
+        let matrix = Matrix::to_matrix(&[1, 2, 3, 4, 5, 6], (2, 3)).unwrap();
+        assert!(!matrix.is_malformed());
+        assert_eq!(matrix.nb_rows(), 2);
+        assert_eq!(matrix.nb_columns(), 3);
+        assert_eq!(matrix.column(0), vec![&1, &4]);
+        assert_eq!(matrix.column(1), vec![&2, &5]);
+        assert_eq!(matrix.column(2), vec![&3, &6]);
+        assert_eq!(matrix.row(0), vec![&1, &2, &3]);
+        assert_eq!(matrix.row(1), vec![&4, &5, &6]);
+        let m2 = matrix.transpose().unwrap();
+        assert_eq!(m2.nb_rows(), 3);
+        assert_eq!(m2.nb_columns(), 2);
+        assert_eq!(m2.row(0), vec![&1, &4]);
+        assert_eq!(m2.row(1), vec![&2, &5]);
+        assert_eq!(m2.row(2), vec![&3, &6]);
+        assert_eq!(m2.column(0), vec![&1, &2, &3]);
+        assert_eq!(m2.column(1), vec![&4, &5, &6]);
+    }
+
+    #[test]
+    fn test_matrix_iter() {
+        let matrix = Matrix::to_matrix(&[1, 2, 3, 4, 5, 6], (2, 3)).unwrap();
+        let mut c_iter = matrix.columns_iter();
+        assert_eq!(c_iter.next(), Some(vec![&1, &4]));
+        assert_eq!(c_iter.next(), Some(vec![&2, &5]));
+        assert_eq!(c_iter.next(), Some(vec![&3, &6]));
+        assert!(c_iter.next().is_none());
+        let mut l_iter = matrix.rows_iter();
+        assert_eq!(l_iter.next(), Some(vec![&1, &2, &3]));
+        assert_eq!(l_iter.next(), Some(vec![&4, &5, &6]));
+        assert!(l_iter.next().is_none())
     }
 }
