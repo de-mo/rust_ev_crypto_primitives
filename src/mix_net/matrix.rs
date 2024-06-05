@@ -20,9 +20,7 @@ use crate::{ integer::MPInteger, Ciphertext, HashableMessage };
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T> where T: Clone + Default + std::fmt::Debug {
-    data: Vec<T>,
-    nb_rows: usize,
-    nb_columns: usize,
+    rows: Vec<Vec<T>>,
 }
 
 #[derive(Error, Debug)]
@@ -55,14 +53,20 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     fn new(m: usize, n: usize) -> Self {
-        Self { data: vec![T::default(); n * m], nb_rows: m, nb_columns: n }
+        Self { rows: vec![vec![T::default(); n]; m] }
     }
 
     pub fn to_matrix(v: &[T], (m, n): (usize, usize)) -> Result<Self, MatrixError> {
         if v.len() != m * n {
             return Err(MatrixError::WrongVectorSize(v.len(), m, n));
         }
-        Ok(Self { data: v.to_vec(), nb_rows: m, nb_columns: n })
+        let mut res = Self::new(m, n);
+        for i in 0..m {
+            for j in 0..n {
+                res.set_elt(&v[i * n + j], i, j);
+            }
+        }
+        Ok(res)
     }
 
     pub fn transpose(&self) -> Result<Self, MatrixError> {
@@ -80,25 +84,24 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         Ok(res)
     }
 
-    fn pos_in_vec(&self, i: usize, j: usize) -> usize {
-        return i * self.nb_columns() + j;
+    pub fn elt(&self, i: usize, j: usize) -> &T {
+        &self.rows[i][j]
     }
 
-    pub fn elt(&self, i: usize, j: usize) -> &T {
-        &self.data[self.pos_in_vec(i, j)]
+    pub fn elt_mut(&mut self, i: usize, j: usize) -> &mut T {
+        &mut self.rows[i][j]
     }
 
     pub fn set_elt(&mut self, value: &T, i: usize, j: usize) {
-        let pos = self.pos_in_vec(i, j);
-        self.data[pos].clone_from(value)
+        self.elt_mut(i, j).clone_from(value)
     }
 
     pub fn nb_rows(&self) -> usize {
-        self.nb_rows
+        self.rows.len()
     }
 
     pub fn nb_columns(&self) -> usize {
-        self.nb_columns
+        self.rows[0].len()
     }
 
     pub fn columns_iter(&self) -> impl Iterator<Item = Vec<&T>> + '_ {
@@ -109,8 +112,8 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         self.columns_iter().map(|e| e.into_iter().cloned().collect::<Vec<T>>())
     }
 
-    pub fn rows_iter(&self) -> impl Iterator<Item = Vec<&T>> + '_ {
-        RowIter { matrix: self, index: 0 }
+    pub fn rows_iter(&self) -> impl Iterator<Item = &Vec<T>> + '_ {
+        self.rows.iter()
     }
 
     pub fn rows_cloned_iter(&self) -> impl Iterator<Item = Vec<T>> + '_ {
@@ -118,11 +121,13 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     pub fn column(&self, j: usize) -> Vec<&T> {
-        self.data.iter().skip(j).step_by(self.nb_columns).collect()
+        self.rows_iter()
+            .map(|r| &r[j])
+            .collect()
     }
 
     pub fn row(&self, i: usize) -> Vec<&T> {
-        self.data.iter().skip(self.pos_in_vec(i, 0)).take(self.nb_columns()).collect()
+        self.rows[i].iter().collect::<Vec<_>>()
     }
 
     #[allow(dead_code)]
@@ -136,12 +141,11 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     pub fn is_malformed(&self) -> bool {
-        self.nb_columns * self.nb_rows != self.data.len()
-    }
-
-    #[allow(dead_code)]
-    pub fn iter(&self) -> impl Iterator<Item = &T> + '_ {
-        self.data.iter()
+        if self.rows.is_empty() {
+            return false;
+        }
+        let size = self.rows[0].len();
+        !self.rows_iter().all(|r| r.len() == size)
     }
 }
 
@@ -172,6 +176,7 @@ impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
     }
 }
 
+/* 
 impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
     type Item = T;
     type IntoIter = std::vec::IntoIter<Self::Item>;
@@ -179,25 +184,7 @@ impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
     }
-}
-
-struct RowIter<'a, T> where T: Clone + Default + std::fmt::Debug {
-    matrix: &'a Matrix<T>,
-    index: usize,
-}
-
-impl<'a, T> Iterator for RowIter<'a, T> where T: Clone + Default + std::fmt::Debug {
-    type Item = Vec<&'a T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.matrix.nb_rows() {
-            let i = self.index;
-            self.index += 1;
-            return Some(self.matrix.row(i));
-        }
-        None
-    }
-}
+}*/
 
 struct ColIter<'a, T> where T: Clone + Default + std::fmt::Debug {
     matrix: &'a Matrix<T>,
@@ -257,8 +244,8 @@ mod test {
         assert_eq!(c_iter.next(), Some(vec![&3, &6]));
         assert!(c_iter.next().is_none());
         let mut l_iter = matrix.rows_iter();
-        assert_eq!(l_iter.next(), Some(vec![&1, &2, &3]));
-        assert_eq!(l_iter.next(), Some(vec![&4, &5, &6]));
+        assert_eq!(l_iter.next(), Some(&vec![1, 2, 3]));
+        assert_eq!(l_iter.next(), Some(&vec![4, 5, 6]));
         assert!(l_iter.next().is_none())
     }
 }
