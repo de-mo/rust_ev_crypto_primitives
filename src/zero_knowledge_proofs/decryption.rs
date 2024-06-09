@@ -23,6 +23,7 @@ use crate::{
     HashError,
     HashableMessage,
     RecursiveHashTrait,
+    ZeroKnowledgeProofError,
 };
 
 // Enum representing the errors in zero knowledge proofs
@@ -52,6 +53,19 @@ fn compute_phi_decryption(
 }
 
 pub fn verify_decryption(
+    ep: &EncryptionParameters,
+    upper_c: &Ciphertext,
+    pks: &[MPInteger],
+    ms: &[MPInteger],
+    i_aux: &[String],
+    (e, zs): (&MPInteger, &[MPInteger])
+) -> Result<bool, ZeroKnowledgeProofError> {
+    verify_decryption_impl(ep, upper_c, pks, ms, i_aux, (e, zs)).map_err(
+        ZeroKnowledgeProofError::DecryptionProofError
+    )
+}
+
+fn verify_decryption_impl(
     ep: &EncryptionParameters,
     upper_c: &Ciphertext,
     pks: &[MPInteger],

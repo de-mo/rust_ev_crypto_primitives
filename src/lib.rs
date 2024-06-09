@@ -58,7 +58,13 @@ pub use argon2::Argon2id;
 pub use basic_crypto_functions::{ BasisCryptoError, CertificateExtension };
 pub use byte_array::{ ByteArray, Decode, Encode };
 pub use direct_trust::{ DirectTrustCertificate, DirectTrustError, Keystore };
-pub use elgamal::{ Ciphertext, ElgamalError, EncryptionParameters };
+pub use elgamal::{
+    Ciphertext,
+    ElgamalError,
+    EncryptionParameters,
+    verify_decryptions,
+    VerifyDecryptionsResult,
+};
 pub use hashing::{ HashError, HashableMessage, RecursiveHashTrait };
 pub use integer::{ ByteLength, Constants, Hexa, MPIntegerError, Operations };
 pub use number_theory::SmallPrimeTrait;
