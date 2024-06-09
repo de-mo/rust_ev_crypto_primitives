@@ -645,7 +645,7 @@ mod test {
             .iter()
             .map(|s| MPInteger::from_hexa_string(s).unwrap())
             .collect();
-        let ciphertext = Ciphertext { gamma: gamma, phis: phis };
+        let ciphertext = Ciphertext { gamma, phis };
         let one = Ciphertext::neutral_for_mod_multiply(ciphertext.l());
         let mult_a = ciphertext.get_ciphertext_product(&one, &ep);
         let mult_b = one.get_ciphertext_product(&ciphertext, &ep);

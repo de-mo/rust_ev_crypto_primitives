@@ -214,7 +214,7 @@ impl Display for HadamardArgumentResult {
         }
         write!(
             f,
-            "c_B_0 = c_A_0: {}, c_B_m-1 = c_B: {}, Zero Argument: {}",
+            "c_B_0 = c_A_0: {}, c_B_m-1 = c_B: {}, Zero Argument: {{ {} }}",
             self.c_upper_b_0_is_c_upper_a_0,
             self.c_upper_b_m_minus_1_is_c_b,
             self.zero_argument

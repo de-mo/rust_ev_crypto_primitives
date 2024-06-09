@@ -21,6 +21,7 @@ use crate::{
     basic_crypto_functions::{ sha3_256, shake256, BasisCryptoError },
     byte_array::{ ByteArray, ByteArrayError },
     integer::MPInteger,
+    MPIntegerError,
     GROUP_PARAMETER_Q_LENGTH,
     SECURITY_STRENGTH,
 };
@@ -120,6 +121,7 @@ pub enum HashableMessage<'a> {
 pub enum HashError {
     #[error(transparent)] HashError(#[from] BasisCryptoError),
     #[error(transparent)] ByteArrayError(#[from] ByteArrayError),
+    #[error(transparent)] MPIntegerError(#[from] MPIntegerError),
     #[error("The value is hashed with {0}, which is wrong")] WrongHashed(String),
 }
 
@@ -129,8 +131,10 @@ impl<'a> HashableMessage<'a> {
         match self {
             HashableMessage::RByteArray(b) => Ok(b.prepend_byte(0u8)),
             HashableMessage::ByteArray(b) => Ok(b.prepend_byte(0u8)),
-            HashableMessage::RInt(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
-            HashableMessage::Int(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
+            HashableMessage::RInt(i) =>
+                Ok(ByteArray::try_from(*i).map_err(HashError::MPIntegerError)?.prepend_byte(1u8)),
+            HashableMessage::Int(i) =>
+                Ok(ByteArray::try_from(i).map_err(HashError::MPIntegerError)?.prepend_byte(1u8)),
             HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
             HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),
@@ -162,8 +166,10 @@ impl<'a> HashableMessage<'a> {
         match self {
             HashableMessage::RByteArray(b) => Ok(b.prepend_byte(0u8)),
             HashableMessage::ByteArray(b) => Ok(b.prepend_byte(0u8)),
-            HashableMessage::RInt(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
-            HashableMessage::Int(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
+            HashableMessage::RInt(i) =>
+                Ok(ByteArray::try_from(*i).map_err(HashError::MPIntegerError)?.prepend_byte(1u8)),
+            HashableMessage::Int(i) =>
+                Ok(ByteArray::try_from(i).map_err(HashError::MPIntegerError)?.prepend_byte(1u8)),
             HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
             HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),

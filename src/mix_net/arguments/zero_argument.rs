@@ -222,6 +222,7 @@ impl ZeroStatement {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 impl ZeroArgument {
     /// New statement taking the ownership of the data
     ///

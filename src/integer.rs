@@ -70,6 +70,12 @@ pub trait Operations: Sized {
     /// Returns the number of bits representing the number
     fn nb_bits(&self) -> usize;
 
+    /// Calculate the add modulo: self + other % modulus
+    fn mod_add(&self, other: &Self, modulus: &Self) -> Self;
+
+    /// Calculate the substraction modulo: self - other % modulus
+    fn mod_sub(&self, other: &Self, modulus: &Self) -> Self;
+
     /// Calculate the exponentiate modulo: self^exp % modulus
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self;
 
@@ -123,6 +129,8 @@ pub trait Hexa: Sized {
 // enum representing the errors with big integer
 #[derive(Error, Debug)]
 pub enum MPIntegerError {
+    #[error("Integer must be positive or zero")]
+    IsNegative,
     #[error("Error parsing {orig} in BigUInt in method {fnname}")] ParseError {
         orig: String,
         fnname: String,
@@ -260,6 +268,15 @@ impl Operations for Integer {
     fn nb_bits(&self) -> usize {
         self.significant_bits() as usize
     }
+
+    fn mod_add(&self, other: &Self, modulus: &Self) -> Self {
+        let res = MPInteger::from(self + other);
+        res.modulo(modulus)
+    }
+
+    fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
+        self.mod_add(&MPInteger::from(-other), modulus)
+    }
 }
 
 #[cfg(feature = "num-bigint")]
@@ -321,16 +338,17 @@ impl Decode for MPInteger {
 }
 
 impl Encode for MPInteger {
-    fn base16_encode(&self) -> String {
-        ByteArray::from(self).base16_encode()
+    type Error = MPIntegerError;
+    fn base16_encode(&self) -> Result<String, Self::Error> {
+        Ok(ByteArray::try_from(self)?.base16_encode().unwrap())
     }
 
-    fn base32_encode(&self) -> String {
-        ByteArray::from(self).base32_encode()
+    fn base32_encode(&self) -> Result<String, Self::Error> {
+        Ok(ByteArray::try_from(self)?.base32_encode().unwrap())
     }
 
-    fn base64_encode(&self) -> String {
-        ByteArray::from(self).base64_encode()
+    fn base64_encode(&self) -> Result<String, Self::Error> {
+        Ok(ByteArray::try_from(self)?.base64_encode().unwrap())
     }
 }
 
@@ -420,6 +438,48 @@ mod test {
     }
 
     #[test]
+    fn test_mod_add() {
+        let modulo = MPInteger::from(7u8);
+        assert_eq!(
+            MPInteger::from(5u8).mod_add(&MPInteger::from(3u8), &modulo),
+            MPInteger::from(1u32)
+        );
+        assert_eq!(
+            MPInteger::from(5u8).mod_add(&MPInteger::from(-7i8), &modulo),
+            MPInteger::from(5u32)
+        );
+        assert_eq!(
+            MPInteger::from(5u8).mod_add(&MPInteger::from(-14i8), &modulo),
+            MPInteger::from(5u32)
+        );
+        assert_eq!(
+            MPInteger::from(-2i8).mod_add(&MPInteger::from(20i8), &modulo),
+            MPInteger::from(4u32)
+        );
+    }
+
+    #[test]
+    fn test_mod_sub() {
+        let modulo = MPInteger::from(7u8);
+        assert_eq!(
+            MPInteger::from(5u8).mod_sub(&MPInteger::from(3u8), &modulo),
+            MPInteger::from(2u32)
+        );
+        assert_eq!(
+            MPInteger::from(5u8).mod_sub(&MPInteger::from(-6i8), &modulo),
+            MPInteger::from(4u32)
+        );
+        assert_eq!(
+            MPInteger::from(5u8).mod_sub(&MPInteger::from(-15i8), &modulo),
+            MPInteger::from(6u32)
+        );
+        assert_eq!(
+            MPInteger::from(-2i8).mod_sub(&MPInteger::from(20i8), &modulo),
+            MPInteger::from(6u32)
+        );
+    }
+
+    #[test]
     fn test_mod_inverse() {
         assert_eq!(
             MPInteger::from(3u16).mod_inverse(&MPInteger::from(11u16)),
@@ -433,8 +493,9 @@ mod test {
 
     #[test]
     fn base16_encode() {
-        assert_eq!(MPInteger::from(0u8).base16_encode(), "00");
-        assert_eq!(MPInteger::from(10u8).base16_encode(), "0A");
+        assert_eq!(MPInteger::from(0u8).base16_encode().unwrap(), "00");
+        assert_eq!(MPInteger::from(10u8).base16_encode().unwrap(), "0A");
+        assert!(MPInteger::from(-2i64).base16_encode().is_err());
     }
 
     #[test]
@@ -445,8 +506,9 @@ mod test {
 
     #[test]
     fn base32_encode() {
-        assert_eq!(MPInteger::from(0u8).base32_encode(), "AA======");
-        assert_eq!(MPInteger::from(10u8).base32_encode(), "BI======");
+        assert_eq!(MPInteger::from(0u8).base32_encode().unwrap(), "AA======");
+        assert_eq!(MPInteger::from(10u8).base32_encode().unwrap(), "BI======");
+        assert!(MPInteger::from(-2i64).base32_encode().is_err());
     }
 
     #[test]
@@ -457,8 +519,9 @@ mod test {
 
     #[test]
     fn base64_encode() {
-        assert_eq!(MPInteger::from(0u8).base64_encode(), "AA==");
-        assert_eq!(MPInteger::from(10u8).base64_encode(), "Cg==");
+        assert_eq!(MPInteger::from(0u8).base64_encode().unwrap(), "AA==");
+        assert_eq!(MPInteger::from(10u8).base64_encode().unwrap(), "Cg==");
+        assert!(MPInteger::from(-2i64).base64_encode().is_err());
     }
 
     #[test]

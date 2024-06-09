@@ -16,6 +16,8 @@
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
+use crate::{ Constants, MPIntegerError };
+
 use super::integer::{ ByteLength, MPInteger };
 use data_encoding::{ DecodeError, BASE32, BASE64, HEXUPPER };
 use num_traits::Pow;
@@ -33,18 +35,20 @@ pub struct ByteArray {
 /// ```
 /// use rust_ev_crypto_primitives::Encode;
 /// use rust_ev_crypto_primitives::ByteArray;
-/// let ba = ByteArray::from_bytes(b"\x41").base64_encode();
+/// let ba = ByteArray::from_bytes(b"\x41").base64_encode().unwrap();
 /// assert_eq!(ba, "QQ==");
 /// ```
 pub trait Encode {
+    type Error;
+
     /// Code to base16 according specifications
-    fn base16_encode(&self) -> String;
+    fn base16_encode(&self) -> Result<String, Self::Error>;
 
     /// Code to base32 according specifications
-    fn base32_encode(&self) -> String;
+    fn base32_encode(&self) -> Result<String, Self::Error>;
 
     /// Code to base64 according specifications
-    fn base64_encode(&self) -> String;
+    fn base64_encode(&self) -> Result<String, Self::Error>;
 }
 
 /// Trait to decode from string in different bases
@@ -194,16 +198,18 @@ pub enum ByteArrayError {
 }
 
 impl Encode for ByteArray {
-    fn base16_encode(&self) -> String {
-        HEXUPPER.encode(&self.inner)
+    type Error = ();
+
+    fn base16_encode(&self) -> Result<String, Self::Error> {
+        Ok(HEXUPPER.encode(&self.inner))
     }
 
-    fn base32_encode(&self) -> String {
-        BASE32.encode(&self.inner)
+    fn base32_encode(&self) -> Result<String, Self::Error> {
+        Ok(BASE32.encode(&self.inner))
     }
 
-    fn base64_encode(&self) -> String {
-        BASE64.encode(&self.inner)
+    fn base64_encode(&self) -> Result<String, Self::Error> {
+        Ok(BASE64.encode(&self.inner))
     }
 }
 
@@ -253,12 +259,17 @@ impl Debug for ByteArray {
 
 impl Display for ByteArray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.base16_encode())
+        write!(f, "{}", self.base16_encode().unwrap())
     }
 }
 
-impl From<&MPInteger> for ByteArray {
-    fn from(value: &MPInteger) -> Self {
+impl TryFrom<&MPInteger> for ByteArray {
+    type Error = MPIntegerError;
+
+    fn try_from(value: &MPInteger) -> Result<Self, Self::Error> {
+        if value < MPInteger::zero() {
+            return Err(MPIntegerError::IsNegative);
+        }
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();
         let mut d: Vec<u8> = Vec::new();
@@ -267,13 +278,13 @@ impl From<&MPInteger> for ByteArray {
             d.insert(0, u8::try_from(MPInteger::from(&x % &nb_256)).unwrap());
             x /= &nb_256;
         }
-        ByteArray::from(&d)
+        Ok(ByteArray::from(&d))
     }
 }
 
 impl From<&usize> for ByteArray {
     fn from(value: &usize) -> Self {
-        ByteArray::from(&MPInteger::from(*value))
+        ByteArray::try_from(&MPInteger::from(*value)).unwrap()
     }
 }
 impl From<&Vec<u8>> for ByteArray {
@@ -318,18 +329,25 @@ mod test {
 
     #[test]
     fn from_biguint() {
-        assert_eq!(ByteArray::from(&MPInteger::from(0u32)).to_bytes(), b"\x00");
-        assert_eq!(ByteArray::from(&MPInteger::from(3u32)).to_bytes(), b"\x03");
-        assert_eq!(ByteArray::from(&MPInteger::from(23591u32)).to_bytes(), b"\x5c\x27");
-        assert_eq!(ByteArray::from(&MPInteger::from(23592u32)).to_bytes(), b"\x5c\x28");
+        assert_eq!(ByteArray::try_from(&MPInteger::from(0u32)).unwrap().to_bytes(), b"\x00");
+        assert_eq!(ByteArray::try_from(&MPInteger::from(3u32)).unwrap().to_bytes(), b"\x03");
         assert_eq!(
-            ByteArray::from(&MPInteger::from(4294967295u64)).to_bytes(),
+            ByteArray::try_from(&MPInteger::from(23591u32)).unwrap().to_bytes(),
+            b"\x5c\x27"
+        );
+        assert_eq!(
+            ByteArray::try_from(&MPInteger::from(23592u32)).unwrap().to_bytes(),
+            b"\x5c\x28"
+        );
+        assert_eq!(
+            ByteArray::try_from(&MPInteger::from(4294967295u64)).unwrap().to_bytes(),
             b"\xff\xff\xff\xff"
         );
         assert_eq!(
-            ByteArray::from(&MPInteger::from(4294967296u64)).to_bytes(),
+            ByteArray::try_from(&MPInteger::from(4294967296u64)).unwrap().to_bytes(),
             b"\x01\x00\x00\x00\x00"
         );
+        assert!(ByteArray::try_from(&MPInteger::from(-2i64)).is_err());
     }
 
     #[test]
@@ -410,16 +428,16 @@ mod test {
 
     #[test]
     fn base16_encode() {
-        assert_eq!(ByteArray::from_bytes(b"").base16_encode(), "00");
-        assert_eq!(ByteArray::from_bytes(b"\x41").base16_encode(), "41");
-        assert_eq!(ByteArray::from_bytes(b"\x60").base16_encode(), "60");
-        assert_eq!(ByteArray::from_bytes(b"\x00").base16_encode(), "00");
-        assert_eq!(ByteArray::from_bytes(b"\x7f").base16_encode(), "7F");
-        assert_eq!(ByteArray::from_bytes(b"\x80").base16_encode(), "80");
-        assert_eq!(ByteArray::from_bytes(b"\xff").base16_encode(), "FF");
-        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base16_encode(), "4100");
-        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base16_encode(), "010101");
-        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base16_encode(), "7F00FE03");
+        assert_eq!(ByteArray::from_bytes(b"").base16_encode().unwrap(), "00");
+        assert_eq!(ByteArray::from_bytes(b"\x41").base16_encode().unwrap(), "41");
+        assert_eq!(ByteArray::from_bytes(b"\x60").base16_encode().unwrap(), "60");
+        assert_eq!(ByteArray::from_bytes(b"\x00").base16_encode().unwrap(), "00");
+        assert_eq!(ByteArray::from_bytes(b"\x7f").base16_encode().unwrap(), "7F");
+        assert_eq!(ByteArray::from_bytes(b"\x80").base16_encode().unwrap(), "80");
+        assert_eq!(ByteArray::from_bytes(b"\xff").base16_encode().unwrap(), "FF");
+        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base16_encode().unwrap(), "4100");
+        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base16_encode().unwrap(), "010101");
+        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base16_encode().unwrap(), "7F00FE03");
     }
 
     #[test]
@@ -438,16 +456,16 @@ mod test {
 
     #[test]
     fn base32_encode() {
-        assert_eq!(ByteArray::from_bytes(b"").base32_encode(), "AA======");
-        assert_eq!(ByteArray::from_bytes(b"\x41").base32_encode(), "IE======");
-        assert_eq!(ByteArray::from_bytes(b"\x60").base32_encode(), "MA======");
-        assert_eq!(ByteArray::from_bytes(b"\x00").base32_encode(), "AA======");
-        assert_eq!(ByteArray::from_bytes(b"\x7f").base32_encode(), "P4======");
-        assert_eq!(ByteArray::from_bytes(b"\x80").base32_encode(), "QA======");
-        assert_eq!(ByteArray::from_bytes(b"\xff").base32_encode(), "74======");
-        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base32_encode(), "IEAA====");
-        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base32_encode(), "AEAQC===");
-        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base32_encode(), "P4AP4AY=");
+        assert_eq!(ByteArray::from_bytes(b"").base32_encode().unwrap(), "AA======");
+        assert_eq!(ByteArray::from_bytes(b"\x41").base32_encode().unwrap(), "IE======");
+        assert_eq!(ByteArray::from_bytes(b"\x60").base32_encode().unwrap(), "MA======");
+        assert_eq!(ByteArray::from_bytes(b"\x00").base32_encode().unwrap(), "AA======");
+        assert_eq!(ByteArray::from_bytes(b"\x7f").base32_encode().unwrap(), "P4======");
+        assert_eq!(ByteArray::from_bytes(b"\x80").base32_encode().unwrap(), "QA======");
+        assert_eq!(ByteArray::from_bytes(b"\xff").base32_encode().unwrap(), "74======");
+        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base32_encode().unwrap(), "IEAA====");
+        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base32_encode().unwrap(), "AEAQC===");
+        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base32_encode().unwrap(), "P4AP4AY=");
     }
 
     #[test]
@@ -466,16 +484,16 @@ mod test {
 
     #[test]
     fn base64_encode() {
-        assert_eq!(ByteArray::from_bytes(b"").base64_encode(), "AA==");
-        assert_eq!(ByteArray::from_bytes(b"\x41").base64_encode(), "QQ==");
-        assert_eq!(ByteArray::from_bytes(b"\x60").base64_encode(), "YA==");
-        assert_eq!(ByteArray::from_bytes(b"\x00").base64_encode(), "AA==");
-        assert_eq!(ByteArray::from_bytes(b"\x7f").base64_encode(), "fw==");
-        assert_eq!(ByteArray::from_bytes(b"\x80").base64_encode(), "gA==");
-        assert_eq!(ByteArray::from_bytes(b"\xff").base64_encode(), "/w==");
-        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base64_encode(), "QQA=");
-        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base64_encode(), "AQEB");
-        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base64_encode(), "fwD+Aw==");
+        assert_eq!(ByteArray::from_bytes(b"").base64_encode().unwrap(), "AA==");
+        assert_eq!(ByteArray::from_bytes(b"\x41").base64_encode().unwrap(), "QQ==");
+        assert_eq!(ByteArray::from_bytes(b"\x60").base64_encode().unwrap(), "YA==");
+        assert_eq!(ByteArray::from_bytes(b"\x00").base64_encode().unwrap(), "AA==");
+        assert_eq!(ByteArray::from_bytes(b"\x7f").base64_encode().unwrap(), "fw==");
+        assert_eq!(ByteArray::from_bytes(b"\x80").base64_encode().unwrap(), "gA==");
+        assert_eq!(ByteArray::from_bytes(b"\xff").base64_encode().unwrap(), "/w==");
+        assert_eq!(ByteArray::from_bytes(b"\x41\x00").base64_encode().unwrap(), "QQA=");
+        assert_eq!(ByteArray::from_bytes(b"\x01\x01\x01").base64_encode().unwrap(), "AQEB");
+        assert_eq!(ByteArray::from_bytes(b"\x7F\x00\xFE\x03").base64_encode().unwrap(), "fwD+Aw==");
     }
 
     #[test]

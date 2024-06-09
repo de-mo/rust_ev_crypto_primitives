@@ -119,7 +119,7 @@ pub fn verify_product_argument(
                     context,
                     &HadamardArgumentVerifyInput::new(
                         &h_statement,
-                        &argument.hadamard_arg.as_ref().unwrap()
+                        argument.hadamard_arg.as_ref().unwrap()
                     ).map_err(ProductArgumentError::HadamardArgumentError)?
                 ).map_err(ProductArgumentError::HadamardArgumentError)?
             ),
@@ -164,9 +164,12 @@ impl Display for ProductArgumentResult {
         if self.is_ok() {
             return write!(f, "verification ok");
         }
-        let svp_str = format!("Single Value Product Argument: {}", self.single_value_product_arg);
+        let svp_str = format!(
+            "Single Value Product Argument: {{ {} }}",
+            self.single_value_product_arg
+        );
         match &self.hadamard_arg {
-            Some(r) => write!(f, "{}, Hadamard Argument: {}", svp_str, r),
+            Some(r) => write!(f, "{}, Hadamard Argument: {{ {} }}", svp_str, r),
             None => write!(f, "{}", svp_str),
         }
     }
@@ -236,10 +239,7 @@ impl ProductArgument {
     }
 
     pub fn n(&self) -> Option<usize> {
-        match &self.hadamard_arg {
-            Some(h) => Some(h.n()),
-            None => None,
-        }
+        self.hadamard_arg.as_ref().map(|h| h.n())
     }
 }
 
@@ -301,14 +301,8 @@ pub mod test {
 
     pub fn get_argument(argument: &Value) -> ProductArgument {
         let single_vpa = get_single_vpa_argument(&argument["single_vpa"]);
-        let hadamard_argument = match argument.get("hadamard_argument") {
-            Some(v) => Some(get_hadamard_argument(v)),
-            None => None,
-        };
-        let c_b = match argument.get("c_b") {
-            Some(v) => Some(json_value_to_mpinteger(v)),
-            None => None,
-        };
+        let hadamard_argument = argument.get("hadamard_argument").map(get_hadamard_argument);
+        let c_b = argument.get("c_b").map(json_value_to_mpinteger);
         ProductArgument::new(c_b.as_ref(), hadamard_argument.as_ref(), &single_vpa).unwrap()
     }
 

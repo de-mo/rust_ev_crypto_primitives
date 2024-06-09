@@ -110,12 +110,13 @@ pub fn verify_shuffle_argument(
     let m = argument.m();
     let n = argument.n();
     let p = context.ep.p();
+    let q = context.ep.q();
 
     let x = get_x(context, statement, argument)?;
     let y = get_y(context, statement, argument)?;
     let z = get_z(context, statement, argument)?;
 
-    let upper_z_neg = Matrix::to_matrix(&vec![-z.clone(); upper_n], (m, n))
+    let upper_z_neg = Matrix::to_matrix(&vec![z.mod_negate(q); upper_n], (m, n))
         .map_err(ShuffleArgumentError::MatrixError)?
         .transpose()
         .map_err(ShuffleArgumentError::MatrixError)?;
@@ -130,12 +131,21 @@ pub fn verify_shuffle_argument(
     let cs_upper_d: Vec<MPInteger> = argument.cs_upper_a
         .iter()
         .zip(argument.cs_upper_b.iter())
-        .map(|(a, b)| { a.mod_exponentiate(&y, p).mod_multiply(b, p) })
+        .map(|(c_a_i, c_b_i)| { c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p) })
         .collect();
 
-    let b = (1..upper_n + 1)
-        .map(|i| &y * i + x.mod_exponentiate(&MPInteger::from(i), p) - &z)
-        .fold(MPInteger::one().clone(), |acc, v| { acc.mod_multiply(&v, p) });
+    let xs = (0..upper_n + 1)
+        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+        .collect::<Vec<_>>();
+
+    let b = xs
+        .iter()
+        .enumerate()
+        .take(upper_n)
+        //.skip(1)
+        .map(|(i, x_i)| { y.mod_multiply(&MPInteger::from(i), q).mod_add(x_i, q).mod_sub(&z, q) })
+        .fold(MPInteger::one().clone(), |acc, v| { acc.mod_multiply(&v, q) });
+
     let p_statement = ProductStatement::new(
         &cs_upper_d
             .iter()
@@ -151,7 +161,6 @@ pub fn verify_shuffle_argument(
         )?
     ).map_err(ShuffleArgumentError::ProductArgumentError)?;
 
-    let xs = (0..upper_n).map(|i| x.mod_exponentiate(&MPInteger::from(i), p)).collect::<Vec<_>>();
     let upper_c = Ciphertext::get_ciphertext_vector_exponentiation(
         &statement.upper_cs,
         &xs,
@@ -224,17 +233,10 @@ fn get_hashable_vector_for_x<'a>(
         HashableMessage::from(context.ep.q()),
         HashableMessage::from(&context.pks),
         HashableMessage::from(&context.ck),
+        HashableMessage::from(&statement.upper_cs),
+        HashableMessage::from(&statement.upper_c_primes),
         HashableMessage::from(
-            statement.upper_cs.iter().map(HashableMessage::from).collect::<Vec<HashableMessage>>()
-        ),
-        HashableMessage::from(
-            statement.upper_c_primes
-                .iter()
-                .map(HashableMessage::from)
-                .collect::<Vec<HashableMessage>>()
-        ),
-        HashableMessage::from(
-            argument.cs_upper_a.iter().map(HashableMessage::from).collect::<Vec<HashableMessage>>()
+            argument.cs_upper_a.iter().map(HashableMessage::from).collect::<Vec<_>>()
         )
     ]
 }
@@ -272,7 +274,12 @@ impl MixNetResultTrait for VerifyShuffleArgumentResult {
 
 impl Display for VerifyShuffleArgumentResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "productVerif: {} / multiVerif: {}", self.product_verif, self.multi_verif)
+        write!(
+            f,
+            "productVerif: {{ {} }} / multiVerif: {{ {} }}",
+            self.product_verif,
+            self.multi_verif
+        )
     }
 }
 
@@ -404,7 +411,10 @@ mod test {
     use super::*;
     use serde_json::Value;
     use super::super::{
-        multi_exponentiation_argument::test::{ get_argument as get_me_argument, get_ciphertexts },
+        multi_exponentiation_argument::test::{
+            get_argument as get_multi_exp_argument,
+            get_ciphertexts,
+        },
         product_argument::test::get_argument as get_product_argument,
         test::context_from_json_value,
     };
@@ -435,7 +445,7 @@ mod test {
             &json_array_value_to_array_mpinteger(&argument["ca"]),
             &json_array_value_to_array_mpinteger(&argument["cb"]),
             &get_product_argument(&argument["product_argument"]),
-            &get_me_argument(&argument["multi_exp_argument"])
+            &get_multi_exp_argument(&argument["multi_exp_argument"])
         ).unwrap()
     }
 

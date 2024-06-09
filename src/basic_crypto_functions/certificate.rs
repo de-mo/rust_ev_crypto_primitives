@@ -21,15 +21,11 @@ use crate::byte_array::ByteArray;
 use openssl::{
     asn1::Asn1Time,
     hash::MessageDigest,
-    pkcs12::{ParsedPkcs12_2, Pkcs12},
-    pkey::{PKey, Private, Public},
+    pkcs12::{ ParsedPkcs12_2, Pkcs12 },
+    pkey::{ PKey, Private, Public },
     x509::X509,
 };
-use std::{
-    fmt::Display,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{ fmt::Display, fs, path::{ Path, PathBuf } };
 
 /// Keystore to collect the public keys
 ///
@@ -126,7 +122,7 @@ impl Keystore {
     /// if somwthing is going wrong
     pub fn get_public_certificate(
         &self,
-        authority: &str,
+        authority: &str
     ) -> Result<SigningCertificate, BasisCryptoError> {
         match self.is_pcks12() {
             true => self.get_certificate_from_pcks12(authority),
@@ -136,15 +132,13 @@ impl Keystore {
 
     fn get_certificate_from_pcks12(
         &self,
-        authority: &str,
+        authority: &str
     ) -> Result<SigningCertificate, BasisCryptoError> {
         let pcks12 = self.pcks12.as_ref().unwrap();
         let cas = match pcks12.ca.as_ref() {
             Some(s) => s,
             None => {
-                return Err(BasisCryptoError::KeyStoreMissingCAList(
-                    self.path.to_path_buf(),
-                ));
+                return Err(BasisCryptoError::KeyStoreMissingCAList(self.path.to_path_buf()));
             }
         };
         // println!("length: {:?}", cas.len());
@@ -152,8 +146,9 @@ impl Keystore {
             // println!("subject_name: {:?}", x.subject_name());
             // println!("issuer_name: {:?}", x.issuer_name());
             for e in x.issuer_name().entries() {
-                if e.object().to_string() == *"commonName"
-                    && e.data().as_slice() == authority.as_bytes()
+                if
+                    e.object().to_string() == *"commonName" &&
+                    e.data().as_slice() == authority.as_bytes()
                 {
                     return Ok(SigningCertificate {
                         authority: authority.to_owned(),
@@ -171,7 +166,7 @@ impl Keystore {
 
     fn get_certificate_from_dir(
         &self,
-        authority: &str,
+        authority: &str
     ) -> Result<SigningCertificate, BasisCryptoError> {
         let p = self.path.join(format!("{}{}", authority, self.extension));
         let buf = fs::read(&p).map_err(|e| BasisCryptoError::IO {
@@ -195,23 +190,19 @@ impl Keystore {
     /// if something is going wrong
     pub fn get_secret_certificate(&self) -> Result<SigningCertificate, BasisCryptoError> {
         if !self.is_pcks12() {
-            return Err(BasisCryptoError::KeystoreWrongFormat(
-                "get_secret_certificate is only working for file pkc12 and not for directory format".to_string()
-            ));
+            return Err(
+                BasisCryptoError::KeystoreWrongFormat(
+                    "get_secret_certificate is only working for file pkc12 and not for directory format".to_string()
+                )
+            );
         }
         let pcks12 = self.pcks12.as_ref().unwrap();
-        let sk = pcks12
-            .pkey
+        let sk = pcks12.pkey
             .as_ref()
-            .ok_or(BasisCryptoError::KeyStoreMissingSecretKey(
-                self.path.to_path_buf(),
-            ))?;
-        let cert = pcks12
-            .cert
+            .ok_or(BasisCryptoError::KeyStoreMissingSecretKey(self.path.to_path_buf()))?;
+        let cert = pcks12.cert
             .as_ref()
-            .ok_or(BasisCryptoError::KeyStoreMissingCertSecretKey(
-                self.path.to_path_buf(),
-            ))?;
+            .ok_or(BasisCryptoError::KeyStoreMissingCertSecretKey(self.path.to_path_buf()))?;
         let mut authority = String::new();
         for e in cert.issuer_name().entries() {
             if e.object().to_string() == *"commonName" {
@@ -266,11 +257,10 @@ impl SigningCertificate {
     pub fn is_valid_time(&self) -> Result<bool, BasisCryptoError> {
         let not_before = self.x509.not_before();
         let not_after = self.x509.not_after();
-        let now =
-            Asn1Time::days_from_now(0).map_err(|e| BasisCryptoError::CertificateErrorTime {
-                name: self.authority.to_string(),
-                source: e,
-            })?;
+        let now = Asn1Time::days_from_now(0).map_err(|e| BasisCryptoError::CertificateErrorTime {
+            name: self.authority.to_string(),
+            source: e,
+        })?;
         Ok(not_before < now && now <= not_after)
     }
 
@@ -283,16 +273,17 @@ impl SigningCertificate {
     /// # Error
     /// if somwthing is going wrong
     pub fn digest(&self) -> Result<ByteArray, BasisCryptoError> {
-        Ok(ByteArray::from(
-            &self
-                .x509
-                .digest(MessageDigest::sha256())
-                .map_err(|e| BasisCryptoError::CertificateDigest {
-                    msg: "Error by digest".to_string(),
-                    source: e,
-                })?
-                .to_vec(),
-        ))
+        Ok(
+            ByteArray::from(
+                &self.x509
+                    .digest(MessageDigest::sha256())
+                    .map_err(|e| BasisCryptoError::CertificateDigest {
+                        msg: "Error by digest".to_string(),
+                        source: e,
+                    })?
+                    .to_vec()
+            )
+        )
     }
 }
 
@@ -316,14 +307,10 @@ impl Default for CertificateExtension {
 
 impl Display for CertificateExtension {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                CertificateExtension::Cer => ".cer".to_string(),
-                CertificateExtension::Pem => ".pem".to_string(),
-            }
-        )
+        write!(f, "{}", match self {
+            CertificateExtension::Cer => ".cer".to_string(),
+            CertificateExtension::Pem => ".pem".to_string(),
+        })
     }
 }
 
@@ -440,11 +427,13 @@ mod test {
     fn digest() {
         let ks = Keystore::from_pkcs12(&get_file(), PASSWORD_VERIFIER).unwrap();
         assert_eq!(
-            ks.get_public_certificate("canton")
+            ks
+                .get_public_certificate("canton")
                 .unwrap()
                 .digest()
                 .unwrap()
                 .base16_encode()
+                .unwrap()
                 .to_lowercase(),
             "37dc2ff6d555fee32d0469c365ed47bdd5a5448ef38a9edd0f05e0b055a12162"
         );
