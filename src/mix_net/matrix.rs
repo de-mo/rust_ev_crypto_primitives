@@ -69,6 +69,14 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         Ok(res)
     }
 
+    pub fn from_rows(rows: &Vec<Vec<T>>) -> Result<Self, MatrixError> {
+        let res = Self { rows: rows.clone() };
+        match res.is_malformed() {
+            true => Err(MatrixError::MalformedMatrix),
+            false => Ok(res),
+        }
+    }
+
     pub fn transpose(&self) -> Result<Self, MatrixError> {
         if self.is_malformed() {
             return Err(MatrixError::MalformedMatrix);
@@ -117,7 +125,7 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     pub fn rows_cloned_iter(&self) -> impl Iterator<Item = Vec<T>> + '_ {
-        self.rows_iter().map(|e| e.into_iter().cloned().collect::<Vec<T>>())
+        self.rows_iter().map(|e| e.to_vec())
     }
 
     pub fn column(&self, j: usize) -> Vec<&T> {
@@ -167,12 +175,7 @@ impl Matrix<MPInteger> {
 
 impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
     fn from(value: &'a Matrix<Ciphertext>) -> Self {
-        HashableMessage::from(
-            value
-                .rows_iter()
-                .map(|c_i| HashableMessage::from(c_i))
-                .collect::<Vec<_>>()
-        )
+        HashableMessage::from(value.rows_iter().map(HashableMessage::from).collect::<Vec<_>>())
     }
 }
 
@@ -212,6 +215,20 @@ mod test {
         assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(12), (3, 4));
         assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(18), (3, 6));
         assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(23), (1, 23));
+    }
+
+    #[test]
+    fn test_from_rows() {
+        let rows = vec![vec![1, 2, 3], vec![4, 5, 6]];
+        let m_r = Matrix::from_rows(&rows);
+        assert!(m_r.is_ok());
+        let m = m_r.unwrap();
+        assert_eq!(m.nb_rows(), 2);
+        assert_eq!(m.nb_columns(), 3);
+        let mut l_iter = m.rows_iter();
+        assert_eq!(l_iter.next(), Some(&vec![1, 2, 3]));
+        assert_eq!(l_iter.next(), Some(&vec![4, 5, 6]));
+        assert!(l_iter.next().is_none())
     }
 
     #[test]

@@ -110,8 +110,6 @@ pub fn verify_multi_exponentiation_argument(
     let x_powers = (0..2 * m)
         .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
         .collect::<Vec<_>>();
-    println!("x_powers: {:?}", x_powers);
-    println!("cs_upper_a: {:?}", statement.cs_upper_a);
 
     let verif_upper_c_b_m = &argument.cs_upper_b[m] == MPInteger::one();
     let verif_upper_e_m = argument.upper_es[m] == statement.upper_c;
@@ -119,10 +117,7 @@ pub fn verify_multi_exponentiation_argument(
     let prod_upper_c_a = statement.cs_upper_a
         .iter()
         .zip(x_powers.iter().skip(1))
-        .map(|(c_a_i, x_i)| {
-            println!("c_a_i: {}, x_i: {}", c_a_i, x_i);
-            c_a_i.mod_exponentiate(x_i, p)
-        })
+        .map(|(c_a_i, x_i)| { c_a_i.mod_exponentiate(x_i, p) })
         .fold(argument.c_upper_a_0.clone(), |acc, v| acc.mod_multiply(&v, p));
     let comm_upper_a = get_commitment(
         &context.ep,
@@ -150,7 +145,7 @@ pub fn verify_multi_exponentiation_argument(
         .iter()
         .zip(x_powers.iter())
         .skip(1)
-        .map(|(e_k, x_k)| e_k.get_ciphertext_exponentiation(x_k, &context.ep))
+        .map(|(e_k, x_k)| { e_k.get_ciphertext_exponentiation(x_k, &context.ep) })
         .fold(argument.upper_es[0].clone(), |acc, e| acc.get_ciphertext_product(&e, &context.ep));
     let encrypted_upper_g_b = Ciphertext::get_ciphertext(
         &context.ep,
@@ -161,13 +156,13 @@ pub fn verify_multi_exponentiation_argument(
     let prod_c = statement.ciphertext_matrix
         .rows_iter()
         .zip(x_powers.iter().take(m).rev())
-        .map(|(c_i, x_m_minus_i_minus_1)|
+        .map(|(c_i, x_m_minus_i_minus_1)| {
             Ciphertext::get_ciphertext_vector_exponentiation(
-                c_i.into_iter().cloned().collect::<Vec<_>>().as_slice(),
-                x_m_minus_i_minus_1.mod_scalar_multiply(argument.a_vec.as_slice(), p).as_slice(),
+                c_i.to_vec().as_slice(),
+                x_m_minus_i_minus_1.mod_scalar_multiply(argument.a_vec.as_slice(), q).as_slice(),
                 &context.ep
             )
-        )
+        })
         .fold(Ciphertext::neutral_for_mod_multiply(l), |acc, c|
             acc.get_ciphertext_product(&c, &context.ep)
         );
@@ -258,6 +253,7 @@ impl MultiExponentiationStatement {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 impl MultiExponentiationArgument {
     /// New statement taking the ownership of the data
     ///
@@ -405,12 +401,7 @@ pub mod test {
     }
 
     pub fn get_ciphertexts(value: &Value) -> Vec<Ciphertext> {
-        value
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|e| get_ciphertext(e))
-            .collect()
+        value.as_array().unwrap().iter().map(get_ciphertext).collect()
     }
 
     pub fn get_ciphertext_matrix(value: &Value) -> Matrix<Ciphertext> {
@@ -420,12 +411,7 @@ pub mod test {
             .iter()
             .map(get_ciphertexts)
             .collect();
-        let m = temp.len();
-        let n = temp[0].len();
-        Matrix::to_matrix(&temp.into_iter().flatten().collect::<Vec<_>>(), (n, m))
-            .unwrap()
-            .transpose()
-            .unwrap()
+        Matrix::from_rows(&temp).unwrap()
     }
 
     fn get_ciphertext(tc: &Value) -> Ciphertext {
@@ -458,7 +444,7 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter().skip(1) {
+        for tc in get_test_cases().iter() {
             let statement = get_statement(&tc["input"]["statement"]);
             let argument = get_argument(&tc["input"]["argument"]);
             let input = MultiExponentiationArgumentVerifyInput::new(&statement, &argument).unwrap();
