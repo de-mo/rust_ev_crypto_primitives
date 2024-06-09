@@ -172,6 +172,14 @@ impl<'a> From<&'a Vec<Ciphertext>> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<&'a [Ciphertext]> for HashableMessage<'a> {
+    fn from(value: &'a [Ciphertext]) -> Self {
+        HashableMessage::from(
+            value.iter().map(HashableMessage::from).collect::<Vec<HashableMessage<'a>>>()
+        )
+    }
+}
+
 impl<'a> From<Vec<Ciphertext>> for HashableMessage<'a> {
     fn from(value: Vec<Ciphertext>) -> Self {
         HashableMessage::from(

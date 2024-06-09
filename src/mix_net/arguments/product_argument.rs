@@ -45,24 +45,24 @@ use super::{
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ProductStatement {
-    cs_upper_a: Vec<MPInteger>,
-    b: MPInteger,
+pub struct ProductStatement<'a> {
+    cs_upper_a: &'a [MPInteger],
+    b: &'a MPInteger,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ProductArgument {
-    c_b: Option<MPInteger>,
-    hadamard_arg: Option<HadamardArgument>,
-    single_value_product_arg: SingleValueProductArgument,
+pub struct ProductArgument<'a> {
+    c_b: Option<&'a MPInteger>,
+    hadamard_arg: Option<&'a HadamardArgument<'a>>,
+    single_value_product_arg: &'a SingleValueProductArgument<'a>,
 }
 
 /// Input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ProductArgumentVerifyInput<'a> {
-    statement: &'a ProductStatement,
-    argument: &'a ProductArgument,
+pub struct ProductArgumentVerifyInput<'a, 'b> {
+    statement: &'a ProductStatement<'a>,
+    argument: &'b ProductArgument<'b>,
 }
 
 /// Result of the verify algorithm, according to the specifications
@@ -175,22 +175,15 @@ impl Display for ProductArgumentResult {
     }
 }
 
-impl ProductStatement {
-    /// New statement taking the ownership of the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new_owned(
-        cs_upper_a: Vec<MPInteger>,
-        b: MPInteger
-    ) -> Result<Self, ProductArgumentError> {
-        Ok(Self { cs_upper_a, b })
-    }
-
+impl<'a> ProductStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(cs_upper_a: &[MPInteger], b: &MPInteger) -> Result<Self, ProductArgumentError> {
-        Self::new_owned(cs_upper_a.to_vec(), b.clone())
+    pub fn new(
+        cs_upper_a: &'a [MPInteger],
+        b: &'a MPInteger
+    ) -> Result<Self, ProductArgumentError> {
+        Ok(Self { cs_upper_a, b })
     }
 
     pub fn m(&self) -> usize {
@@ -198,14 +191,14 @@ impl ProductStatement {
     }
 }
 
-impl ProductArgument {
-    /// New statement taking the ownership of the data
+impl<'a> ProductArgument<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        c_b: Option<MPInteger>,
-        hadamard_arg: Option<HadamardArgument>,
-        single_value_product_arg: SingleValueProductArgument
+    pub fn new(
+        c_b: Option<&'a MPInteger>,
+        hadamard_arg: Option<&'a HadamardArgument<'a>>,
+        single_value_product_arg: &'a SingleValueProductArgument
     ) -> Result<Self, ProductArgumentError> {
         if (c_b.is_some() && hadamard_arg.is_none()) || (c_b.is_none() && hadamard_arg.is_some()) {
             return Err(ProductArgumentError::BothNoneOrSome);
@@ -220,17 +213,6 @@ impl ProductArgument {
         })
     }
 
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        c_b: Option<&MPInteger>,
-        hadamard_arg: Option<&HadamardArgument>,
-        single_value_product_arg: &SingleValueProductArgument
-    ) -> Result<Self, ProductArgumentError> {
-        Self::new_owned(c_b.cloned(), hadamard_arg.cloned(), single_value_product_arg.clone())
-    }
-
     pub fn m(&self) -> usize {
         match &self.hadamard_arg {
             Some(h) => h.m(),
@@ -243,14 +225,14 @@ impl ProductArgument {
     }
 }
 
-impl<'a> ProductArgumentVerifyInput<'a> {
+impl<'a, 'b> ProductArgumentVerifyInput<'a, 'b> {
     /// New Input
     ///
     /// Return error if the domain is wrong
     pub fn new(
         context: &ArgumentContext,
-        statement: &'a ProductStatement,
-        argument: &'a ProductArgument
+        statement: &'a ProductStatement<'a>,
+        argument: &'b ProductArgument<'b>
     ) -> Result<Self, ProductArgumentError> {
         if statement.m() != argument.m() {
             return Err(ProductArgumentError::MInStatementAndArguemntNotSame);
@@ -272,10 +254,24 @@ pub mod test {
     use std::path::Path;
     use super::*;
     use serde_json::Value;
+    use super::super::test::{
+        context_from_json_value,
+        context_values,
+        ep_from_json_value,
+        ck_from_json_value,
+    };
     use super::super::{
-        single_value_product_argument::test::get_argument as get_single_vpa_argument,
-        hadamard_argument::test::get_argument as get_hadamard_argument,
-        test::context_from_json_value,
+        single_value_product_argument::test::{
+            get_argument as get_single_vpa_argument,
+            get_argument_values as get_single_vpa_argument_values,
+        },
+        hadamard_argument::test::{
+            get_argument as get_hadamard_argument,
+            get_argument_values as get_hadamard_argument_values,
+        },
+        zero_argument::test::get_argument as get_zero_argument,
+        hadamard_argument::test::HadamardArgumentValues,
+        single_value_product_argument::test::SVPArgumentValues,
     };
     use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
 
@@ -288,30 +284,56 @@ pub mod test {
         serde_json::from_str(&json).unwrap()
     }
 
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
+    pub struct ProductStatementValues(pub Vec<MPInteger>, pub MPInteger);
+    pub struct ProductArgumentValues(
+        pub SVPArgumentValues,
+        pub Option<HadamardArgumentValues>,
+        pub Option<MPInteger>,
+    );
+
+    fn get_statement_values(statement: &Value) -> ProductStatementValues {
+        ProductStatementValues(
+            json_array_value_to_array_mpinteger(&statement["c_a"]),
+            json_value_to_mpinteger(&statement["b"])
+        )
     }
 
-    fn get_statement(statement: &Value) -> ProductStatement {
-        ProductStatement::new(
-            &json_array_value_to_array_mpinteger(&statement["c_a"]),
-            &json_value_to_mpinteger(&statement["b"])
-        ).unwrap()
+    fn get_statement<'a>(values: &'a ProductStatementValues) -> ProductStatement<'a> {
+        ProductStatement::new(&values.0, &values.1).unwrap()
     }
 
-    pub fn get_argument(argument: &Value) -> ProductArgument {
-        let single_vpa = get_single_vpa_argument(&argument["single_vpa"]);
-        let hadamard_argument = argument.get("hadamard_argument").map(get_hadamard_argument);
-        let c_b = argument.get("c_b").map(json_value_to_mpinteger);
-        ProductArgument::new(c_b.as_ref(), hadamard_argument.as_ref(), &single_vpa).unwrap()
+    pub fn get_argument_values(argument: &Value) -> ProductArgumentValues {
+        ProductArgumentValues(
+            get_single_vpa_argument_values(&argument["single_vpa"]),
+            argument.get("hadamard_argument").map(get_hadamard_argument_values),
+            argument.get("c_b").map(json_value_to_mpinteger)
+        )
+    }
+
+    pub fn get_argument<'a>(
+        values: &'a ProductArgumentValues,
+        ha: &'a Option<HadamardArgument>,
+        svp: &'a SingleValueProductArgument
+    ) -> ProductArgument<'a> {
+        ProductArgument::new(values.2.as_ref(), ha.as_ref(), &svp).unwrap()
     }
 
     #[test]
     fn test_verify() {
         for tc in get_test_cases().iter() {
-            let context = get_context(tc);
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let svp_argument = get_single_vpa_argument(&argument_values.0);
+            let zero_argument = argument_values.1.as_ref().map(|vs| get_zero_argument(&vs.1));
+            let hadamard_argument = argument_values.1
+                .as_ref()
+                .map(|vs| get_hadamard_argument(vs, zero_argument.as_ref().unwrap()));
+            let argument = get_argument(&argument_values, &hadamard_argument, &svp_argument);
             let input = ProductArgumentVerifyInput::new(&context, &statement, &argument).unwrap();
             let x_res = verify_product_argument(&context, &input);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());

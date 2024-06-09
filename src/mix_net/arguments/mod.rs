@@ -42,10 +42,10 @@ use crate::{ integer::MPInteger, Constants, EncryptionParameters, Operations };
 
 /// context for all arguments verification functions
 #[derive(Clone, Debug)]
-pub struct ArgumentContext {
-    ep: EncryptionParameters,
-    pks: Vec<MPInteger>,
-    ck: CommitmentKey,
+pub struct ArgumentContext<'a> {
+    ep: &'a EncryptionParameters,
+    pks: &'a [MPInteger],
+    ck: &'a CommitmentKey,
 }
 
 #[derive(Error, Debug)]
@@ -78,15 +78,10 @@ pub fn star_map(
     )
 }
 
-impl ArgumentContext {
-    /// New context taking the ownership of the data
-    pub fn new_owned(ep: EncryptionParameters, pks: Vec<MPInteger>, ck: CommitmentKey) -> Self {
-        Self { ep, pks, ck }
-    }
-
+impl<'a> ArgumentContext<'a> {
     /// New context cloning the data
-    pub fn new(ep: &EncryptionParameters, pks: &[MPInteger], ck: &CommitmentKey) -> Self {
-        Self::new_owned(ep.clone(), pks.to_vec(), ck.clone())
+    pub fn new(ep: &'a EncryptionParameters, pks: &'a [MPInteger], ck: &'a CommitmentKey) -> Self {
+        Self { ep, pks, ck }
     }
 }
 
@@ -97,29 +92,53 @@ mod test {
     use serde_json::Value;
     use super::*;
 
-    pub fn context_from_json_value(context: &Value) -> ArgumentContext {
-        ArgumentContext::new(
-            &EncryptionParameters::from((
-                &json_value_to_mpinteger(&context["p"]),
-                &json_value_to_mpinteger(&context["q"]),
-                &json_value_to_mpinteger(&context["g"]),
-            )),
-            &&json_array_value_to_array_mpinteger(&context["pk"]),
-            &(CommitmentKey {
-                h: json_value_to_mpinteger(&context["ck"]["h"]),
-                gs: json_array_value_to_array_mpinteger(&context["ck"]["g"]),
-            })
+    pub struct EncryptionParametersValues(pub MPInteger, pub MPInteger, pub MPInteger);
+    pub struct CommitmentKeyValues(pub MPInteger, pub Vec<MPInteger>);
+
+    pub struct ContextValues(
+        pub EncryptionParametersValues,
+        Vec<MPInteger>,
+        pub CommitmentKeyValues,
+    );
+
+    pub fn context_values(context: &Value) -> ContextValues {
+        ContextValues(
+            EncryptionParametersValues(
+                json_value_to_mpinteger(&context["p"]),
+                json_value_to_mpinteger(&context["q"]),
+                json_value_to_mpinteger(&context["g"])
+            ),
+            json_array_value_to_array_mpinteger(&context["pk"]),
+            CommitmentKeyValues(
+                json_value_to_mpinteger(&context["ck"]["h"]),
+                json_array_value_to_array_mpinteger(&context["ck"]["g"])
+            )
         )
+    }
+
+    pub fn ep_from_json_value(values: &EncryptionParametersValues) -> EncryptionParameters {
+        EncryptionParameters::from((&values.0, &values.1, &values.2))
+    }
+
+    pub fn ck_from_json_value(values: &CommitmentKeyValues) -> CommitmentKey {
+        CommitmentKey {
+            h: values.0.clone(),
+            gs: values.1.clone(),
+        }
+    }
+
+    pub fn context_from_json_value<'a>(
+        values: &'a ContextValues,
+        ep: &'a EncryptionParameters,
+        ck: &'a CommitmentKey
+    ) -> ArgumentContext<'a> {
+        ArgumentContext::new(ep, &values.1, ck)
     }
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./").join("test_data").join("mixnet").join("bilinearMap.json");
         let json = std::fs::read_to_string(test_file).unwrap();
         serde_json::from_str(&json).unwrap()
-    }
-
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
     }
 
     fn get_input(tc: &Value) -> (MPInteger, Vec<MPInteger>, Vec<MPInteger>) {
@@ -134,7 +153,10 @@ mod test {
     #[test]
     fn test_star_map() {
         for tc in get_test_cases().iter() {
-            let context = get_context(tc);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
             let (y, a, b) = get_input(tc);
             let s_res = star_map(context.ep.q(), &y, &a, &b);
             assert!(s_res.is_ok(), "Error unwraping {}: {}", tc["description"], s_res.unwrap_err());

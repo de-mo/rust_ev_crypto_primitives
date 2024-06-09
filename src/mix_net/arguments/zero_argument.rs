@@ -32,30 +32,30 @@ use super::{ star_map, ArgumentContext, StarMapError };
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ZeroStatement {
-    cs_upper_a: Vec<MPInteger>,
-    cs_upper_b: Vec<MPInteger>,
-    y: MPInteger,
+pub struct ZeroStatement<'a> {
+    cs_upper_a: &'a [MPInteger],
+    cs_upper_b: &'a [MPInteger],
+    y: &'a MPInteger,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ZeroArgument {
-    pub c_upper_a_0: MPInteger,
-    pub c_upper_b_m: MPInteger,
-    pub cs_d: Vec<MPInteger>,
-    pub as_prime: Vec<MPInteger>,
-    pub bs_prime: Vec<MPInteger>,
-    pub r_prime: MPInteger,
-    pub s_prime: MPInteger,
-    pub t_prime: MPInteger,
+pub struct ZeroArgument<'a> {
+    pub c_upper_a_0: &'a MPInteger,
+    pub c_upper_b_m: &'a MPInteger,
+    pub cs_d: &'a [MPInteger],
+    pub as_prime: &'a [MPInteger],
+    pub bs_prime: &'a [MPInteger],
+    pub r_prime: &'a MPInteger,
+    pub s_prime: &'a MPInteger,
+    pub t_prime: &'a MPInteger,
 }
 
 /// Input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct ZeroArgumentVerifyInput<'a> {
-    statement: &'a ZeroStatement,
-    argument: &'a ZeroArgument,
+pub struct ZeroArgumentVerifyInput<'a, 'b> {
+    statement: &'a ZeroStatement<'a>,
+    argument: &'b ZeroArgument<'b>,
 }
 
 /// Result of the verify algorithm, according to the specifications
@@ -154,13 +154,13 @@ fn get_x(
             vec![
                 HashableMessage::from(context.ep.p()),
                 HashableMessage::from(context.ep.q()),
-                HashableMessage::from(&context.pks),
-                HashableMessage::from(&context.ck),
-                HashableMessage::from(&argument.c_upper_a_0),
-                HashableMessage::from(&argument.c_upper_b_m),
-                HashableMessage::from(&argument.cs_d),
-                HashableMessage::from(&statement.cs_upper_b),
-                HashableMessage::from(&statement.cs_upper_a)
+                HashableMessage::from(context.pks),
+                HashableMessage::from(context.ck),
+                HashableMessage::from(argument.c_upper_a_0),
+                HashableMessage::from(argument.c_upper_b_m),
+                HashableMessage::from(argument.cs_d),
+                HashableMessage::from(statement.cs_upper_b),
+                HashableMessage::from(statement.cs_upper_a)
             ]
         )
             .recursive_hash()
@@ -191,30 +191,19 @@ impl Display for ZeroArgumentResult {
     }
 }
 
-impl ZeroStatement {
-    /// New statement taking the ownership of the data
+impl<'a> ZeroStatement<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        cs_upper_a: Vec<MPInteger>,
-        cs_upper_b: Vec<MPInteger>,
-        y: MPInteger
+    pub fn new(
+        cs_upper_a: &'a [MPInteger],
+        cs_upper_b: &'a [MPInteger],
+        y: &'a MPInteger
     ) -> Result<Self, ZeroArgumentError> {
         if cs_upper_a.len() != cs_upper_b.len() {
             return Err(ZeroArgumentError::CommitmentVectorNotSameLen);
         }
         Ok(Self { cs_upper_a, cs_upper_b, y })
-    }
-
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        cs_upper_a: &[MPInteger],
-        cs_upper_b: &[MPInteger],
-        y: &MPInteger
-    ) -> Result<Self, ZeroArgumentError> {
-        Self::new_owned(cs_upper_a.to_vec(), cs_upper_b.to_vec(), y.clone())
     }
 
     pub fn m(&self) -> usize {
@@ -223,19 +212,19 @@ impl ZeroStatement {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl ZeroArgument {
-    /// New statement taking the ownership of the data
+impl<'a> ZeroArgument<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        c_upper_a_0: MPInteger,
-        c_upper_b_m: MPInteger,
-        cs_d: Vec<MPInteger>,
-        as_prime: Vec<MPInteger>,
-        bs_prime: Vec<MPInteger>,
-        r_prime: MPInteger,
-        s_prime: MPInteger,
-        t_prime: MPInteger
+    pub fn new(
+        c_upper_a_0: &'a MPInteger,
+        c_upper_b_m: &'a MPInteger,
+        cs_d: &'a [MPInteger],
+        as_prime: &'a [MPInteger],
+        bs_prime: &'a [MPInteger],
+        r_prime: &'a MPInteger,
+        s_prime: &'a MPInteger,
+        t_prime: &'a MPInteger
     ) -> Result<Self, ZeroArgumentError> {
         if as_prime.len() != bs_prime.len() {
             return Err(ZeroArgumentError::ExponentVectorNotSameLen);
@@ -252,43 +241,18 @@ impl ZeroArgument {
         })
     }
 
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        c_upper_a_0: &MPInteger,
-        c_upper_b_m: &MPInteger,
-        cs_d: &[MPInteger],
-        as_prime: &[MPInteger],
-        bs_prime: &[MPInteger],
-        r_prime: &MPInteger,
-        s_prime: &MPInteger,
-        t_prime: &MPInteger
-    ) -> Result<Self, ZeroArgumentError> {
-        Self::new_owned(
-            c_upper_a_0.clone(),
-            c_upper_b_m.clone(),
-            cs_d.to_vec(),
-            as_prime.to_vec(),
-            bs_prime.to_vec(),
-            r_prime.clone(),
-            s_prime.clone(),
-            t_prime.clone()
-        )
-    }
-
     pub fn n(&self) -> usize {
         self.as_prime.len()
     }
 }
 
-impl<'a> ZeroArgumentVerifyInput<'a> {
+impl<'a, 'b> ZeroArgumentVerifyInput<'a, 'b> {
     /// New Input
     ///
     /// Return error if the domain is wrong
     pub fn new(
         statement: &'a ZeroStatement,
-        argument: &'a ZeroArgument
+        argument: &'b ZeroArgument
     ) -> Result<Self, ZeroArgumentError> {
         if argument.cs_d.len() != 2 * statement.m() + 1 {
             return Err(ZeroArgumentError::ExponentVectorNotSameLen);
@@ -302,8 +266,26 @@ pub mod test {
     use std::path::Path;
     use super::*;
     use serde_json::Value;
-    use super::super::test::context_from_json_value;
+    use super::super::test::{
+        context_from_json_value,
+        context_values,
+        ep_from_json_value,
+        ck_from_json_value,
+    };
     use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
+
+    pub struct ZeroStatementValues(pub Vec<MPInteger>, pub Vec<MPInteger>, pub MPInteger);
+
+    pub struct ZeroArgumentValues(
+        pub MPInteger,
+        pub MPInteger,
+        pub Vec<MPInteger>,
+        pub Vec<MPInteger>,
+        pub Vec<MPInteger>,
+        pub MPInteger,
+        pub MPInteger,
+        pub MPInteger,
+    );
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./")
@@ -314,37 +296,56 @@ pub mod test {
         serde_json::from_str(&json).unwrap()
     }
 
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
+    fn get_statement_values(statement: &Value) -> ZeroStatementValues {
+        ZeroStatementValues(
+            json_array_value_to_array_mpinteger(&statement["c_a"]),
+            json_array_value_to_array_mpinteger(&statement["c_b"]),
+            json_value_to_mpinteger(&statement["y"])
+        )
     }
 
-    fn get_statement(statement: &Value) -> ZeroStatement {
-        ZeroStatement::new(
-            &json_array_value_to_array_mpinteger(&statement["c_a"]),
-            &json_array_value_to_array_mpinteger(&statement["c_b"]),
-            &json_value_to_mpinteger(&statement["y"])
-        ).unwrap()
+    fn get_statement<'a>(values: &'a ZeroStatementValues) -> ZeroStatement<'a> {
+        ZeroStatement::new(&values.0, &values.1, &values.2).unwrap()
     }
 
-    pub fn get_argument(argument: &Value) -> ZeroArgument {
+    pub fn get_argument_values(argument: &Value) -> ZeroArgumentValues {
+        ZeroArgumentValues(
+            json_value_to_mpinteger(&argument["c_a0"]),
+            json_value_to_mpinteger(&argument["c_bm"]),
+            json_array_value_to_array_mpinteger(&argument["c_d"]),
+            json_array_value_to_array_mpinteger(&argument["a"]),
+            json_array_value_to_array_mpinteger(&argument["b"]),
+            json_value_to_mpinteger(&argument["r"]),
+            json_value_to_mpinteger(&argument["s"]),
+            json_value_to_mpinteger(&argument["t"])
+        )
+    }
+
+    pub fn get_argument<'a>(values: &'a ZeroArgumentValues) -> ZeroArgument<'a> {
         ZeroArgument::new(
-            &json_value_to_mpinteger(&argument["c_a0"]),
-            &json_value_to_mpinteger(&argument["c_bm"]),
-            &json_array_value_to_array_mpinteger(&argument["c_d"]),
-            &json_array_value_to_array_mpinteger(&argument["a"]),
-            &json_array_value_to_array_mpinteger(&argument["b"]),
-            &json_value_to_mpinteger(&argument["r"]),
-            &json_value_to_mpinteger(&argument["s"]),
-            &json_value_to_mpinteger(&argument["t"])
+            &values.0,
+            &values.1,
+            &values.2,
+            &values.3,
+            &values.4,
+            &values.5,
+            &values.6,
+            &values.7
         ).unwrap()
     }
 
     #[test]
     fn test_get_x() {
         for tc in get_test_cases().iter() {
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
-            let x_res = get_x(&get_context(tc), &statement, &argument);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let argument = get_argument(&argument_values);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
             assert_eq!(
                 x_res.unwrap(),
@@ -358,10 +359,16 @@ pub mod test {
     #[test]
     fn test_verify() {
         for tc in get_test_cases().iter() {
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let argument = get_argument(&argument_values);
             let input = ZeroArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_zero_argument(&get_context(tc), &input);
+            let x_res = verify_zero_argument(&context, &input);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
             assert!(
                 x_res.as_ref().unwrap().is_ok(),

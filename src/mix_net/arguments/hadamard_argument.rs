@@ -44,23 +44,23 @@ use super::{
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct HadamardStatement {
-    cs_upper_a: Vec<MPInteger>,
-    c_b: MPInteger,
+pub struct HadamardStatement<'a> {
+    cs_upper_a: &'a [MPInteger],
+    c_b: &'a MPInteger,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct HadamardArgument {
-    cs_upper_b: Vec<MPInteger>,
-    zero_argument: ZeroArgument,
+pub struct HadamardArgument<'a> {
+    cs_upper_b: &'a [MPInteger],
+    zero_argument: &'a ZeroArgument<'a>,
 }
 
 /// Input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct HadamardArgumentVerifyInput<'a> {
-    statement: &'a HadamardStatement,
-    argument: &'a HadamardArgument,
+pub struct HadamardArgumentVerifyInput<'a, 'b> {
+    statement: &'a HadamardStatement<'a>,
+    argument: &'b HadamardArgument<'b>,
 }
 
 /// Result of the verify algorithm, according to the specifications
@@ -148,7 +148,7 @@ pub fn verify_hadamard_argument(
 
     Ok(HadamardArgumentResult {
         c_upper_b_0_is_c_upper_a_0: argument.cs_upper_b[0] == statement.cs_upper_a[0],
-        c_upper_b_m_minus_1_is_c_b: argument.cs_upper_b[m - 1] == statement.c_b,
+        c_upper_b_m_minus_1_is_c_b: &argument.cs_upper_b[m - 1] == statement.c_b,
         zero_argument: verify_zero_argument(context, &zero_inputs).map_err(
             HadamardArgumentError::ZeroArgumentError
         )?,
@@ -191,11 +191,11 @@ fn get_hashable_vector_for_x<'a>(
     vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
-        HashableMessage::from(&context.pks),
-        HashableMessage::from(&context.ck),
-        HashableMessage::from(&statement.cs_upper_a),
-        HashableMessage::from(&statement.c_b),
-        HashableMessage::from(&argument.cs_upper_b)
+        HashableMessage::from(context.pks),
+        HashableMessage::from(context.ck),
+        HashableMessage::from(statement.cs_upper_a),
+        HashableMessage::from(statement.c_b),
+        HashableMessage::from(argument.cs_upper_b)
     ]
 }
 
@@ -222,22 +222,15 @@ impl Display for HadamardArgumentResult {
     }
 }
 
-impl HadamardStatement {
-    /// New statement taking the ownership of the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new_owned(
-        cs_upper_a: Vec<MPInteger>,
-        c_b: MPInteger
-    ) -> Result<Self, HadamardArgumentError> {
-        Ok(Self { cs_upper_a, c_b })
-    }
-
+impl<'a> HadamardStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(cs_upper_a: &[MPInteger], c_b: &MPInteger) -> Result<Self, HadamardArgumentError> {
-        Self::new_owned(cs_upper_a.to_vec(), c_b.clone())
+    pub fn new(
+        cs_upper_a: &'a [MPInteger],
+        c_b: &'a MPInteger
+    ) -> Result<Self, HadamardArgumentError> {
+        Ok(Self { cs_upper_a, c_b })
     }
 
     pub fn m(&self) -> usize {
@@ -245,13 +238,13 @@ impl HadamardStatement {
     }
 }
 
-impl HadamardArgument {
-    /// New statement taking the ownership of the data
+impl<'a> HadamardArgument<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        cs_upper_b: Vec<MPInteger>,
-        zero_argument: ZeroArgument
+    pub fn new(
+        cs_upper_b: &'a [MPInteger],
+        zero_argument: &'a ZeroArgument
     ) -> Result<Self, HadamardArgumentError> {
         if zero_argument.cs_d.len() != 2 * cs_upper_b.len() + 1 {
             return Err(HadamardArgumentError::CommitmentVectorNotCorrectLen);
@@ -260,16 +253,6 @@ impl HadamardArgument {
             cs_upper_b,
             zero_argument,
         })
-    }
-
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        cs_upper_b: &[MPInteger],
-        zero_argument: &ZeroArgument
-    ) -> Result<Self, HadamardArgumentError> {
-        Self::new_owned(cs_upper_b.to_vec(), zero_argument.clone())
     }
 
     pub fn m(&self) -> usize {
@@ -281,13 +264,13 @@ impl HadamardArgument {
     }
 }
 
-impl<'a> HadamardArgumentVerifyInput<'a> {
+impl<'a, 'b> HadamardArgumentVerifyInput<'a, 'b> {
     /// New Input
     ///
     /// Return error if the domain is wrong
     pub fn new(
         statement: &'a HadamardStatement,
-        argument: &'a HadamardArgument
+        argument: &'b HadamardArgument
     ) -> Result<Self, HadamardArgumentError> {
         if statement.m() != argument.m() {
             return Err(HadamardArgumentError::MInStatementAndArguemntNotSame);
@@ -303,7 +286,15 @@ pub mod test {
     use serde_json::Value;
     use super::super::test::context_from_json_value;
     use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
-    use super::super::zero_argument::test::get_argument as get_zero_argument;
+    use super::super::zero_argument::test::{
+        get_argument as get_zero_argument,
+        get_argument_values as get_zero_argument_values,
+        ZeroArgumentValues,
+    };
+    use super::super::test::{ context_values, ep_from_json_value, ck_from_json_value };
+
+    pub struct HadamardStatementValues(pub Vec<MPInteger>, pub MPInteger);
+    pub struct HadamardArgumentValues(pub Vec<MPInteger>, pub ZeroArgumentValues);
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./")
@@ -314,30 +305,43 @@ pub mod test {
         serde_json::from_str(&json).unwrap()
     }
 
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
+    fn get_statement_values(statement: &Value) -> HadamardStatementValues {
+        HadamardStatementValues(
+            json_array_value_to_array_mpinteger(&statement["c_a"]),
+            json_value_to_mpinteger(&statement["c_b"])
+        )
     }
 
-    fn get_statement(statement: &Value) -> HadamardStatement {
-        HadamardStatement::new(
-            &json_array_value_to_array_mpinteger(&statement["c_a"]),
-            &json_value_to_mpinteger(&statement["c_b"])
-        ).unwrap()
+    fn get_statement<'a>(values: &'a HadamardStatementValues) -> HadamardStatement<'a> {
+        HadamardStatement::new(&values.0, &values.1).unwrap()
     }
 
-    pub fn get_argument(argument: &Value) -> HadamardArgument {
-        HadamardArgument::new(
-            &json_array_value_to_array_mpinteger(&argument["cUpperB"]),
-            &get_zero_argument(&argument["zero_argument"])
-        ).unwrap()
+    pub fn get_argument_values(argument: &Value) -> HadamardArgumentValues {
+        HadamardArgumentValues(
+            json_array_value_to_array_mpinteger(&argument["cUpperB"]),
+            get_zero_argument_values(&argument["zero_argument"])
+        )
+    }
+
+    pub fn get_argument<'a>(
+        values: &'a HadamardArgumentValues,
+        zero: &'a ZeroArgument<'a>
+    ) -> HadamardArgument<'a> {
+        HadamardArgument::new(&values.0, &zero).unwrap()
     }
 
     #[test]
     fn test_verify() {
         for tc in get_test_cases().iter() {
-            let context = get_context(tc);
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let statement = get_statement(&statement_values);
+            let zero_argument = get_zero_argument(&argument_values.1);
+            let argument = get_argument(&argument_values, &zero_argument);
             let input = HadamardArgumentVerifyInput::new(&statement, &argument).unwrap();
             let x_res = verify_hadamard_argument(&context, &input);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());

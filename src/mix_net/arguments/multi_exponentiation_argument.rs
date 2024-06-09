@@ -40,30 +40,30 @@ use super::{ ArgumentContext, StarMapError };
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct MultiExponentiationStatement {
-    ciphertext_matrix: Matrix<Ciphertext>,
-    upper_c: Ciphertext,
-    cs_upper_a: Vec<MPInteger>,
+pub struct MultiExponentiationStatement<'a> {
+    ciphertext_matrix: &'a Matrix<Ciphertext>,
+    upper_c: &'a Ciphertext,
+    cs_upper_a: &'a [MPInteger],
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct MultiExponentiationArgument {
-    pub c_upper_a_0: MPInteger,
-    pub cs_upper_b: Vec<MPInteger>,
-    pub upper_es: Vec<Ciphertext>,
-    pub a_vec: Vec<MPInteger>,
-    pub r: MPInteger,
-    pub b: MPInteger,
-    pub s: MPInteger,
-    pub tau: MPInteger,
+pub struct MultiExponentiationArgument<'a> {
+    pub c_upper_a_0: &'a MPInteger,
+    pub cs_upper_b: &'a [MPInteger],
+    pub upper_es: &'a [Ciphertext],
+    pub a_vec: &'a [MPInteger],
+    pub r: &'a MPInteger,
+    pub b: &'a MPInteger,
+    pub s: &'a MPInteger,
+    pub tau: &'a MPInteger,
 }
 
 /// Input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct MultiExponentiationArgumentVerifyInput<'a> {
-    statement: &'a MultiExponentiationStatement,
-    argument: &'a MultiExponentiationArgument,
+pub struct MultiExponentiationArgumentVerifyInput<'a, 'b> {
+    statement: &'a MultiExponentiationStatement<'a>,
+    argument: &'b MultiExponentiationArgument<'b>,
 }
 
 /// Result of the verify algorithm, according to the specifications
@@ -112,7 +112,7 @@ pub fn verify_multi_exponentiation_argument(
         .collect::<Vec<_>>();
 
     let verif_upper_c_b_m = &argument.cs_upper_b[m] == MPInteger::one();
-    let verif_upper_e_m = argument.upper_es[m] == statement.upper_c;
+    let verif_upper_e_m = &argument.upper_es[m] == statement.upper_c;
 
     let prod_upper_c_a = statement.cs_upper_a
         .iter()
@@ -159,7 +159,7 @@ pub fn verify_multi_exponentiation_argument(
         .map(|(c_i, x_m_minus_i_minus_1)| {
             Ciphertext::get_ciphertext_vector_exponentiation(
                 c_i.to_vec().as_slice(),
-                x_m_minus_i_minus_1.mod_scalar_multiply(argument.a_vec.as_slice(), q).as_slice(),
+                x_m_minus_i_minus_1.mod_scalar_multiply(argument.a_vec, q).as_slice(),
                 &context.ep
             )
         })
@@ -188,14 +188,14 @@ pub fn get_x(
             vec![
                 HashableMessage::from(context.ep.p()),
                 HashableMessage::from(context.ep.q()),
-                HashableMessage::from(&context.pks),
-                HashableMessage::from(&context.ck),
-                HashableMessage::from(&statement.ciphertext_matrix),
-                HashableMessage::from(&statement.upper_c),
-                HashableMessage::from(&statement.cs_upper_a),
-                HashableMessage::from(&argument.c_upper_a_0),
-                HashableMessage::from(&argument.cs_upper_b),
-                HashableMessage::from(&argument.upper_es)
+                HashableMessage::from(context.pks),
+                HashableMessage::from(context.ck),
+                HashableMessage::from(statement.ciphertext_matrix),
+                HashableMessage::from(statement.upper_c),
+                HashableMessage::from(statement.cs_upper_a),
+                HashableMessage::from(argument.c_upper_a_0),
+                HashableMessage::from(argument.cs_upper_b),
+                HashableMessage::from(argument.upper_es)
             ]
         )
             .recursive_hash()
@@ -204,14 +204,14 @@ pub fn get_x(
     )
 }
 
-impl MultiExponentiationStatement {
-    /// New statement taking the ownership of the data
+impl<'a> MultiExponentiationStatement<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        ciphertext_matrix: Matrix<Ciphertext>,
-        upper_c: Ciphertext,
-        cs_upper_a: Vec<MPInteger>
+    pub fn new(
+        ciphertext_matrix: &'a Matrix<Ciphertext>,
+        upper_c: &'a Ciphertext,
+        cs_upper_a: &'a [MPInteger]
     ) -> Result<Self, MultiExponentiationArgumentError> {
         if ciphertext_matrix.is_malformed() {
             return Err(MultiExponentiationArgumentError::CyphertextMatrixMalformed);
@@ -229,17 +229,6 @@ impl MultiExponentiationStatement {
         Ok(Self { ciphertext_matrix, upper_c, cs_upper_a })
     }
 
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        ciphertext_matrix: &Matrix<Ciphertext>,
-        upper_c: &Ciphertext,
-        cs_upper_a: &[MPInteger]
-    ) -> Result<Self, MultiExponentiationArgumentError> {
-        Self::new_owned(ciphertext_matrix.clone(), upper_c.clone(), cs_upper_a.to_vec())
-    }
-
     pub fn m(&self) -> usize {
         self.cs_upper_a.len()
     }
@@ -254,19 +243,19 @@ impl MultiExponentiationStatement {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl MultiExponentiationArgument {
-    /// New statement taking the ownership of the data
+impl<'a> MultiExponentiationArgument<'a> {
+    /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        c_upper_a_0: MPInteger,
-        cs_upper_b: Vec<MPInteger>,
-        upper_es: Vec<Ciphertext>,
-        a_vec: Vec<MPInteger>,
-        r: MPInteger,
-        b: MPInteger,
-        s: MPInteger,
-        tau: MPInteger
+    pub fn new(
+        c_upper_a_0: &'a MPInteger,
+        cs_upper_b: &'a [MPInteger],
+        upper_es: &'a [Ciphertext],
+        a_vec: &'a [MPInteger],
+        r: &'a MPInteger,
+        b: &'a MPInteger,
+        s: &'a MPInteger,
+        tau: &'a MPInteger
     ) -> Result<Self, MultiExponentiationArgumentError> {
         if cs_upper_b.len() != upper_es.len() {
             return Err(MultiExponentiationArgumentError::CommitmentVectorNotSameLen);
@@ -287,31 +276,6 @@ impl MultiExponentiationArgument {
         })
     }
 
-    /// New statement cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        c_upper_a_0: &MPInteger,
-        cs_upper_b: &[MPInteger],
-        upper_es: &[Ciphertext],
-        a_vec: &[MPInteger],
-        r: &MPInteger,
-        b: &MPInteger,
-        s: &MPInteger,
-        tau: &MPInteger
-    ) -> Result<Self, MultiExponentiationArgumentError> {
-        Self::new_owned(
-            c_upper_a_0.clone(),
-            cs_upper_b.to_vec(),
-            upper_es.to_vec(),
-            a_vec.to_vec(),
-            r.clone(),
-            b.clone(),
-            s.clone(),
-            tau.clone()
-        )
-    }
-
     pub fn m(&self) -> usize {
         self.cs_upper_b.len() / 2
     }
@@ -325,13 +289,13 @@ impl MultiExponentiationArgument {
     }
 }
 
-impl<'a> MultiExponentiationArgumentVerifyInput<'a> {
+impl<'a, 'b> MultiExponentiationArgumentVerifyInput<'a, 'b> {
     /// New Input
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        statement: &'a MultiExponentiationStatement,
-        argument: &'a MultiExponentiationArgument
+        statement: &'a MultiExponentiationStatement<'a>,
+        argument: &'b MultiExponentiationArgument<'b>
     ) -> Result<Self, MultiExponentiationArgumentError> {
         if statement.m() != argument.m() {
             return Err(MultiExponentiationArgumentError::ValueNotConsistent("m".to_string()));
@@ -385,6 +349,7 @@ pub mod test {
     use super::*;
     use serde_json::Value;
     use super::super::test::context_from_json_value;
+    use super::super::test::{ context_values, ep_from_json_value, ck_from_json_value };
     use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
 
     fn get_test_cases() -> Vec<Value> {
@@ -394,10 +359,6 @@ pub mod test {
             .join("verify-multiexp-argument.json");
         let json = std::fs::read_to_string(test_file).unwrap();
         serde_json::from_str(&json).unwrap()
-    }
-
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
     }
 
     pub fn get_ciphertexts(value: &Value) -> Vec<Ciphertext> {
@@ -421,16 +382,32 @@ pub mod test {
         )
     }
 
-    fn get_statement(statement: &Value) -> MultiExponentiationStatement {
-        MultiExponentiationStatement::new_owned(
+    pub struct MEStatementValues(pub Matrix<Ciphertext>, pub Ciphertext, pub Vec<MPInteger>);
+    pub struct MEArgumentValues(
+        pub MPInteger,
+        pub Vec<MPInteger>,
+        pub Vec<Ciphertext>,
+        pub Vec<MPInteger>,
+        pub MPInteger,
+        pub MPInteger,
+        pub MPInteger,
+        pub MPInteger,
+    );
+
+    fn get_statement_values(statement: &Value) -> MEStatementValues {
+        MEStatementValues(
             get_ciphertext_matrix(&statement["ciphertexts"]),
             get_ciphertext(&statement["ciphertext_product"]),
             json_array_value_to_array_mpinteger(&statement["c_a"])
-        ).unwrap()
+        )
     }
 
-    pub fn get_argument(argument: &Value) -> MultiExponentiationArgument {
-        MultiExponentiationArgument::new_owned(
+    fn get_statement<'a>(values: &'a MEStatementValues) -> MultiExponentiationStatement<'a> {
+        MultiExponentiationStatement::new(&values.0, &values.1, &values.2).unwrap()
+    }
+
+    pub fn get_argument_values(argument: &Value) -> MEArgumentValues {
+        MEArgumentValues(
             json_value_to_mpinteger(&argument["c_a_0"]),
             json_array_value_to_array_mpinteger(&argument["c_b"]),
             get_ciphertexts(&argument["e"]),
@@ -439,16 +416,35 @@ pub mod test {
             json_value_to_mpinteger(&argument["b"]),
             json_value_to_mpinteger(&argument["s"]),
             json_value_to_mpinteger(&argument["tau"])
+        )
+    }
+
+    pub fn get_argument<'a>(values: &'a MEArgumentValues) -> MultiExponentiationArgument<'a> {
+        MultiExponentiationArgument::new(
+            &values.0,
+            &values.1,
+            &values.2,
+            &values.3,
+            &values.4,
+            &values.5,
+            &values.6,
+            &values.7
         ).unwrap()
     }
 
     #[test]
     fn test_verify() {
         for tc in get_test_cases().iter() {
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let argument = get_argument(&argument_values);
             let input = MultiExponentiationArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_multi_exponentiation_argument(&get_context(tc), &input);
+            let x_res = verify_multi_exponentiation_argument(&context, &input);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
             assert!(
                 x_res.as_ref().unwrap().is_ok(),

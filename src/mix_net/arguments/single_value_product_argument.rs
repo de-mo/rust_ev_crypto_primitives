@@ -33,28 +33,28 @@ use super::ArgumentContext;
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct SingleValueProductStatement {
-    pub c_a: MPInteger,
-    pub b: MPInteger,
+pub struct SingleValueProductStatement<'a> {
+    pub c_a: &'a MPInteger,
+    pub b: &'a MPInteger,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct SingleValueProductArgument {
-    pub c_d: MPInteger,
-    pub c_lower_delta: MPInteger,
-    pub c_upper_delta: MPInteger,
-    pub a_tilde: Vec<MPInteger>,
-    pub b_tilde: Vec<MPInteger>,
-    pub r_tilde: MPInteger,
-    pub s_tilde: MPInteger,
+pub struct SingleValueProductArgument<'a> {
+    pub c_d: &'a MPInteger,
+    pub c_lower_delta: &'a MPInteger,
+    pub c_upper_delta: &'a MPInteger,
+    pub a_tilde: &'a [MPInteger],
+    pub b_tilde: &'a [MPInteger],
+    pub r_tilde: &'a MPInteger,
+    pub s_tilde: &'a MPInteger,
 }
 
 /// Input of the verify algorithm
 #[derive(Debug, Clone)]
-pub struct SingleValueProductVerifyInput<'a> {
-    statement: &'a SingleValueProductStatement,
-    argument: &'a SingleValueProductArgument,
+pub struct SingleValueProductVerifyInput<'a, 'b> {
+    statement: &'a SingleValueProductStatement<'a>,
+    argument: &'b SingleValueProductArgument<'b>,
 }
 
 /// Result of the verify algorithm, according to the specifications
@@ -76,37 +76,30 @@ pub enum SingleValueProductArgumentError {
     #[error("CommitmentError: {0}")] CommitmentError(#[from] CommitmentError),
 }
 
-impl SingleValueProductStatement {
-    /// New statement taking the ownership of the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new_owned(
-        c_a: MPInteger,
-        b: MPInteger
-    ) -> Result<Self, SingleValueProductArgumentError> {
-        Ok(Self { c_a, b })
-    }
-
+impl<'a> SingleValueProductStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(c_a: &MPInteger, b: &MPInteger) -> Result<Self, SingleValueProductArgumentError> {
-        Self::new_owned(c_a.clone(), b.clone())
+    pub fn new(
+        c_a: &'a MPInteger,
+        b: &'a MPInteger
+    ) -> Result<Self, SingleValueProductArgumentError> {
+        Ok(Self { c_a, b })
     }
 }
 
-impl SingleValueProductArgument {
-    /// New argument taking the ownership of the data
+impl<'a> SingleValueProductArgument<'a> {
+    /// New argument cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new_owned(
-        c_d: MPInteger,
-        c_lower_delta: MPInteger,
-        c_upper_delta: MPInteger,
-        a_tilde: Vec<MPInteger>,
-        b_tilde: Vec<MPInteger>,
-        r_tilde: MPInteger,
-        s_tilde: MPInteger
+    pub fn new(
+        c_d: &'a MPInteger,
+        c_lower_delta: &'a MPInteger,
+        c_upper_delta: &'a MPInteger,
+        a_tilde: &'a [MPInteger],
+        b_tilde: &'a [MPInteger],
+        r_tilde: &'a MPInteger,
+        s_tilde: &'a MPInteger
     ) -> Result<Self, SingleValueProductArgumentError> {
         if a_tilde.len() != b_tilde.len() {
             return Err(SingleValueProductArgumentError::ExponentVectorNotSameLen);
@@ -124,38 +117,15 @@ impl SingleValueProductArgument {
             s_tilde,
         })
     }
-
-    /// New argument cloning the data
-    ///
-    /// Return error if the domain is wrong
-    pub fn new(
-        c_d: &MPInteger,
-        c_lower_delta: &MPInteger,
-        c_upper_delta: &MPInteger,
-        a_tilde: &[MPInteger],
-        b_tilde: &[MPInteger],
-        r_tilde: &MPInteger,
-        s_tilde: &MPInteger
-    ) -> Result<Self, SingleValueProductArgumentError> {
-        Self::new_owned(
-            c_d.clone(),
-            c_lower_delta.clone(),
-            c_upper_delta.clone(),
-            a_tilde.to_vec(),
-            b_tilde.to_vec(),
-            r_tilde.clone(),
-            s_tilde.clone()
-        )
-    }
 }
 
-impl<'a> SingleValueProductVerifyInput<'a> {
+impl<'a, 'b> SingleValueProductVerifyInput<'a, 'b> {
     /// New Input
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        statement: &'a SingleValueProductStatement,
-        argument: &'a SingleValueProductArgument
+        statement: &'a SingleValueProductStatement<'a>,
+        argument: &'b SingleValueProductArgument<'b>
     ) -> Result<Self, SingleValueProductArgumentError> {
         Ok(Self { statement, argument })
     }
@@ -164,7 +134,7 @@ impl<'a> SingleValueProductVerifyInput<'a> {
 /// Algorithm 9.26
 pub fn verify_single_value_product_argument(
     context: &ArgumentContext,
-    input: &SingleValueProductVerifyInput<'_>
+    input: &SingleValueProductVerifyInput
 ) -> Result<SingleValueProductArgumentResult, SingleValueProductArgumentError> {
     let statement = input.statement;
     let argument = input.argument;
@@ -222,13 +192,13 @@ fn get_x(
             vec![
                 HashableMessage::from(context.ep.p()),
                 HashableMessage::from(context.ep.q()),
-                HashableMessage::from(&context.pks),
-                HashableMessage::from(&context.ck),
-                HashableMessage::from(&argument.c_upper_delta),
-                HashableMessage::from(&argument.c_lower_delta),
-                HashableMessage::from(&argument.c_d),
-                HashableMessage::from(&statement.b),
-                HashableMessage::from(&statement.c_a)
+                HashableMessage::from(context.pks),
+                HashableMessage::from(context.ck),
+                HashableMessage::from(argument.c_upper_delta),
+                HashableMessage::from(argument.c_lower_delta),
+                HashableMessage::from(argument.c_d),
+                HashableMessage::from(statement.b),
+                HashableMessage::from(statement.c_a)
             ]
         )
             .recursive_hash()
@@ -263,8 +233,24 @@ pub mod test {
     use std::path::Path;
     use super::*;
     use serde_json::Value;
-    use super::super::test::context_from_json_value;
+    use super::super::test::{
+        context_from_json_value,
+        context_values,
+        ep_from_json_value,
+        ck_from_json_value,
+    };
     use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
+
+    pub struct SVPStatementValues(pub MPInteger, pub MPInteger);
+    pub struct SVPArgumentValues(
+        pub MPInteger,
+        pub MPInteger,
+        pub MPInteger,
+        pub Vec<MPInteger>,
+        pub Vec<MPInteger>,
+        pub MPInteger,
+        pub MPInteger,
+    );
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./")
@@ -275,19 +261,19 @@ pub mod test {
         serde_json::from_str(&json).unwrap()
     }
 
-    fn get_context(tc: &Value) -> ArgumentContext {
-        context_from_json_value(&tc["context"])
-    }
-
-    fn get_statement(statement: &Value) -> SingleValueProductStatement {
-        SingleValueProductStatement::new_owned(
+    fn get_statement_values(statement: &Value) -> SVPStatementValues {
+        SVPStatementValues(
             json_value_to_mpinteger(&statement["c_a"]),
             json_value_to_mpinteger(&statement["b"])
-        ).unwrap()
+        )
     }
 
-    pub fn get_argument(argument: &Value) -> SingleValueProductArgument {
-        SingleValueProductArgument::new_owned(
+    fn get_statement<'a>(values: &'a SVPStatementValues) -> SingleValueProductStatement<'a> {
+        SingleValueProductStatement::new(&values.0, &values.1).unwrap()
+    }
+
+    pub fn get_argument_values(argument: &Value) -> SVPArgumentValues {
+        SVPArgumentValues(
             json_value_to_mpinteger(&argument["c_d"]),
             json_value_to_mpinteger(&argument["c_lower_delta"]),
             json_value_to_mpinteger(&argument["c_upper_delta"]),
@@ -295,15 +281,33 @@ pub mod test {
             json_array_value_to_array_mpinteger(&argument["b_tilde"]),
             json_value_to_mpinteger(&argument["r_tilde"]),
             json_value_to_mpinteger(&argument["s_tilde"])
+        )
+    }
+
+    pub fn get_argument<'a>(values: &'a SVPArgumentValues) -> SingleValueProductArgument<'a> {
+        SingleValueProductArgument::new(
+            &values.0,
+            &values.1,
+            &values.2,
+            &values.3,
+            &values.4,
+            &values.5,
+            &values.6
         ).unwrap()
     }
 
     #[test]
     fn test_get_x() {
         for tc in get_test_cases().iter() {
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
-            let x_res = get_x(&get_context(tc), &statement, &argument);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let argument = get_argument(&argument_values);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
             assert_eq!(
                 x_res.unwrap(),
@@ -317,10 +321,16 @@ pub mod test {
     #[test]
     fn test_verify() {
         for tc in get_test_cases().iter() {
-            let statement = get_statement(&tc["input"]["statement"]);
-            let argument = get_argument(&tc["input"]["argument"]);
+            let context_values = context_values(&tc["context"]);
+            let ep = ep_from_json_value(&context_values.0);
+            let ck = ck_from_json_value(&context_values.2);
+            let context = context_from_json_value(&context_values, &ep, &ck);
+            let statement_values = get_statement_values(&tc["input"]["statement"]);
+            let statement = get_statement(&statement_values);
+            let argument_values = get_argument_values(&tc["input"]["argument"]);
+            let argument = get_argument(&argument_values);
             let input = SingleValueProductVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_single_value_product_argument(&get_context(tc), &input);
+            let x_res = verify_single_value_product_argument(&context, &input);
             assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
             assert!(
                 x_res.as_ref().unwrap().is_ok(),
