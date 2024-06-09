@@ -16,12 +16,20 @@
 
 //! Module implementing the algorithm for the the mixnet
 
-mod arguments;
+pub mod arguments;
 mod commitments;
 mod matrix;
 mod shuffle;
 
 pub use shuffle::{ verify_shuffle, VerifyShuffleResult, ShuffleError };
+pub use arguments::{
+    ShuffleArgument,
+    HadamardArgument,
+    MultiExponentiationArgument,
+    SingleValueProductArgument,
+    ZeroArgument,
+    ProductArgument,
+};
 
 pub trait MixNetResultTrait: std::fmt::Display {
     fn is_ok(&self) -> bool;

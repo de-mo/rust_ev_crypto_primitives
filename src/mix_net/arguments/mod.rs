@@ -29,6 +29,12 @@ pub use shuffle_argument::{
     ShuffleArgumentError,
     VerifyShuffleArgumentResult,
 };
+pub use hadamard_argument::HadamardArgument;
+pub use multi_exponentiation_argument::MultiExponentiationArgument;
+pub use product_argument::ProductArgument;
+pub use single_value_product_argument::SingleValueProductArgument;
+pub use zero_argument::ZeroArgument;
+
 use thiserror::Error;
 
 use super::commitments::CommitmentKey;

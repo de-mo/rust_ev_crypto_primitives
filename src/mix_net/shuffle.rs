@@ -34,6 +34,7 @@ use crate::{ integer::{ Constants, MPInteger }, Ciphertext, EncryptionParameters
 use thiserror::Error;
 
 /// The result of the verification of the shuffle
+#[derive(Debug)]
 pub struct VerifyShuffleResult {
     pub verify_shuffle_argument_result: VerifyShuffleArgumentResult,
 }

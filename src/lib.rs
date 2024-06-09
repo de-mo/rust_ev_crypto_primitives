@@ -71,7 +71,17 @@ pub use zero_knowledge_proofs::{
     verify_schnorr,
     ZeroKnowledgeProofError,
 };
-pub use mix_net::{ verify_shuffle, VerifyShuffleResult, ShuffleError };
+pub use mix_net::{
+    verify_shuffle,
+    VerifyShuffleResult,
+    ShuffleError,
+    ShuffleArgument,
+    HadamardArgument,
+    MultiExponentiationArgument,
+    SingleValueProductArgument,
+    ZeroArgument,
+    ProductArgument,
+};
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
