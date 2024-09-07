@@ -16,20 +16,14 @@
 
 //! Implementation of the structure for the Encryption parameters
 
-use anyhow::anyhow;
+use thiserror::Error;
 
 use crate::{
     basic_crypto_functions::shake256,
     integer::MPInteger,
-    number_theory::{ NumberTheoryMethodTrait, SMALL_PRIMES },
-    ByteArray,
-    Constants,
-    DomainVerifications,
-    HashableMessage,
-    SmallPrimeTrait,
-    VerifyDomainTrait,
-    GROUP_PARAMETER_P_LENGTH,
-    SECURITY_STRENGTH,
+    number_theory::{NumberTheoryMethodTrait, SMALL_PRIMES},
+    ByteArray, Constants, DomainVerifications, HashableMessage, SmallPrimeTrait, VerifyDomainTrait,
+    GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
 
 use super::ElgamalError;
@@ -40,6 +34,17 @@ pub struct EncryptionParameters {
     p: MPInteger,
     q: MPInteger,
     g: MPInteger,
+}
+
+// Enum reprsenting the elgamal errors
+#[derive(Error, Debug, Clone)]
+pub enum EncryptionParameterDomainError {
+    #[error("p does not satisfy the requirements: {0}")]
+    PNotSatisfiedDomain(String),
+    #[error("q does not satisfy the requirements: {0}")]
+    QNotSatisfiedDomain(String),
+    #[error("g does not satisfy the requirements: {0}")]
+    GNotSatisfiedDomain(String),
 }
 
 impl EncryptionParameters {
@@ -81,13 +86,13 @@ impl EncryptionParameters {
 
     // GetEncryptionParameters according to the specification of Swiss Post (Algorithm 8.1)
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
-        let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8).map_err(
-            ElgamalError::OpenSSLError
-        )?;
+        let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
+            .map_err(ElgamalError::OpenSSLError)?;
         let q_b = q_b_hat.prepend_byte(2u8);
         let q_prime: MPInteger = q_b.into_mp_integer() >> 3;
         let q = &q_prime - MPInteger::from(&q_prime % 6u8) + MPInteger::five();
-        let rs: Vec<MPInteger> = SMALL_PRIMES.iter()
+        let rs: Vec<MPInteger> = SMALL_PRIMES
+            .iter()
             .map(|sp| MPInteger::from(&q % sp))
             .collect();
         let mut delta = MPInteger::zero().clone();
@@ -98,10 +103,10 @@ impl EncryptionParameters {
                 let mut i: usize = 0;
                 while i < rs.len() {
                     let r_plus_delta = MPInteger::from(&rs[i] + &delta);
-                    if
-                        MPInteger::from(&r_plus_delta % SMALL_PRIMES[i]) == *MPInteger::zero() ||
-                        MPInteger::from(&r_plus_delta * MPInteger::two() + MPInteger::one()) %
-                            SMALL_PRIMES[i] == *MPInteger::zero()
+                    if MPInteger::from(&r_plus_delta % SMALL_PRIMES[i]) == *MPInteger::zero()
+                        || MPInteger::from(&r_plus_delta * MPInteger::two() + MPInteger::one())
+                            % SMALL_PRIMES[i]
+                            == *MPInteger::zero()
                     {
                         delta += &jump;
                         i = 0;
@@ -110,19 +115,16 @@ impl EncryptionParameters {
                     }
                 }
                 let q_plus_delta = MPInteger::from(&q + &delta);
-                if
-                    q_plus_delta.miller_rabin(1) &&
-                    (q_plus_delta * MPInteger::two() + MPInteger::one()).miller_rabin(1)
+                if q_plus_delta.miller_rabin(1)
+                    && (q_plus_delta * MPInteger::two() + MPInteger::one()).miller_rabin(1)
                 {
                     break;
                 }
             }
             let q_plus_delta = MPInteger::from(&q + &delta);
-            if
-                q_plus_delta.miller_rabin(SECURITY_STRENGTH / 2) &&
-                (q_plus_delta * MPInteger::two() + MPInteger::one()).miller_rabin(
-                    SECURITY_STRENGTH / 2
-                )
+            if q_plus_delta.miller_rabin(SECURITY_STRENGTH / 2)
+                && (q_plus_delta * MPInteger::two() + MPInteger::one())
+                    .miller_rabin(SECURITY_STRENGTH / 2)
             {
                 break;
             }
@@ -143,14 +145,13 @@ impl EncryptionParameters {
     // Get small prime group members according to the specifications of Swiss Post (Algorithm 8.2)
     pub fn get_small_prime_group_members(
         &self,
-        desired_number: usize
+        desired_number: usize,
     ) -> Result<Vec<usize>, ElgamalError> {
         let mut current = 5usize;
         let mut res = vec![];
-        while
-            res.len() < desired_number &&
-            &MPInteger::from(current) < self.p() &&
-            current < usize::pow(2, 31)
+        while res.len() < desired_number
+            && &MPInteger::from(current) < self.p()
+            && current < usize::pow(2, 31)
         {
             let is_prime = current.is_small_prime().unwrap();
             if is_prime && MPInteger::from(current).is_quadratic_residue(self.p()) {
@@ -203,10 +204,10 @@ impl EncryptionParameters {
         if &self.g == MPInteger::one() {
             return vec![ElgamalError::CheckNotOne];
         }
-        if
-            let Some(e) = self.g
-                .check_quadratic_residue(&self.p)
-                .map(ElgamalError::CheckNumberTheory)
+        if let Some(e) = self
+            .g
+            .check_quadratic_residue(&self.p)
+            .map(ElgamalError::CheckNumberTheory)
         {
             return vec![e];
         }
@@ -226,31 +227,42 @@ impl From<(&MPInteger, &MPInteger, &MPInteger)> for EncryptionParameters {
 
 impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
     fn from(value: &'a EncryptionParameters) -> Self {
-        Self::from(vec![Self::from(value.p()), Self::from(value.q()), Self::from(value.g())])
+        Self::from(vec![
+            Self::from(value.p()),
+            Self::from(value.q()),
+            Self::from(value.g()),
+        ])
     }
 }
 
-impl VerifyDomainTrait for EncryptionParameters {
-    fn new_domain_verifications() -> crate::DomainVerifications<Self> {
+impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters {
+    fn new_domain_verifications() -> crate::DomainVerifications<Self, EncryptionParameterDomainError>
+    {
         let mut res = DomainVerifications::default();
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_p(ep) {
-                res.push(anyhow!(e).context("p does not satisfy the requirements".to_string()));
+                res.push(EncryptionParameterDomainError::PNotSatisfiedDomain(
+                    e.to_string(),
+                ))
             }
             res
         });
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_q(ep) {
-                res.push(anyhow!(e).context("q does not satisfy the requirements".to_string()));
+                res.push(EncryptionParameterDomainError::QNotSatisfiedDomain(
+                    e.to_string(),
+                ))
             }
             res
         });
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_g(ep) {
-                res.push(anyhow!(e).context("g does not satisfy the requirements".to_string()));
+                res.push(EncryptionParameterDomainError::GNotSatisfiedDomain(
+                    e.to_string(),
+                ))
             }
             res
         });
@@ -260,8 +272,8 @@ impl VerifyDomainTrait for EncryptionParameters {
 
 #[cfg(test)]
 mod test {
-    use crate::Hexa;
     use super::*;
+    use crate::Hexa;
 
     #[test]
     fn test_get_small_prime_group_members() {
@@ -274,7 +286,10 @@ mod test {
             ).unwrap(),
             &MPInteger::from(3u8),
         ));
-        assert_eq!(ep.get_small_prime_group_members(5).unwrap(), vec![5, 17, 19, 37, 41]);
+        assert_eq!(
+            ep.get_small_prime_group_members(5).unwrap(),
+            vec![5, 17, 19, 37, 41]
+        );
     }
 
     #[test]
@@ -355,13 +370,23 @@ mod test {
         let q_err_1 = MPInteger::from(6u8);
         let q_err_2 = MPInteger::from(11u8);
         let g_err = MPInteger::from(2u8);
-        assert!(EncryptionParameters::from((&p, &q, &g)).verifiy_domain().is_empty());
-        assert!(!EncryptionParameters::from((&p_err, &q, &g)).verifiy_domain().is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_1, &g)).verifiy_domain().is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_2, &g)).verifiy_domain().is_empty());
-        assert!(!EncryptionParameters::from((&p, &q, &g_err)).verifiy_domain().is_empty());
-        assert!(
-            !EncryptionParameters::from((&p, &q, MPInteger::one())).verifiy_domain().is_empty()
-        );
+        assert!(EncryptionParameters::from((&p, &q, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p_err, &q, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q_err_1, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q_err_2, &g))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q, &g_err))
+            .verifiy_domain()
+            .is_empty());
+        assert!(!EncryptionParameters::from((&p, &q, MPInteger::one()))
+            .verifiy_domain()
+            .is_empty());
     }
 }

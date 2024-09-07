@@ -16,28 +16,23 @@
 
 //! Module implementing the verification for the Hadamrd Argument (§9.3.4)
 
-use std::{ fmt::Display, iter::once };
+use std::{fmt::Display, iter::once};
 
 use thiserror::Error;
 
 use crate::{
     integer::MPInteger,
-    mix_net::{ commitments::{ get_commitment, CommitmentError }, MixNetResultTrait },
-    Constants,
-    HashError,
-    HashableMessage,
-    Operations,
-    RecursiveHashTrait,
+    mix_net::{
+        commitments::{get_commitment, CommitmentError},
+        MixNetResultTrait,
+    },
+    Constants, HashError, HashableMessage, Operations, RecursiveHashTrait,
 };
 
 use super::{
     zero_argument::{
-        verify_zero_argument,
-        ZeroArgument,
-        ZeroArgumentError,
-        ZeroArgumentResult,
-        ZeroArgumentVerifyInput,
-        ZeroStatement,
+        verify_zero_argument, ZeroArgument, ZeroArgumentError, ZeroArgumentResult,
+        ZeroArgumentVerifyInput, ZeroStatement,
     },
     ArgumentContext,
 };
@@ -83,14 +78,17 @@ pub enum HadamardArgumentError {
     //#[error(
     //    "Commitment vector c_d has not the size 2*m + 1 where m={0}"
     //)] CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")] HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")] CommitmentError(#[from] CommitmentError),
-    #[error("ZeroArgumentError: {0}")] ZeroArgumentError(#[from] ZeroArgumentError),
+    #[error("HashError: {0}")]
+    HashError(#[from] HashError),
+    #[error("CommitmentError: {0}")]
+    CommitmentError(#[from] CommitmentError),
+    #[error("ZeroArgumentError: {0}")]
+    ZeroArgumentError(#[from] ZeroArgumentError),
 }
 
 pub fn verify_hadamard_argument(
     context: &ArgumentContext,
-    input: &HadamardArgumentVerifyInput
+    input: &HadamardArgumentVerifyInput,
 ) -> Result<HadamardArgumentResult, HadamardArgumentError> {
     let statement = input.statement;
     let argument = input.argument;
@@ -102,30 +100,36 @@ pub fn verify_hadamard_argument(
     let x = get_x(context, statement, argument)?;
     let y = get_y(context, statement, argument)?;
 
-    let x_powers = (0..m).map(|i| x.mod_exponentiate(&MPInteger::from(i), q)).collect::<Vec<_>>();
+    let x_powers = (0..m)
+        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+        .collect::<Vec<_>>();
 
-    let cs_upper_d = argument.cs_upper_b
+    let cs_upper_d = argument
+        .cs_upper_b
         .iter()
         .take(m - 1)
         .zip(x_powers.iter().skip(1))
-        .map(|(c_b_i, x_i_plus_1)| { c_b_i.mod_exponentiate(x_i_plus_1, p) })
+        .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
         .collect::<Vec<_>>();
-    let c_upper_d = argument.cs_upper_b
+    let c_upper_d = argument
+        .cs_upper_b
         .iter()
         .zip(x_powers.iter())
         .skip(1)
-        .map(|(c_b_i, x_i_plus_1)| { c_b_i.mod_exponentiate(x_i_plus_1, p) })
+        .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
         .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, p));
 
-    let minus_1_vec = vec![MPInteger::from(q-MPInteger::one()); n];
+    let minus_1_vec = vec![MPInteger::from(q - MPInteger::one()); n];
     let c_minus_1 = get_commitment(
-        &context.ep,
-        &minus_1_vec,
+        context.ep,
+        minus_1_vec.as_slice(),
         MPInteger::zero(),
-        &context.ck
-    ).map_err(HadamardArgumentError::CommitmentError)?;
+        context.ck,
+    )
+    .map_err(HadamardArgumentError::CommitmentError)?;
 
-    let zero_statement_input_cs_upper_a = statement.cs_upper_a
+    let zero_statement_input_cs_upper_a = statement
+        .cs_upper_a
         .iter()
         .skip(1)
         .chain(once(&c_minus_1))
@@ -139,54 +143,50 @@ pub fn verify_hadamard_argument(
     let zero_statement = ZeroStatement::new(
         &zero_statement_input_cs_upper_a,
         &zero_statement_input_cs_upper_b,
-        &y
-    ).map_err(HadamardArgumentError::ZeroArgumentError)?;
-    let zero_inputs = ZeroArgumentVerifyInput::new(
-        &zero_statement,
-        &argument.zero_argument
-    ).map_err(HadamardArgumentError::ZeroArgumentError)?;
+        &y,
+    )
+    .map_err(HadamardArgumentError::ZeroArgumentError)?;
+    let zero_inputs = ZeroArgumentVerifyInput::new(&zero_statement, argument.zero_argument)
+        .map_err(HadamardArgumentError::ZeroArgumentError)?;
 
     Ok(HadamardArgumentResult {
         c_upper_b_0_is_c_upper_a_0: argument.cs_upper_b[0] == statement.cs_upper_a[0],
         c_upper_b_m_minus_1_is_c_b: &argument.cs_upper_b[m - 1] == statement.c_b,
-        zero_argument: verify_zero_argument(context, &zero_inputs).map_err(
-            HadamardArgumentError::ZeroArgumentError
-        )?,
+        zero_argument: verify_zero_argument(context, &zero_inputs)
+            .map_err(HadamardArgumentError::ZeroArgumentError)?,
     })
 }
 
 fn get_x(
     context: &ArgumentContext,
     statement: &HadamardStatement,
-    argument: &HadamardArgument
+    argument: &HadamardArgument,
 ) -> Result<MPInteger, HadamardArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
             .map_err(HadamardArgumentError::HashError)?
-            .into_mp_integer()
+            .into_mp_integer(),
     )
 }
 
 fn get_y(
     context: &ArgumentContext,
     statement: &HadamardStatement,
-    argument: &HadamardArgument
+    argument: &HadamardArgument,
 ) -> Result<MPInteger, HadamardArgumentError> {
     let mut vec = get_hashable_vector_for_x(context, statement, argument);
     vec.insert(0, HashableMessage::from("1"));
-    Ok(
-        HashableMessage::from(vec)
-            .recursive_hash()
-            .map_err(HadamardArgumentError::HashError)?
-            .into_mp_integer()
-    )
+    Ok(HashableMessage::from(vec)
+        .recursive_hash()
+        .map_err(HadamardArgumentError::HashError)?
+        .into_mp_integer())
 }
 
 fn get_hashable_vector_for_x<'a>(
     context: &'a ArgumentContext,
     statement: &'a HadamardStatement,
-    argument: &'a HadamardArgument
+    argument: &'a HadamardArgument,
 ) -> Vec<HashableMessage<'a>> {
     vec![
         HashableMessage::from(context.ep.p()),
@@ -195,15 +195,15 @@ fn get_hashable_vector_for_x<'a>(
         HashableMessage::from(context.ck),
         HashableMessage::from(statement.cs_upper_a),
         HashableMessage::from(statement.c_b),
-        HashableMessage::from(argument.cs_upper_b)
+        HashableMessage::from(argument.cs_upper_b),
     ]
 }
 
 impl MixNetResultTrait for HadamardArgumentResult {
     fn is_ok(&self) -> bool {
-        self.c_upper_b_0_is_c_upper_a_0 &&
-            self.c_upper_b_m_minus_1_is_c_b &&
-            self.zero_argument.is_ok()
+        self.c_upper_b_0_is_c_upper_a_0
+            && self.c_upper_b_m_minus_1_is_c_b
+            && self.zero_argument.is_ok()
     }
 }
 
@@ -215,9 +215,7 @@ impl Display for HadamardArgumentResult {
         write!(
             f,
             "c_B_0 = c_A_0: {}, c_B_m-1 = c_B: {}, Zero Argument: {{ {} }}",
-            self.c_upper_b_0_is_c_upper_a_0,
-            self.c_upper_b_m_minus_1_is_c_b,
-            self.zero_argument
+            self.c_upper_b_0_is_c_upper_a_0, self.c_upper_b_m_minus_1_is_c_b, self.zero_argument
         )
     }
 }
@@ -228,7 +226,7 @@ impl<'a> HadamardStatement<'a> {
     /// Return error if the domain is wrong
     pub fn new(
         cs_upper_a: &'a [MPInteger],
-        c_b: &'a MPInteger
+        c_b: &'a MPInteger,
     ) -> Result<Self, HadamardArgumentError> {
         Ok(Self { cs_upper_a, c_b })
     }
@@ -244,7 +242,7 @@ impl<'a> HadamardArgument<'a> {
     /// Return error if the domain is wrong
     pub fn new(
         cs_upper_b: &'a [MPInteger],
-        zero_argument: &'a ZeroArgument
+        zero_argument: &'a ZeroArgument,
     ) -> Result<Self, HadamardArgumentError> {
         if zero_argument.cs_d.len() != 2 * cs_upper_b.len() + 1 {
             return Err(HadamardArgumentError::CommitmentVectorNotCorrectLen);
@@ -270,28 +268,30 @@ impl<'a, 'b> HadamardArgumentVerifyInput<'a, 'b> {
     /// Return error if the domain is wrong
     pub fn new(
         statement: &'a HadamardStatement,
-        argument: &'b HadamardArgument
+        argument: &'b HadamardArgument,
     ) -> Result<Self, HadamardArgumentError> {
         if statement.m() != argument.m() {
             return Err(HadamardArgumentError::MInStatementAndArguemntNotSame);
         }
-        Ok(Self { statement, argument })
+        Ok(Self {
+            statement,
+            argument,
+        })
     }
 }
 
 #[cfg(test)]
 pub mod test {
-    use std::path::Path;
-    use super::*;
-    use serde_json::Value;
     use super::super::test::context_from_json_value;
-    use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
+    use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::super::zero_argument::test::{
-        get_argument as get_zero_argument,
-        get_argument_values as get_zero_argument_values,
+        get_argument as get_zero_argument, get_argument_values as get_zero_argument_values,
         ZeroArgumentValues,
     };
-    use super::super::test::{ context_values, ep_from_json_value, ck_from_json_value };
+    use super::*;
+    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use serde_json::Value;
+    use std::path::Path;
 
     pub struct HadamardStatementValues(pub Vec<MPInteger>, pub MPInteger);
     pub struct HadamardArgumentValues(pub Vec<MPInteger>, pub ZeroArgumentValues);
@@ -308,26 +308,26 @@ pub mod test {
     fn get_statement_values(statement: &Value) -> HadamardStatementValues {
         HadamardStatementValues(
             json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["c_b"])
+            json_value_to_mpinteger(&statement["c_b"]),
         )
     }
 
-    fn get_statement<'a>(values: &'a HadamardStatementValues) -> HadamardStatement<'a> {
+    fn get_statement(values: &HadamardStatementValues) -> HadamardStatement<'_> {
         HadamardStatement::new(&values.0, &values.1).unwrap()
     }
 
     pub fn get_argument_values(argument: &Value) -> HadamardArgumentValues {
         HadamardArgumentValues(
             json_array_value_to_array_mpinteger(&argument["cUpperB"]),
-            get_zero_argument_values(&argument["zero_argument"])
+            get_zero_argument_values(&argument["zero_argument"]),
         )
     }
 
     pub fn get_argument<'a>(
         values: &'a HadamardArgumentValues,
-        zero: &'a ZeroArgument<'a>
+        zero: &'a ZeroArgument<'a>,
     ) -> HadamardArgument<'a> {
-        HadamardArgument::new(&values.0, &zero).unwrap()
+        HadamardArgument::new(&values.0, zero).unwrap()
     }
 
     #[test]
@@ -344,7 +344,12 @@ pub mod test {
             let argument = get_argument(&argument_values, &zero_argument);
             let input = HadamardArgumentVerifyInput::new(&statement, &argument).unwrap();
             let x_res = verify_hadamard_argument(&context, &input);
-            assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
+            assert!(
+                x_res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                x_res.unwrap_err()
+            );
             assert!(
                 x_res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",

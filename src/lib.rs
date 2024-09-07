@@ -32,11 +32,10 @@
 //!
 //! Following features are possible:
 //! - "rug": Use `Integer` of crate [sug](https://crates.io/crates/rug) for mulitple precision numbers
-//! - "num-bigint": Use the `BigUint`of crate [num-bigint](https://crates.io/crates/num-bigint) for mulitple precision
-//! numbers
+//! - "num-bigint": Use the `BigUint`of crate [num-bigint](https://crates.io/crates/num-bigint) for mulitple precision numbers
 //! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post.
-//! This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
-//! not to activate the feature
+//!   This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
+//!   not to activate the feature
 //!
 //! The feature "rug" is strongly more performant, but GMP must be installed for compilation.
 //! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
@@ -55,38 +54,25 @@ pub mod signature;
 pub mod zero_knowledge_proofs;
 
 pub use argon2::Argon2id;
-pub use basic_crypto_functions::{ BasisCryptoError, CertificateExtension };
-pub use byte_array::{ ByteArray, Decode, Encode };
-pub use direct_trust::{ DirectTrustCertificate, DirectTrustError, Keystore };
+pub use basic_crypto_functions::{BasisCryptoError, CertificateExtension};
+pub use byte_array::{ByteArray, Decode, Encode};
+pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
 pub use elgamal::{
-    Ciphertext,
-    ElgamalError,
-    EncryptionParameters,
-    verify_decryptions,
-    VerifyDecryptionsResult,
+    verify_decryptions, Ciphertext, ElgamalError, EncryptionParameterDomainError,
+    EncryptionParameters, VerifyDecryptionsResult,
 };
-pub use hashing::{ HashError, HashableMessage, RecursiveHashTrait };
-pub use integer::{ ByteLength, Constants, Hexa, MPIntegerError, Operations };
+pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
+pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
+pub use mix_net::{
+    verify_shuffle, HadamardArgument, MultiExponentiationArgument, ProductArgument,
+    ShuffleArgument, ShuffleError, SingleValueProductArgument, VerifyShuffleResult, ZeroArgument,
+};
 pub use number_theory::SmallPrimeTrait;
 pub use random::random_bytes;
-pub use signature::{ sign, verify_signature, SignatureError };
+pub use signature::{sign, verify_signature, SignatureError};
 pub use zero_knowledge_proofs::{
-    verify_decryption,
-    verify_exponentiation,
-    verify_plaintext_equality,
-    verify_schnorr,
+    verify_decryption, verify_exponentiation, verify_plaintext_equality, verify_schnorr,
     ZeroKnowledgeProofError,
-};
-pub use mix_net::{
-    verify_shuffle,
-    VerifyShuffleResult,
-    ShuffleError,
-    ShuffleArgument,
-    HadamardArgument,
-    MultiExponentiationArgument,
-    SingleValueProductArgument,
-    ZeroArgument,
-    ProductArgument,
 };
 
 /// The length of the group parameter `p` according to the security level in the specifications
@@ -98,11 +84,11 @@ pub const GROUP_PARAMETER_Q_LENGTH: usize = 3071;
 /// The security length according to the security level in the specifications
 pub const SECURITY_STRENGTH: usize = 128;
 
-type DomainVerificationFunctionBoxed<T> = Box<dyn Fn(&T) -> Vec<anyhow::Error>>;
+type DomainVerificationFunctionBoxed<T, E> = Box<dyn Fn(&T) -> Vec<E>>;
 
-/// Structure containing the verifications for the generic object T
-pub struct DomainVerifications<T: Sized> {
-    verification_fns: Vec<DomainVerificationFunctionBoxed<T>>,
+/// Structure containing the verifications for the generic object T with the error type E
+pub struct DomainVerifications<T: Sized, E> {
+    verification_fns: Vec<DomainVerificationFunctionBoxed<T, E>>,
 }
 
 /// Trait for the verification of a the domain of a strucut
@@ -113,26 +99,23 @@ pub struct DomainVerifications<T: Sized> {
 /// In the default implementation, nothing will be verified
 ///
 /// It is possible to implement the function `verifiy_domain` or the function `new_domain_verifications`
-pub trait VerifyDomainTrait: Sized {
+pub trait VerifyDomainTrait<E>: Sized {
     /// Create the new list of verications containing all the necessary verifications
     /// for the object implementing the trait
-    fn new_domain_verifications() -> DomainVerifications<Self> {
+    fn new_domain_verifications() -> DomainVerifications<Self, E> {
         DomainVerifications::default()
     }
 
     /// Verify the domain
     ///
-    /// Return a vector of [anyhow::Error]. Empty if no error found
-    fn verifiy_domain(&self) -> Vec<anyhow::Error> {
+    /// Return a vector of [Self::Error]. Empty if no error found
+    fn verifiy_domain(&self) -> Vec<E> {
         let verifications = Self::new_domain_verifications();
-        verifications
-            .iter()
-            .flat_map(|f| f(self))
-            .collect()
+        verifications.iter().flat_map(|f| f(self)).collect()
     }
 }
 
-impl<T> Default for DomainVerifications<T> {
+impl<T, E> Default for DomainVerifications<T, E> {
     fn default() -> Self {
         Self {
             verification_fns: Default::default(),
@@ -140,16 +123,16 @@ impl<T> Default for DomainVerifications<T> {
     }
 }
 
-impl<T> DomainVerifications<T> {
+impl<T, E> DomainVerifications<T, E> {
     /// Add Verification function to the structure
-    pub fn add_verification(&mut self, fct: impl (Fn(&T) -> Vec<anyhow::Error>) + 'static) {
+    pub fn add_verification(&mut self, fct: impl (Fn(&T) -> Vec<E>) + 'static) {
         self.verification_fns.push(Box::new(fct));
     }
 
     /// Add a verification return a vector of vector of errors
     pub fn add_verification_with_vec_of_vec_errors(
         &mut self,
-        fct: impl (Fn(&T) -> Vec<Vec<anyhow::Error>>) + 'static
+        fct: impl (Fn(&T) -> Vec<Vec<E>>) + 'static,
     ) {
         self.add_verification(move |t| {
             let mut res = vec![];
@@ -163,15 +146,15 @@ impl<T> DomainVerifications<T> {
     }
 
     /// Iterate over ale the functions
-    pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T, E>> {
         self.verification_fns.iter()
     }
 }
 
 #[cfg(test)]
 mod test_json_data {
+    use crate::{integer::MPInteger, Hexa};
     use serde_json::Value;
-    use crate::{ integer::MPInteger, Hexa };
 
     pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
         array

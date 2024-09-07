@@ -4,7 +4,7 @@ description = "Crypto Primitives necessary for E-Voting Applications."
 authors = ["Denis Morel"]
 version = "0.5.4"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.81"
 license = "LGPL-3.0+"
 repository = "https://github.com/de-mo/rust_ev_crypto_primitives"
 readme = "README.md"
@@ -18,11 +18,10 @@ chrono = "0.4"
 thiserror = "1.0"
 data-encoding = "2.5"
 num-traits = "0.2"
-anyhow = "1.0"
 argon2 = "0.5"
 
 # Dependencies for usage with rug
-rug = {version="1.24", optional=true}
+rug = {version="1", optional=true}
 rug-miller-rabin = {version="0.1", optional=true}
 
 # Dependencies for usage with num-bigint
@@ -31,8 +30,8 @@ num-bigint = {version = "0.4", optional = true}
 
 # Dev dpendencies
 [dev-dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [features]
 default=["rug"]

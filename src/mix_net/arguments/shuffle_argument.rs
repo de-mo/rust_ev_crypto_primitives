@@ -22,32 +22,22 @@ use crate::{
     integer::MPInteger,
     mix_net::{
         arguments::product_argument::{
-            verify_product_argument,
-            ProductArgumentVerifyInput,
-            ProductStatement,
+            verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
         },
-        commitments::{ get_commitment_matrix, CommitmentError },
-        matrix::{ Matrix, MatrixError },
+        commitments::{get_commitment_matrix, CommitmentError},
+        matrix::{Matrix, MatrixError},
         MixNetResultTrait,
     },
-    Ciphertext,
-    Constants,
-    HashError,
-    HashableMessage,
-    Operations,
-    RecursiveHashTrait,
+    Ciphertext, Constants, HashError, HashableMessage, Operations, RecursiveHashTrait,
 };
 
 use super::{
     multi_exponentiation_argument::{
-        verify_multi_exponentiation_argument,
-        MultiExponentiationArgument,
-        MultiExponentiationArgumentError,
-        MultiExponentiationArgumentResult,
-        MultiExponentiationArgumentVerifyInput,
-        MultiExponentiationStatement,
+        verify_multi_exponentiation_argument, MultiExponentiationArgument,
+        MultiExponentiationArgumentError, MultiExponentiationArgumentResult,
+        MultiExponentiationArgumentVerifyInput, MultiExponentiationStatement,
     },
-    product_argument::{ ProductArgument, ProductArgumentError, ProductArgumentResult },
+    product_argument::{ProductArgument, ProductArgumentError, ProductArgumentResult},
     ArgumentContext,
 };
 
@@ -81,28 +71,35 @@ pub struct VerifyShuffleArgumentResult {
 
 #[derive(Error, Debug)]
 pub enum ShuffleArgumentError {
-    #[error("Inconsistent lenght of list of cyphertexts")] LengthListCypherTextInconsistent,
-    #[error("Inconsistent lenght of list of cyphertexts")] LengthCypherTextInconsistent,
-    #[error("n must be greater or equal 2 and less or equal nu={1}. It is {0}")] SmallNWorng(
-        usize,
-        usize,
-    ),
-    #[error("m is not consistent in {0}")] MNotConsistent(String),
-    #[error("n is not consistent in {0}")] NNotConsistent(String),
-    #[error("N ist not n*m")] NNotProductOfNAndM,
-    #[error("l must be bigger than 0 and less or equal k")] LNotInRange,
-    #[error("HashError: {0}")] HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")] CommitmentError(#[from] CommitmentError),
-    #[error("MatrixError: {0}")] MatrixError(#[from] MatrixError),
-    #[error("ProductArgumentError: {0}")] ProductArgumentError(#[from] ProductArgumentError),
-    #[error("MultiExponentiationArgumentError: {0}")] MultiExponentiationArgumentError(
-        #[from] MultiExponentiationArgumentError,
-    ),
+    #[error("Inconsistent lenght of list of cyphertexts")]
+    LengthListCypherTextInconsistent,
+    #[error("Inconsistent lenght of list of cyphertexts")]
+    LengthCypherTextInconsistent,
+    #[error("n must be greater or equal 2 and less or equal nu={1}. It is {0}")]
+    SmallNWorng(usize, usize),
+    #[error("m is not consistent in {0}")]
+    MNotConsistent(String),
+    #[error("n is not consistent in {0}")]
+    NNotConsistent(String),
+    #[error("N ist not n*m")]
+    NNotProductOfNAndM,
+    #[error("l must be bigger than 0 and less or equal k")]
+    LNotInRange,
+    #[error("HashError: {0}")]
+    HashError(#[from] HashError),
+    #[error("CommitmentError: {0}")]
+    CommitmentError(#[from] CommitmentError),
+    #[error("MatrixError: {0}")]
+    MatrixError(#[from] MatrixError),
+    #[error("ProductArgumentError: {0}")]
+    ProductArgumentError(#[from] ProductArgumentError),
+    #[error("MultiExponentiationArgumentError: {0}")]
+    MultiExponentiationArgumentError(#[from] MultiExponentiationArgumentError),
 }
 
 pub fn verify_shuffle_argument(
     context: &ArgumentContext,
-    input: &ShuffleArgumentVerifyInput
+    input: &ShuffleArgumentVerifyInput,
 ) -> Result<VerifyShuffleArgumentResult, ShuffleArgumentError> {
     let statement = input.statement;
     let argument = input.argument;
@@ -122,16 +119,18 @@ pub fn verify_shuffle_argument(
         .map_err(ShuffleArgumentError::MatrixError)?;
 
     let cs_minus_z = get_commitment_matrix(
-        &context.ep,
+        context.ep,
         &upper_z_neg,
         &vec![MPInteger::zero().clone(); m],
-        &context.ck
-    ).map_err(ShuffleArgumentError::CommitmentError)?;
+        context.ck,
+    )
+    .map_err(ShuffleArgumentError::CommitmentError)?;
 
-    let cs_upper_d: Vec<MPInteger> = argument.cs_upper_a
+    let cs_upper_d: Vec<MPInteger> = argument
+        .cs_upper_a
         .iter()
         .zip(argument.cs_upper_b.iter())
-        .map(|(c_a_i, c_b_i)| { c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p) })
+        .map(|(c_a_i, c_b_i)| c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p))
         .collect();
 
     let xs = (0..upper_n + 1)
@@ -143,91 +142,93 @@ pub fn verify_shuffle_argument(
         .enumerate()
         .take(upper_n)
         //.skip(1)
-        .map(|(i, x_i)| { y.mod_multiply(&MPInteger::from(i), q).mod_add(x_i, q).mod_sub(&z, q) })
-        .fold(MPInteger::one().clone(), |acc, v| { acc.mod_multiply(&v, q) });
+        .map(|(i, x_i)| {
+            y.mod_multiply(&MPInteger::from(i), q)
+                .mod_add(x_i, q)
+                .mod_sub(&z, q)
+        })
+        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, q));
 
     let p_statement_value = cs_upper_d
         .iter()
         .zip(cs_minus_z.iter())
         .map(|(c_d_i, c_z_i)| c_d_i.mod_multiply(c_z_i, p))
         .collect::<Vec<_>>();
-    let p_statement = ProductStatement::new(p_statement_value.as_slice(), &b).map_err(
-        ShuffleArgumentError::ProductArgumentError
-    )?;
+    let p_statement = ProductStatement::new(p_statement_value.as_slice(), &b)
+        .map_err(ShuffleArgumentError::ProductArgumentError)?;
     let product_verif = verify_product_argument(
         context,
-        &ProductArgumentVerifyInput::new(context, &p_statement, &argument.product_argument).map_err(
-            ShuffleArgumentError::ProductArgumentError
-        )?
-    ).map_err(ShuffleArgumentError::ProductArgumentError)?;
+        &ProductArgumentVerifyInput::new(context, &p_statement, argument.product_argument)
+            .map_err(ShuffleArgumentError::ProductArgumentError)?,
+    )
+    .map_err(ShuffleArgumentError::ProductArgumentError)?;
 
-    let upper_c = Ciphertext::get_ciphertext_vector_exponentiation(
-        &statement.upper_cs,
-        &xs,
-        &context.ep
-    );
-    let cipher_matrix = Matrix::to_matrix(&statement.upper_c_primes, (m, n)).map_err(
-        ShuffleArgumentError::MatrixError
-    )?;
-    let m_statement = MultiExponentiationStatement::new(
-        &cipher_matrix,
-        &upper_c,
-        &argument.cs_upper_b
-    ).map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
+    let upper_c =
+        Ciphertext::get_ciphertext_vector_exponentiation(statement.upper_cs, &xs, context.ep);
+    let cipher_matrix = Matrix::to_matrix(statement.upper_c_primes, (m, n))
+        .map_err(ShuffleArgumentError::MatrixError)?;
+    let m_statement =
+        MultiExponentiationStatement::new(&cipher_matrix, &upper_c, argument.cs_upper_b)
+            .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
     let multi_verif = verify_multi_exponentiation_argument(
         context,
         &MultiExponentiationArgumentVerifyInput::new(
             &m_statement,
-            &argument.multi_exponentiation_argument
-        ).map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?
-    ).map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
+            argument.multi_exponentiation_argument,
+        )
+        .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?,
+    )
+    .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
 
-    Ok(VerifyShuffleArgumentResult { product_verif, multi_verif })
+    Ok(VerifyShuffleArgumentResult {
+        product_verif,
+        multi_verif,
+    })
 }
 
 pub fn get_x(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
-    argument: &ShuffleArgument
+    argument: &ShuffleArgument,
 ) -> Result<MPInteger, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer()
+            .into_mp_integer(),
     )
 }
 
 pub fn get_y(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
-    argument: &ShuffleArgument
+    argument: &ShuffleArgument,
 ) -> Result<MPInteger, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_y(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer()
+            .into_mp_integer(),
     )
 }
 
 pub fn get_z(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
-    argument: &ShuffleArgument
+    argument: &ShuffleArgument,
 ) -> Result<MPInteger, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_z(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer()
+            .into_mp_integer(),
     )
 }
 
 fn get_hashable_vector_for_x<'a>(
     context: &'a ArgumentContext,
     statement: &'a ShuffleStatement,
-    argument: &'a ShuffleArgument
+    argument: &'a ShuffleArgument,
 ) -> Vec<HashableMessage<'a>> {
     vec![
         HashableMessage::from(context.ep.p()),
@@ -237,22 +238,30 @@ fn get_hashable_vector_for_x<'a>(
         HashableMessage::from(statement.upper_cs),
         HashableMessage::from(statement.upper_c_primes),
         HashableMessage::from(
-            argument.cs_upper_a.iter().map(HashableMessage::from).collect::<Vec<_>>()
-        )
+            argument
+                .cs_upper_a
+                .iter()
+                .map(HashableMessage::from)
+                .collect::<Vec<_>>(),
+        ),
     ]
 }
 
 fn get_hashable_vector_for_y<'a>(
     context: &'a ArgumentContext,
     statement: &'a ShuffleStatement,
-    argument: &'a ShuffleArgument
+    argument: &'a ShuffleArgument,
 ) -> Vec<HashableMessage<'a>> {
     let mut res = get_hashable_vector_for_x(context, statement, argument);
     res.insert(
         0,
         HashableMessage::from(
-            argument.cs_upper_b.iter().map(HashableMessage::from).collect::<Vec<HashableMessage>>()
-        )
+            argument
+                .cs_upper_b
+                .iter()
+                .map(HashableMessage::from)
+                .collect::<Vec<HashableMessage>>(),
+        ),
     );
     res
 }
@@ -260,7 +269,7 @@ fn get_hashable_vector_for_y<'a>(
 fn get_hashable_vector_for_z<'a>(
     context: &'a ArgumentContext,
     statement: &'a ShuffleStatement,
-    argument: &'a ShuffleArgument
+    argument: &'a ShuffleArgument,
 ) -> Vec<HashableMessage<'a>> {
     let mut res = get_hashable_vector_for_y(context, statement, argument);
     res.insert(0, HashableMessage::from("1"));
@@ -278,8 +287,7 @@ impl Display for VerifyShuffleArgumentResult {
         write!(
             f,
             "productVerif: {{ {} }} / multiVerif: {{ {} }}",
-            self.product_verif,
-            self.multi_verif
+            self.product_verif, self.multi_verif
         )
     }
 }
@@ -290,7 +298,7 @@ impl<'a> ShuffleStatement<'a> {
     /// Return error if the domain is wrong
     pub fn new(
         upper_cs: &'a [Ciphertext],
-        upper_c_primes: &'a [Ciphertext]
+        upper_c_primes: &'a [Ciphertext],
     ) -> Result<Self, ShuffleArgumentError> {
         let upper_n = upper_cs.len();
         if upper_c_primes.len() != upper_n {
@@ -300,7 +308,10 @@ impl<'a> ShuffleStatement<'a> {
         if upper_cs.iter().any(|c| c.l() != l) || upper_c_primes.iter().any(|c| c.l() != l) {
             return Err(ShuffleArgumentError::LengthCypherTextInconsistent);
         }
-        Ok(Self { upper_cs, upper_c_primes })
+        Ok(Self {
+            upper_cs,
+            upper_c_primes,
+        })
     }
 
     pub fn l(&self) -> usize {
@@ -320,7 +331,7 @@ impl<'a> ShuffleArgument<'a> {
         cs_upper_a: &'a [MPInteger],
         cs_upper_b: &'a [MPInteger],
         product_argument: &'a ProductArgument<'a>,
-        multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>
+        multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>,
     ) -> Result<Self, ShuffleArgumentError> {
         let m = cs_upper_a.len();
         let n = multi_exponentiation_argument.n();
@@ -328,16 +339,20 @@ impl<'a> ShuffleArgument<'a> {
             return Err(ShuffleArgumentError::MNotConsistent("c_B".to_string()));
         }
         if multi_exponentiation_argument.m() != m {
-            return Err(
-                ShuffleArgumentError::MNotConsistent("multiExponentiationArgument".to_string())
-            );
+            return Err(ShuffleArgumentError::MNotConsistent(
+                "multiExponentiationArgument".to_string(),
+            ));
         }
         if product_argument.m() != m {
-            return Err(ShuffleArgumentError::MNotConsistent("ProductArgmuent".to_string()));
+            return Err(ShuffleArgumentError::MNotConsistent(
+                "ProductArgmuent".to_string(),
+            ));
         }
         if let Some(p_n) = product_argument.n() {
             if p_n != n {
-                return Err(ShuffleArgumentError::NNotConsistent("ProductArgmuent".to_string()));
+                return Err(ShuffleArgumentError::NNotConsistent(
+                    "ProductArgmuent".to_string(),
+                ));
             }
         }
         Ok(Self {
@@ -364,7 +379,7 @@ impl<'a, 'b> ShuffleArgumentVerifyInput<'a, 'b> {
     pub fn new(
         context: &ArgumentContext,
         statement: &'a ShuffleStatement<'a>,
-        argument: &'b ShuffleArgument<'b>
+        argument: &'b ShuffleArgument<'b>,
     ) -> Result<Self, ShuffleArgumentError> {
         if statement.upper_n() != argument.m() * argument.n() {
             return Err(ShuffleArgumentError::NNotProductOfNAndM);
@@ -373,40 +388,40 @@ impl<'a, 'b> ShuffleArgumentVerifyInput<'a, 'b> {
             return Err(ShuffleArgumentError::LNotInRange);
         }
         if argument.n() < 2 || argument.n() > context.ck.nu() {
-            return Err(ShuffleArgumentError::SmallNWorng(argument.n(), context.ck.nu()));
+            return Err(ShuffleArgumentError::SmallNWorng(
+                argument.n(),
+                context.ck.nu(),
+            ));
         }
-        Ok(Self { statement, argument })
+        Ok(Self {
+            statement,
+            argument,
+        })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-    use super::*;
-    use serde_json::Value;
     use super::super::test::{
-        context_from_json_value,
-        context_values,
-        ep_from_json_value,
-        ck_from_json_value,
+        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
     };
     use super::super::{
-        single_value_product_argument::test::get_argument as get_single_vpa_argument,
         hadamard_argument::test::get_argument as get_hadamard_argument,
+        multi_exponentiation_argument::test::{
+            get_argument as get_me_argument, get_argument_values as get_me_argument_values,
+            get_ciphertexts, MEArgumentValues,
+        },
         product_argument::test::{
             get_argument as get_product_argument,
-            get_argument_values as get_product_argument_values,
-            ProductArgumentValues,
+            get_argument_values as get_product_argument_values, ProductArgumentValues,
         },
-        multi_exponentiation_argument::test::{
-            get_argument as get_me_argument,
-            get_argument_values as get_me_argument_values,
-            get_ciphertexts,
-            MEArgumentValues,
-        },
+        single_value_product_argument::test::get_argument as get_single_vpa_argument,
         zero_argument::test::get_argument as get_zero_argument,
     };
+    use super::*;
     use crate::test_json_data::json_array_value_to_array_mpinteger;
+    use serde_json::Value;
+    use std::path::Path;
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./")
@@ -428,11 +443,11 @@ mod test {
     fn get_statement_values(statement: &Value) -> ShuffleStatementValues {
         ShuffleStatementValues(
             get_ciphertexts(&statement["ciphertexts"]),
-            get_ciphertexts(&statement["shuffled_ciphertexts"])
+            get_ciphertexts(&statement["shuffled_ciphertexts"]),
         )
     }
 
-    fn get_statement<'a>(values: &'a ShuffleStatementValues) -> ShuffleStatement<'a> {
+    fn get_statement(values: &ShuffleStatementValues) -> ShuffleStatement<'_> {
         ShuffleStatement::new(&values.0, &values.1).unwrap()
     }
 
@@ -441,16 +456,16 @@ mod test {
             json_array_value_to_array_mpinteger(&argument["ca"]),
             json_array_value_to_array_mpinteger(&argument["cb"]),
             get_product_argument_values(&argument["product_argument"]),
-            get_me_argument_values(&argument["multi_exp_argument"])
+            get_me_argument_values(&argument["multi_exp_argument"]),
         )
     }
 
     fn get_argument<'a>(
         values: &'a ShuffleArgumentValues,
         pe: &'a ProductArgument<'a>,
-        me: &'a MultiExponentiationArgument<'a>
+        me: &'a MultiExponentiationArgument<'a>,
     ) -> ShuffleArgument<'a> {
-        ShuffleArgument::new(&values.0, &values.1, &pe, &me).unwrap()
+        ShuffleArgument::new(&values.0, &values.1, pe, me).unwrap()
     }
 
     #[test]
@@ -466,21 +481,25 @@ mod test {
             let me_argument = get_me_argument(&argument_values.3);
             let product_argument_values = &argument_values.2;
             let svp_argument = get_single_vpa_argument(&product_argument_values.0);
-            let zero_argument = product_argument_values.1
+            let zero_argument = product_argument_values
+                .1
                 .as_ref()
                 .map(|vs| get_zero_argument(&vs.1));
-            let hadamard_argument = product_argument_values.1
+            let hadamard_argument = product_argument_values
+                .1
                 .as_ref()
                 .map(|vs| get_hadamard_argument(vs, zero_argument.as_ref().unwrap()));
-            let product_argument = get_product_argument(
-                &product_argument_values,
-                &hadamard_argument,
-                &svp_argument
-            );
+            let product_argument =
+                get_product_argument(product_argument_values, &hadamard_argument, &svp_argument);
             let argument = get_argument(&argument_values, &product_argument, &me_argument);
             let input = ShuffleArgumentVerifyInput::new(&context, &statement, &argument).unwrap();
             let x_res = verify_shuffle_argument(&context, &input);
-            assert!(x_res.is_ok(), "Error unwraping {}: {}", tc["description"], x_res.unwrap_err());
+            assert!(
+                x_res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                x_res.unwrap_err()
+            );
             assert!(
                 x_res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",

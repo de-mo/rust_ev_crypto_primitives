@@ -16,20 +16,20 @@
 
 use thiserror::Error;
 
-use crate::{ integer::MPInteger, Ciphertext, HashableMessage };
+use crate::{integer::MPInteger, Ciphertext, HashableMessage};
 
 #[derive(Debug, Clone)]
-pub struct Matrix<T> where T: Clone + Default + std::fmt::Debug {
+pub struct Matrix<T>
+where
+    T: Clone + Default + std::fmt::Debug,
+{
     rows: Vec<Vec<T>>,
 }
 
 #[derive(Error, Debug)]
 pub enum MatrixError {
-    #[error("The size {0} of the vector must the product of m={1} et n={2}")] WrongVectorSize(
-        usize,
-        usize,
-        usize,
-    ),
+    #[error("The size {0} of the vector must the product of m={1} et n={2}")]
+    WrongVectorSize(usize, usize, usize),
     #[error("The Matrix is malformed")]
     MalformedMatrix,
     #[error("The Matrices have different size")]
@@ -53,7 +53,9 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     fn new(m: usize, n: usize) -> Self {
-        Self { rows: vec![vec![T::default(); n]; m] }
+        Self {
+            rows: vec![vec![T::default(); n]; m],
+        }
     }
 
     pub fn to_matrix(v: &[T], (m, n): (usize, usize)) -> Result<Self, MatrixError> {
@@ -69,8 +71,10 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         Ok(res)
     }
 
-    pub fn from_rows(rows: &Vec<Vec<T>>) -> Result<Self, MatrixError> {
-        let res = Self { rows: rows.clone() };
+    pub fn from_rows(rows: &[Vec<T>]) -> Result<Self, MatrixError> {
+        let res = Self {
+            rows: rows.to_vec(),
+        };
         match res.is_malformed() {
             true => Err(MatrixError::MalformedMatrix),
             false => Ok(res),
@@ -113,11 +117,15 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     pub fn columns_iter(&self) -> impl Iterator<Item = Vec<&T>> + '_ {
-        ColIter { matrix: self, index: 0 }
+        ColIter {
+            matrix: self,
+            index: 0,
+        }
     }
 
     pub fn columns_cloned_iter(&self) -> impl Iterator<Item = Vec<T>> + '_ {
-        self.columns_iter().map(|e| e.into_iter().cloned().collect::<Vec<T>>())
+        self.columns_iter()
+            .map(|e| e.into_iter().cloned().collect::<Vec<T>>())
     }
 
     pub fn rows_iter(&self) -> impl Iterator<Item = &Vec<T>> + '_ {
@@ -129,9 +137,7 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 
     pub fn column(&self, j: usize) -> Vec<&T> {
-        self.rows_iter()
-            .map(|r| &r[j])
-            .collect()
+        self.rows_iter().map(|r| &r[j]).collect()
     }
 
     pub fn row(&self, i: usize) -> Vec<&T> {
@@ -175,11 +181,16 @@ impl Matrix<MPInteger> {
 
 impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
     fn from(value: &'a Matrix<Ciphertext>) -> Self {
-        HashableMessage::from(value.rows_iter().map(HashableMessage::from).collect::<Vec<_>>())
+        HashableMessage::from(
+            value
+                .rows_iter()
+                .map(HashableMessage::from)
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
-/* 
+/*
 impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
     type Item = T;
     type IntoIter = std::vec::IntoIter<Self::Item>;
@@ -189,12 +200,18 @@ impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
     }
 }*/
 
-struct ColIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+struct ColIter<'a, T>
+where
+    T: Clone + Default + std::fmt::Debug,
+{
     matrix: &'a Matrix<T>,
     index: usize,
 }
 
-impl<'a, T> Iterator for ColIter<'a, T> where T: Clone + Default + std::fmt::Debug {
+impl<'a, T> Iterator for ColIter<'a, T>
+where
+    T: Clone + Default + std::fmt::Debug,
+{
     type Item = Vec<&'a T>;
 
     fn next(&mut self) -> Option<Self::Item> {

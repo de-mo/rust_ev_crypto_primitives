@@ -16,13 +16,9 @@
 
 use crate::{
     integer::MPInteger,
-    number_theory::{ NumberTheoryError, NumberTheoryMethodTrait },
-    EncryptionParameters,
-    HashError,
-    HashableMessage,
-    Operations,
-    RecursiveHashTrait,
-    VerifyDomainTrait,
+    number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
+    EncryptionParameterDomainError, EncryptionParameters, HashError, HashableMessage, Operations,
+    RecursiveHashTrait, VerifyDomainTrait,
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -31,24 +27,23 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum ExponentiationProofError {
-    #[error(transparent)] CheckNumberTheory(#[from] NumberTheoryError),
-    #[error("Error checking the elgamal parameters")] CheckElgamal(Vec<anyhow::Error>),
-    #[error("The list {0} must have the same length as the list {1}")] CheckListSameSize(
-        String,
-        String,
-    ),
-    #[error(transparent)] HashError(#[from] HashError),
+    #[error(transparent)]
+    CheckNumberTheory(#[from] NumberTheoryError),
+    #[error("Error checking the elgamal parameters")]
+    CheckElgamal(Vec<EncryptionParameterDomainError>),
+    #[error("The list {0} must have the same length as the list {1}")]
+    CheckListSameSize(String, String),
+    #[error(transparent)]
+    HashError(#[from] HashError),
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
 fn compute_phi_exponentiation(
     ep: &EncryptionParameters,
     x: &MPInteger,
-    gs: &[MPInteger]
+    gs: &[MPInteger],
 ) -> Vec<MPInteger> {
-    gs.iter()
-        .map(|g| g.mod_exponentiate(x, ep.p()))
-        .collect()
+    gs.iter().map(|g| g.mod_exponentiate(x, ep.p())).collect()
 }
 
 /// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
@@ -60,7 +55,7 @@ pub fn verify_exponentiation(
     gs: &Vec<MPInteger>,
     ys: &Vec<MPInteger>,
     (e, z): (&MPInteger, &MPInteger),
-    i_aux: &Vec<String>
+    i_aux: &Vec<String>,
 ) -> Result<bool, ExponentiationProofError> {
     // Check of input parameters
     if cfg!(feature = "checks") {
@@ -69,9 +64,10 @@ pub fn verify_exponentiation(
             return Err(ExponentiationProofError::CheckElgamal(domain_errs));
         }
         if gs.len() != ys.len() {
-            return Err(
-                ExponentiationProofError::CheckListSameSize("gs".to_string(), "ys".to_string())
-            );
+            return Err(ExponentiationProofError::CheckListSameSize(
+                "gs".to_string(),
+                "ys".to_string(),
+            ));
         }
         for g in gs.iter() {
             if let Some(e) = g.check_quadratic_residue(ep.p()) {
@@ -89,7 +85,7 @@ pub fn verify_exponentiation(
     let f_list = vec![
         HashableMessage::from(ep.p()),
         HashableMessage::from(ep.q()),
-        HashableMessage::from(gs)
+        HashableMessage::from(gs),
     ];
     let f = HashableMessage::from(&f_list);
     let c_prime_s: Vec<MPInteger> = zip(&xs, ys)
@@ -105,7 +101,7 @@ pub fn verify_exponentiation(
         f,
         HashableMessage::from(ys),
         HashableMessage::from(&c_prime_s),
-        h_aux
+        h_aux,
     ];
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
@@ -144,21 +140,21 @@ mod test {
             .map(|e| MPInteger::from_hexa_string(e).unwrap())
             .collect();
         let e = MPInteger::from_hexa_string(
-            "0x5636744690A3B23308800A82E1C482C873B13A760153EF28F7DB42B3ACE49303"
-        ).unwrap();
+            "0x5636744690A3B23308800A82E1C482C873B13A760153EF28F7DB42B3ACE49303",
+        )
+        .unwrap();
         let z = MPInteger::from_hexa_string(
             "0x195D3C062B40B2DB1F0B6750417B79A4D2B1E851C2C9F521294AB5C2C5343F2C7D1D100634C0C8E2A091B5E0C4604E668617917F00C2A3793A5F0EF5EA007FC5AFDB44F3705CB2C3A671F49C635C6944B6D2C62FE8FD7E950F1872515633102AC14901329A58926353EE45359BB9AE6C71E88D80AB2027817A3BE3FD44D1611E7AA44E5FC8EAA42C12BF14AE3B0CC1ECD15EBA1B1A7F23E5E481668E12A4D8FAD850EDD95EAE72F2814B3F57FF2E43DEEB1CD82D6559BE2E4BA89E2F1881B4A4C70CE5BBDB9D2DE9738E03E4CF9B43BB5CEDAA61BC43E9534B8CE3CB8B22CCCE033887EF269003262A756727B1BCBB38180BECDB322C757CE37E6F3BDB6677EA23947399571C23F7E12CB2A33045DD7374195A88BA1860F27D81227E5239D070CBAB3C4636EE055AF16987023FC8B559EA7363FCEA8400933A8B69C7D96F6AE13803E424E0168AEC25E3E828D6840A45087B9F4D2C154ADF15B18B0DE216C8D082C6969B2360B52A3AC54BDD201D59D4C68E915C26EDF87956AE4A90CD3D48E"
         ).unwrap();
         let add_info: Vec<String> = vec!["test-0".to_string()];
-        assert!(
-            verify_exponentiation(
-                &EncryptionParameters::from((&p, &q, &g)),
-                &gs,
-                &ys,
-                (&e, &z),
-                &add_info
-            ).unwrap()
+        assert!(verify_exponentiation(
+            &EncryptionParameters::from((&p, &q, &g)),
+            &gs,
+            &ys,
+            (&e, &z),
+            &add_info
         )
+        .unwrap())
     }
 
     #[test]
@@ -187,21 +183,21 @@ mod test {
             .map(|e| MPInteger::from_hexa_string(e).unwrap())
             .collect();
         let e = MPInteger::from_hexa_string(
-            "0xB1EA73A8BE45C17E6416A8FB86D326C580A86FE31958D4A7F7FC76E9981CB690"
-        ).unwrap();
+            "0xB1EA73A8BE45C17E6416A8FB86D326C580A86FE31958D4A7F7FC76E9981CB690",
+        )
+        .unwrap();
         let z = MPInteger::from_hexa_string(
             "0x4BCD5712846DEDA293A5D164F945AE1FA3CA3F1D6F8521235532AE5663238BE5446CC129CC47EF25E5A34C82CAE1837D462492D488CF9966E0928A013E7E81B995A1375A0219EB8451E269DB6486CE99B180E2C91FE8F52F236993A85573808A3F51DA9519510B4AC489F8B250A886F32B87519665E7A229FCC525CA72FA8B565D546456A77F52EC9F98488A98553C56B2816C28FE4609C1DFA77FDD53E08385DA32770B659953340B6AF62900934F3BE11F7A2D313BC977DDE8BE4CEF3461135B81825296FD8E9C588A0BDB2A0BC60D88EC17E93B7A6AADCF3000F8D2877D0CF670F9042B05CE739E8D804E85C6996E9DF42AA0D866C02C5F33152133E7023CBD259CFCF85770BEDF674D7CCA334AF7D0256873CF38EF9F1C9A500A01BFEBCF1E5317D72255D1B4F24CBBF5CDFAB1F51801CA96053A08F52539DA4B2B29EC9D830295C78360E0947BF216EFA395B714644A3A7035A2D2FA2D7EFD7C5DBD54CD7A352955CE810B175D17180FE11EBC207C7B91AB46B0C40765E25AE722F0B9F2"
         ).unwrap();
         let add_info: Vec<String> = vec!["test-0".to_string(), "test-1".to_string()];
-        assert!(
-            verify_exponentiation(
-                &EncryptionParameters::from((&p, &q, &g)),
-                &gs,
-                &ys,
-                (&e, &z),
-                &add_info
-            ).unwrap()
+        assert!(verify_exponentiation(
+            &EncryptionParameters::from((&p, &q, &g)),
+            &gs,
+            &ys,
+            (&e, &z),
+            &add_info
         )
+        .unwrap())
     }
 
     #[test]
@@ -240,20 +236,20 @@ mod test {
             .map(|e| MPInteger::from_hexa_string(e).unwrap())
             .collect();
         let e = MPInteger::from_hexa_string(
-            "0xB5706811B59D6CE68F85A5F84C87FEA0A259DADDC0EDDD2CE43ABF73AE26F0BD"
-        ).unwrap();
+            "0xB5706811B59D6CE68F85A5F84C87FEA0A259DADDC0EDDD2CE43ABF73AE26F0BD",
+        )
+        .unwrap();
         let z = MPInteger::from_hexa_string(
             "0x1A847DE8B2512725C0C77B01870AF3351DA8B59452B2865CB745F7A7813AE715DD0354CE735F8B4978C39EDF74AE81961EE03B96C9AE2FD9218FD6807DA1A9B5A05B98C68C6AF4B13159B7D9A3F4A1C4296B49F0D55EE7442F9A3D96AC98123E9E334AD2DACD53F0B8A9D8FFD2AF819C714182D2955EE1FAF2AA7042E55514CB7A2B6C5F269E99E6875AD4D3A6F09DC2FE662C15BB3F17D33D86405D7241F56F7106903E31E85FAB830E257C8366FD8C0D01FF4A65545728F27E0EE632EE00D012F00B1EA1320D268389C4CBDC744D51634B5E9CAC31C35731AC6B3CF26D6578011EDDAFC32D86B478C58DA5A256E383343326326C5A18B06E32754CA989AE62A655652EC39971E89CB42A6FA395032B349C58150D704646203A08E71D3E9CD53550DFAAA2CB21DD4AA04B531716556E2FFAE060F4C2B03AD696CF04B765A04D4DAA002EB2C4747BF91ECA87C9F1B71F8467E9C9EAF8909632BF327FD52B6149D9E6C98F6B244D400E64442477A44150BF47240438CE7CDF3F88E4A851E07208"
         ).unwrap();
         let add_info: Vec<String> = vec!["test-0".to_string(), "test-1".to_string()];
-        assert!(
-            verify_exponentiation(
-                &EncryptionParameters::from((&p, &q, &g)),
-                &gs,
-                &ys,
-                (&e, &z),
-                &add_info
-            ).unwrap()
+        assert!(verify_exponentiation(
+            &EncryptionParameters::from((&p, &q, &g)),
+            &gs,
+            &ys,
+            (&e, &z),
+            &add_info
         )
+        .unwrap())
     }
 }

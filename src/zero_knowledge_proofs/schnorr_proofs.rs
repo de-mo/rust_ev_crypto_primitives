@@ -17,8 +17,8 @@
 use crate::{
     integer::MPInteger,
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
-    EncryptionParameters, HashError, HashableMessage, Operations, RecursiveHashTrait,
-    VerifyDomainTrait,
+    EncryptionParameterDomainError, EncryptionParameters, HashError, HashableMessage, Operations,
+    RecursiveHashTrait, VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub enum SchnorrProofError {
     #[error(transparent)]
     CheckNumberTheory(#[from] NumberTheoryError),
     #[error("Error checking the elgamal parameters")]
-    CheckElgamal(Vec<anyhow::Error>),
+    CheckElgamal(Vec<EncryptionParameterDomainError>),
     #[error(transparent)]
     HashError(#[from] HashError),
 }

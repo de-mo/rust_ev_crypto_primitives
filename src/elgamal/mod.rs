@@ -16,18 +16,16 @@
 
 //! Implementation of El Gamal functionalitiies
 
-mod encryption_parameters;
 mod ciphertext;
 mod dercryption;
+mod encryption_parameters;
 
-pub use encryption_parameters::EncryptionParameters;
 pub use ciphertext::Ciphertext;
-pub use dercryption::{ verify_decryptions, VerifyDecryptionsResult };
+pub use dercryption::{verify_decryptions, VerifyDecryptionsResult};
+pub use encryption_parameters::{EncryptionParameterDomainError, EncryptionParameters};
 
 use crate::{
-    basic_crypto_functions::BasisCryptoError,
-    integer::MPInteger,
-    number_theory::NumberTheoryError,
+    basic_crypto_functions::BasisCryptoError, integer::MPInteger, number_theory::NumberTheoryError,
     ZeroKnowledgeProofError,
 };
 use thiserror::Error;
@@ -35,19 +33,18 @@ use thiserror::Error;
 // Enum reprsenting the elgamal errors
 #[derive(Error, Debug)]
 pub enum ElgamalError {
-    #[error(transparent)] OpenSSLError(#[from] BasisCryptoError),
-    #[error(
-        "To few number of small primes found. Expcted: {expected}, found: {found}"
-    )] TooFewSmallPrimeNumbers {
-        expected: usize,
-        found: usize,
-    },
-    #[error("Number {0} with value {1} is not prime")] NotPrime(String, MPInteger),
+    #[error(transparent)]
+    OpenSSLError(#[from] BasisCryptoError),
+    #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
+    TooFewSmallPrimeNumbers { expected: usize, found: usize },
+    #[error("Number {0} with value {1} is not prime")]
+    NotPrime(String, MPInteger),
     #[error("The relation p=2q+1 is not satisfied")]
     CheckRelationPQ,
     #[error("The value should not be one")]
     CheckNotOne,
-    #[error(transparent)] CheckNumberTheory(#[from] NumberTheoryError),
+    #[error(transparent)]
+    CheckNumberTheory(#[from] NumberTheoryError),
     #[error("l must be between 1 and k")]
     LNotCorrect,
     #[error("The length of the ciphertext vectors must be the same")]
@@ -60,5 +57,6 @@ pub enum ElgamalError {
     LNotConsistentOverCiphertexts,
     #[error("l not consistent over the proofs")]
     LNotConsistentForTheProofs,
-    #[error(transparent)] ZeroKnowledgeProofError(#[from] ZeroKnowledgeProofError),
+    #[error(transparent)]
+    ZeroKnowledgeProofError(#[from] ZeroKnowledgeProofError),
 }
