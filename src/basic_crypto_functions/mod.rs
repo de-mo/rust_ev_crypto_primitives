@@ -16,12 +16,14 @@
 
 //! Module to wrap the openssl library for crypto functions
 
+mod aes;
 mod argon2;
 mod certificate;
 mod hash;
 mod rand;
 mod signature;
 
+pub use aes::Decrypter;
 pub use argon2::*;
 pub use certificate::*;
 pub use hash::*;
@@ -74,4 +76,6 @@ pub enum BasisCryptoError {
     },
     #[error("Random error caused by {source}: {msg}")]
     RandomError { msg: String, source: ErrorStack },
+    #[error("Secretkey error caused by {source}: {msg}")]
+    AesGcmError { msg: String, source: ErrorStack },
 }
