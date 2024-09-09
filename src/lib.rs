@@ -54,7 +54,7 @@ pub mod signature;
 pub mod zero_knowledge_proofs;
 
 pub use argon2::Argon2id;
-pub use basic_crypto_functions::Decrypter;
+pub use basic_crypto_functions::{sha256_stream, Decrypter};
 pub use basic_crypto_functions::{BasisCryptoError, CertificateExtension};
 pub use byte_array::{ByteArray, Decode, Encode};
 pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};

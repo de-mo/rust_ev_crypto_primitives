@@ -16,6 +16,8 @@
 
 //! Impement necessary Hash algorithms for the crate
 
+use std::io::BufRead;
+
 use super::BasisCryptoError;
 use crate::byte_array::ByteArray;
 use openssl::{
@@ -81,6 +83,48 @@ pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
     Ok(ByteArray::from_bytes(&digest))
 }
 
+/// Wrapper for SHA256 for a stream reader
+///
+/// # Error
+/// [OpensslError] if something is going wrong
+#[allow(dead_code)]
+pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoError> {
+    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
+        msg: "Error creating MdCtx".to_string(),
+        source: e,
+    })?;
+    ctx.digest_init(Md::sha256())
+        .map_err(|e| BasisCryptoError::HashError {
+            msg: "Error digest_init".to_string(),
+            source: e,
+        })?;
+    loop {
+        let mut buf = vec![0; 2048];
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| BasisCryptoError::BufferHashError {
+                msg: "Error reading the buffer".to_string(),
+                source: e,
+            })?;
+        if n == 0 {
+            break;
+        }
+        buf.truncate(n);
+        ctx.digest_update(&buf)
+            .map_err(|e| BasisCryptoError::HashError {
+                msg: "Error digest_update".to_string(),
+                source: e,
+            })?;
+    }
+    let mut digest = [0; 32];
+    ctx.digest_final(&mut digest)
+        .map_err(|e| BasisCryptoError::HashError {
+            msg: "Error digest_final".to_string(),
+            source: e,
+        })?;
+    Ok(ByteArray::from_bytes(&digest))
+}
+
 /// Wrapper for SHAKE128
 ///
 /// # Error
@@ -122,7 +166,9 @@ pub fn shake256(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
 mod test {
     use super::super::super::byte_array::Decode;
     use super::*;
-    use crate::GROUP_PARAMETER_P_LENGTH;
+    use crate::{Encode, GROUP_PARAMETER_P_LENGTH};
+    use std::io::BufReader;
+    use std::path::Path;
 
     #[test]
     fn test_sha3_256() {
@@ -170,5 +216,19 @@ mod test {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_sha256_stream() {
+        let path = Path::new("./")
+            .join("test_data")
+            .join("test_sha256_stream.zip");
+        let f = std::fs::File::open(path).unwrap();
+        let mut reader = BufReader::new(f);
+        let sha = sha256_stream(&mut reader).unwrap();
+        assert_eq!(
+            sha.base16_encode().unwrap(),
+            "07CC28A8D8604FF9CD34EC0E5067E970087EF3CAC07A2247B88160F5A0AF2D36"
+        )
     }
 }

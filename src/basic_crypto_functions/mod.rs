@@ -69,6 +69,8 @@ pub enum BasisCryptoError {
     Sign { msg: String, source: ErrorStack },
     #[error("Hash error caused by {source}: {msg}")]
     HashError { msg: String, source: ErrorStack },
+    #[error("Buffer Hash error caused by {source}: {msg}")]
+    BufferHashError { msg: String, source: std::io::Error },
     #[error("Argon2 error caused by {argon2_error_source}: {msg}")]
     Argon2Error {
         msg: String,
