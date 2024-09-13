@@ -40,18 +40,18 @@
 //! The feature "rug" is strongly more performant, but GMP must be installed for compilation.
 //! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
 
-pub mod argon2;
+mod argon2;
 mod basic_crypto_functions;
-pub mod byte_array;
-pub mod direct_trust;
-pub mod elgamal;
-pub mod hashing;
-pub mod integer;
-pub mod mix_net;
-pub mod number_theory;
-pub mod random;
-pub mod signature;
-pub mod zero_knowledge_proofs;
+mod byte_array;
+mod direct_trust;
+mod elgamal;
+mod hashing;
+mod integer;
+mod mix_net;
+mod number_theory;
+mod random;
+mod signature;
+mod zero_knowledge_proofs;
 
 pub use argon2::Argon2id;
 pub use basic_crypto_functions::{sha256_stream, Decrypter};
@@ -63,7 +63,7 @@ pub use elgamal::{
     EncryptionParameters, VerifyDecryptionsResult,
 };
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
-pub use integer::{ByteLength, Constants, Hexa, MPIntegerError, Operations};
+pub use integer::{ByteLength, Constants, Hexa, MPInteger as Integer, MPIntegerError, Operations};
 pub use mix_net::{
     verify_shuffle, HadamardArgument, MultiExponentiationArgument, ProductArgument,
     ShuffleArgument, ShuffleError, SingleValueProductArgument, VerifyShuffleResult, ZeroArgument,
