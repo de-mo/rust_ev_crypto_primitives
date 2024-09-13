@@ -60,27 +60,7 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 /// [OpensslError] if something is going wrong
 #[allow(dead_code)]
 pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
-    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
-        msg: "Error creating MdCtx".to_string(),
-        source: e,
-    })?;
-    ctx.digest_init(Md::sha256())
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_init".to_string(),
-            source: e,
-        })?;
-    ctx.digest_update(&byte_array.to_bytes())
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_update".to_string(),
-            source: e,
-        })?;
-    let mut digest = [0; 32];
-    ctx.digest_final(&mut digest)
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_final".to_string(),
-            source: e,
-        })?;
-    Ok(ByteArray::from_bytes(&digest))
+    sha256_stream(&mut byte_array.to_bytes().as_slice())
 }
 
 /// Wrapper for SHA256 for a stream reader
