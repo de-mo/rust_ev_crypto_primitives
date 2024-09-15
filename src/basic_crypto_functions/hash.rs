@@ -58,7 +58,6 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 ///
 /// # Error
 /// [OpensslError] if something is going wrong
-#[allow(dead_code)]
 pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
     sha256_stream(&mut byte_array.to_bytes().as_slice())
 }
@@ -67,7 +66,6 @@ pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 ///
 /// # Error
 /// [OpensslError] if something is going wrong
-#[allow(dead_code)]
 pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoError> {
     let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
         msg: "Error creating MdCtx".to_string(),
@@ -109,7 +107,6 @@ pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoE
 ///
 /// # Error
 /// [OpensslError] if something is going wrong
-#[allow(dead_code)]
 pub fn shake128(byte_array: &ByteArray, length: usize) -> Result<ByteArray, BasisCryptoError> {
     let mut digest = vec![0; length];
     hash_xof(
@@ -144,9 +141,9 @@ pub fn shake256(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
 
 #[cfg(test)]
 mod test {
-    use super::super::super::byte_array::Decode;
+    use super::super::super::byte_array::DecodeTrait;
     use super::*;
-    use crate::{Encode, GROUP_PARAMETER_P_LENGTH};
+    use crate::{EncodeTrait, GROUP_PARAMETER_P_LENGTH};
     use std::io::BufReader;
     use std::path::Path;
 

@@ -4,7 +4,7 @@
 
 This crate implements functionalities of the crpyto primitives for the E-Voting system of Swiss Post. It is based on the specifications of Swiss Post, according to the following document version:
 
-- [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.0
+- [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.1
 
 It implements only the functionalities that are necessary for the implementation of the Verifier.
 
@@ -12,11 +12,13 @@ See [API Documentation](https://docs.rs/rust_ev_crypto_primitives/) for details
 
 ## Development guide
 
-The crate is tested with the version 1.76.0 of Rust.
+The crate is tested with the version of Rust defined in [Cargo.toml](Cargo.toml).
 
 ## Installation
 
-The crate uses the crate [openssl](https://docs.rs/openssl/latest/openssl/) to wrap the functions of the library openssl for the basic cryptographic functions. Please check the installation guide of the create.
+The crate uses the crate [openssl](https://docs.rs/openssl/latest/openssl/) to wrap the functions of the library openssl for the basic cryptographic functions. Please check the installation guide of the crate.
+
+The crate uses the crate [rug](https://crates.io/crates/rug) to wrap the functions of the library GMP for the performant big integers. Please check the installation guide of the crate.
 
 ## Licence
 

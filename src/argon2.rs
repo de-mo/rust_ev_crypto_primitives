@@ -16,8 +16,10 @@
 
 //! Module that implement key derivation functions with argon2id
 //!
-use crate::basic_crypto_functions::{argon2_has_password, random_bytes, BasisCryptoError};
-use crate::ByteArray;
+use crate::{
+    basic_crypto_functions::{argon2_has_password, random_bytes, BasisCryptoError},
+    ByteArray,
+};
 
 const STANDARD_MEMORY_EXPONENT: u32 = 21;
 const STANDARD_PARALLELISM: u32 = 4;
@@ -35,7 +37,7 @@ const OUTPUT_SIZE: usize = 32;
 ///
 /// # Usage (example)
 /// ```
-/// use rust_ev_crypto_primitives::{Argon2id, ByteArray, Decode};
+/// use rust_ev_crypto_primitives::{argon2::Argon2id, ByteArray, DecodeTrait};
 /// let key = ByteArray::base64_decode("dGVzdCBwYXNzd29yZA==").unwrap();
 /// let salt = ByteArray::base64_decode("1YBBD3ZMrqhZr5bLsddvSA==").unwrap();
 /// let expected_tag = ByteArray::base64_decode("qYOoULGijoHNdsDaz6PqnVrTriSLuTB74cGtqHEbO7o=").unwrap();
@@ -109,7 +111,7 @@ impl Argon2id {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Decode;
+    use crate::DecodeTrait;
 
     #[test]
     fn verify_argon2id_0() {

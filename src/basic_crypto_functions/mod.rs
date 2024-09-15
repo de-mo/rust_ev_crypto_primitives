@@ -27,7 +27,7 @@ pub use aes::Decrypter;
 pub use argon2::*;
 pub use certificate::*;
 pub use hash::*;
-pub use rand::*;
+pub(crate) use rand::*;
 pub use signature::*;
 
 use openssl::error::ErrorStack;

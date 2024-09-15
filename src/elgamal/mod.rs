@@ -25,8 +25,8 @@ pub use dercryption::{verify_decryptions, VerifyDecryptionsResult};
 pub use encryption_parameters::{EncryptionParameterDomainError, EncryptionParameters};
 
 use crate::{
-    basic_crypto_functions::BasisCryptoError, integer::MPInteger, number_theory::NumberTheoryError,
-    ZeroKnowledgeProofError,
+    basic_crypto_functions::BasisCryptoError, zero_knowledge_proofs::ZeroKnowledgeProofError,
+    Integer, NumberTheoryError,
 };
 use thiserror::Error;
 
@@ -38,7 +38,7 @@ pub enum ElgamalError {
     #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
     TooFewSmallPrimeNumbers { expected: usize, found: usize },
     #[error("Number {0} with value {1} is not prime")]
-    NotPrime(String, MPInteger),
+    NotPrime(String, Integer),
     #[error("The relation p=2q+1 is not satisfied")]
     CheckRelationPQ,
     #[error("The value should not be one")]

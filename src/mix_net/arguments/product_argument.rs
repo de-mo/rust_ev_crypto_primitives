@@ -31,22 +31,21 @@ use super::{
     ArgumentContext,
 };
 use crate::{
-    integer::MPInteger,
     mix_net::{commitments::CommitmentError, MixNetResultTrait},
-    HashError,
+    HashError, Integer,
 };
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct ProductStatement<'a> {
-    cs_upper_a: &'a [MPInteger],
-    b: &'a MPInteger,
+    cs_upper_a: &'a [Integer],
+    b: &'a Integer,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct ProductArgument<'a> {
-    c_b: Option<&'a MPInteger>,
+    c_b: Option<&'a Integer>,
     hadamard_arg: Option<&'a HadamardArgument<'a>>,
     single_value_product_arg: &'a SingleValueProductArgument<'a>,
 }
@@ -176,10 +175,7 @@ impl<'a> ProductStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(
-        cs_upper_a: &'a [MPInteger],
-        b: &'a MPInteger,
-    ) -> Result<Self, ProductArgumentError> {
+    pub fn new(cs_upper_a: &'a [Integer], b: &'a Integer) -> Result<Self, ProductArgumentError> {
         Ok(Self { cs_upper_a, b })
     }
 
@@ -193,7 +189,7 @@ impl<'a> ProductArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        c_b: Option<&'a MPInteger>,
+        c_b: Option<&'a Integer>,
         hadamard_arg: Option<&'a HadamardArgument<'a>>,
         single_value_product_arg: &'a SingleValueProductArgument,
     ) -> Result<Self, ProductArgumentError> {
@@ -281,11 +277,11 @@ pub mod test {
         serde_json::from_str(&json).unwrap()
     }
 
-    pub struct ProductStatementValues(pub Vec<MPInteger>, pub MPInteger);
+    pub struct ProductStatementValues(pub Vec<Integer>, pub Integer);
     pub struct ProductArgumentValues(
         pub SVPArgumentValues,
         pub Option<HadamardArgumentValues>,
-        pub Option<MPInteger>,
+        pub Option<Integer>,
     );
 
     fn get_statement_values(statement: &Value) -> ProductStatementValues {

@@ -332,7 +332,7 @@ impl Display for CertificateExtension {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::byte_array::Encode;
+    use crate::byte_array::EncodeTrait;
     use std::path::PathBuf;
     use std::str;
 

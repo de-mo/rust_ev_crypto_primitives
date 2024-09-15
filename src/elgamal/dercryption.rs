@@ -17,7 +17,10 @@
 //! Implementation of decryption algorithms
 
 use super::{Ciphertext, ElgamalError, EncryptionParameters};
-use crate::{integer::MPInteger, verify_decryption, ZeroKnowledgeProofError};
+use crate::{
+    zero_knowledge_proofs::{verify_decryption, ZeroKnowledgeProofError},
+    Integer,
+};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy)]
@@ -34,9 +37,9 @@ pub struct VerifyDecryptionsResult {
 pub fn verify_decryptions(
     ep: &EncryptionParameters,
     upper_cs: &[Ciphertext],
-    pks: &[MPInteger],
+    pks: &[Integer],
     upper_cs_prime: &[Ciphertext],
-    pi_dec: &[(MPInteger, Vec<MPInteger>)],
+    pi_dec: &[(Integer, Vec<Integer>)],
     i_aux: &[String],
 ) -> Result<VerifyDecryptionsResult, ElgamalError> {
     let upper_n = upper_cs.len();

@@ -16,7 +16,7 @@
 
 use thiserror::Error;
 
-use crate::{integer::MPInteger, Ciphertext, HashableMessage};
+use crate::{elgamal::Ciphertext, HashableMessage, Integer};
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T>
@@ -163,7 +163,7 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
     }
 }
 
-impl Matrix<MPInteger> {
+impl Matrix<Integer> {
     #[allow(dead_code)]
     pub fn entrywise_product(&self, other: &Self) -> Result<Self, MatrixError> {
         if self.nb_rows() != other.nb_rows() || self.nb_columns() != other.nb_columns() {
@@ -172,7 +172,7 @@ impl Matrix<MPInteger> {
         let mut res = Self::new(self.nb_rows(), self.nb_columns());
         for i in 1..self.nb_rows() {
             for j in 1..self.nb_columns() {
-                res.set_elt(&MPInteger::from(self.elt(i, j) * other.elt(i, j)), j, i);
+                res.set_elt(&Integer::from(self.elt(i, j) * other.elt(i, j)), j, i);
             }
         }
         Ok(res)
@@ -229,9 +229,9 @@ mod test {
 
     #[test]
     fn test_get_matrix_dimensions() {
-        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(12), (3, 4));
-        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(18), (3, 6));
-        assert_eq!(Matrix::<MPInteger>::get_matrix_dimensions(23), (1, 23));
+        assert_eq!(Matrix::<Integer>::get_matrix_dimensions(12), (3, 4));
+        assert_eq!(Matrix::<Integer>::get_matrix_dimensions(18), (3, 6));
+        assert_eq!(Matrix::<Integer>::get_matrix_dimensions(23), (1, 23));
     }
 
     #[test]

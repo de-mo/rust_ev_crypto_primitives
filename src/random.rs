@@ -17,7 +17,8 @@
 //! Module that implement random functions
 //!
 use crate::{
-    basic_crypto_functions::random_bytes as basic_random_bytes, BasisCryptoError, ByteArray,
+    basic_crypto_functions::{random_bytes as basic_random_bytes, BasisCryptoError},
+    ByteArray,
 };
 
 /// Random bytes of give size

@@ -16,12 +16,10 @@
 
 //! Implementation of the verification of the signature
 
-use super::{
+use crate::{
     basic_crypto_functions::{sign as openssl_sign, verify, BasisCryptoError},
-    direct_trust::{DirectTrustError, Keystore},
-};
-use super::{
     byte_array::ByteArray,
+    direct_trust::{DirectTrustError, Keystore},
     hashing::{HashError, HashableMessage, RecursiveHashTrait},
 };
 use thiserror::Error;

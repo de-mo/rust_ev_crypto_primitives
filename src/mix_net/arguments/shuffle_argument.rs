@@ -19,7 +19,7 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::{
-    integer::MPInteger,
+    elgamal::Ciphertext,
     mix_net::{
         arguments::product_argument::{
             verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
@@ -28,7 +28,7 @@ use crate::{
         matrix::{Matrix, MatrixError},
         MixNetResultTrait,
     },
-    Ciphertext, Constants, HashError, HashableMessage, Operations, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::{
@@ -50,8 +50,8 @@ pub struct ShuffleStatement<'a> {
 /// Shuffle argument according to the speicifcation of Swiss Post
 #[derive(Debug, Clone)]
 pub struct ShuffleArgument<'a> {
-    cs_upper_a: &'a [MPInteger],
-    cs_upper_b: &'a [MPInteger],
+    cs_upper_a: &'a [Integer],
+    cs_upper_b: &'a [Integer],
     product_argument: &'a ProductArgument<'a>,
     multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>,
 }
@@ -121,12 +121,12 @@ pub fn verify_shuffle_argument(
     let cs_minus_z = get_commitment_matrix(
         context.ep,
         &upper_z_neg,
-        &vec![MPInteger::zero().clone(); m],
+        &vec![Integer::zero().clone(); m],
         context.ck,
     )
     .map_err(ShuffleArgumentError::CommitmentError)?;
 
-    let cs_upper_d: Vec<MPInteger> = argument
+    let cs_upper_d: Vec<Integer> = argument
         .cs_upper_a
         .iter()
         .zip(argument.cs_upper_b.iter())
@@ -134,7 +134,7 @@ pub fn verify_shuffle_argument(
         .collect();
 
     let xs = (0..upper_n + 1)
-        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+        .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Vec<_>>();
 
     let b = xs
@@ -143,11 +143,11 @@ pub fn verify_shuffle_argument(
         .take(upper_n)
         //.skip(1)
         .map(|(i, x_i)| {
-            y.mod_multiply(&MPInteger::from(i), q)
+            y.mod_multiply(&Integer::from(i), q)
                 .mod_add(x_i, q)
                 .mod_sub(&z, q)
         })
-        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, q));
+        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, q));
 
     let p_statement_value = cs_upper_d
         .iter()
@@ -190,7 +190,7 @@ pub fn get_x(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<MPInteger, ShuffleArgumentError> {
+) -> Result<Integer, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
@@ -203,7 +203,7 @@ pub fn get_y(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<MPInteger, ShuffleArgumentError> {
+) -> Result<Integer, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_y(context, statement, argument))
             .recursive_hash()
@@ -216,7 +216,7 @@ pub fn get_z(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<MPInteger, ShuffleArgumentError> {
+) -> Result<Integer, ShuffleArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_z(context, statement, argument))
             .recursive_hash()
@@ -328,8 +328,8 @@ impl<'a> ShuffleArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        cs_upper_a: &'a [MPInteger],
-        cs_upper_b: &'a [MPInteger],
+        cs_upper_a: &'a [Integer],
+        cs_upper_b: &'a [Integer],
         product_argument: &'a ProductArgument<'a>,
         multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>,
     ) -> Result<Self, ShuffleArgumentError> {
@@ -434,8 +434,8 @@ mod test {
 
     pub struct ShuffleStatementValues(pub Vec<Ciphertext>, pub Vec<Ciphertext>);
     pub struct ShuffleArgumentValues(
-        pub Vec<MPInteger>,
-        pub Vec<MPInteger>,
+        pub Vec<Integer>,
+        pub Vec<Integer>,
         ProductArgumentValues,
         MEArgumentValues,
     );

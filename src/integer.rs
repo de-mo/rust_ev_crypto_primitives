@@ -14,35 +14,20 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Module to extend functionalities of the used big integer (`BigUint` or `Integer`)
+//! Module to extend functionalities of the used big `Integer`.
 //!
 //! The extended functionalities are implemented using Trait that have to be
 //! used in the client modules
 //!
 
-use crate::{ ByteArray, Decode, Encode };
+use crate::{ByteArray, DecodeTrait, EncodeTrait};
+use rug::Integer;
 use std::fmt::Debug;
 use std::sync::OnceLock;
 use thiserror::Error;
 
-#[cfg(feature = "num-bigint")]
-use num_bigint::{ BigInt, BigUint, Sign };
-#[cfg(feature = "num-bigint")]
-use num_traits::Num;
-
-#[cfg(feature = "rug")]
-use rug::Integer;
-
-#[cfg(feature = "num-bigint")]
-/// Type alias for all the crate
-pub type MPInteger = BigUint;
-
-#[cfg(feature = "rug")]
-/// Type alias for all the crate
-pub type MPInteger = Integer;
-
 /// Trait to implement constant numbers
-pub trait Constants {
+pub trait ConstantsTrait: Sized {
     /// Zero
     fn zero() -> &'static Self;
     /// One
@@ -57,8 +42,8 @@ pub trait Constants {
     fn five() -> &'static Self;
 }
 
-/// Trait to extend operations of BigUInt
-pub trait Operations: Sized {
+/// Trait to extend operations of [Integer]
+pub trait OperationsTrait: Sized {
     /// Test if is even
     fn is_even(&self) -> bool;
 
@@ -111,12 +96,12 @@ pub trait Operations: Sized {
 /// Transformation from or to String in hexadecimal according to the specifications
 pub trait Hexa: Sized {
     /// Create object from hexadecimal String. If not valid return an error
-    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError>;
+    fn from_hexa_string(s: &str) -> Result<Self, IntegerError>;
 
     /// Generate the hexadecimal String
     fn to_hexa(&self) -> String;
 
-    fn from_hexa_string_slice(vs: &[String]) -> Result<Vec<Self>, MPIntegerError> {
+    fn from_hexa_string_slice(vs: &[String]) -> Result<Vec<Self>, IntegerError> {
         let mut decoded = vs.iter().map(|s| Self::from_hexa_string(s.as_str()));
         let decoded_2 = decoded.clone();
         match decoded.find(|e| e.is_err()) {
@@ -128,32 +113,26 @@ pub trait Hexa: Sized {
 
 // enum representing the errors with big integer
 #[derive(Error, Debug)]
-pub enum MPIntegerError {
+pub enum IntegerError {
     #[error("Integer must be positive or zero")]
     IsNegative,
-    #[error("Error parsing {orig} in BigUInt in method {fnname}")] ParseError {
+    #[error("Error parsing {orig} in Integer in method {fnname}")]
+    ParseError { orig: String, fnname: String },
+    #[error("Error parsing {orig} in Integer in method {fnname} caused by {source}")]
+    ParseErrorWithSource {
         orig: String,
         fnname: String,
-    },
-    #[error(
-        "Error parsing {orig} in BigUInt in method {fnname} caused by {source}"
-    )] ParseErrorWithSource {
-        orig: String,
-        fnname: String,
-        #[cfg(feature = "num-bigint")]
-        source: num_bigint::ParseBigIntError,
-        #[cfg(feature = "rug")]
         source: rug::integer::ParseIntegerError,
     },
 }
 
 /// Trait to calculate byte length
-pub trait ByteLength {
-    /// Byte legnth of a BigUInt
+pub trait ByteLengthTrait {
+    /// Byte legnth of an object
     fn byte_length(&self) -> usize;
 }
 
-impl ByteLength for MPInteger {
+impl ByteLengthTrait for Integer {
     fn byte_length(&self) -> usize {
         let bits = self.nb_bits();
         let bytes = bits / 8;
@@ -165,81 +144,43 @@ impl ByteLength for MPInteger {
     }
 }
 
-static ZERO: OnceLock<MPInteger> = OnceLock::new();
-static ONE: OnceLock<MPInteger> = OnceLock::new();
-static TWO: OnceLock<MPInteger> = OnceLock::new();
-static THREE: OnceLock<MPInteger> = OnceLock::new();
-static FOR: OnceLock<MPInteger> = OnceLock::new();
-static FIVE: OnceLock<MPInteger> = OnceLock::new();
+static ZERO: OnceLock<Integer> = OnceLock::new();
+static ONE: OnceLock<Integer> = OnceLock::new();
+static TWO: OnceLock<Integer> = OnceLock::new();
+static THREE: OnceLock<Integer> = OnceLock::new();
+static FOR: OnceLock<Integer> = OnceLock::new();
+static FIVE: OnceLock<Integer> = OnceLock::new();
 
-impl Constants for MPInteger {
+impl ConstantsTrait for Integer {
     fn zero() -> &'static Self {
-        ZERO.get_or_init(|| MPInteger::from(0u8))
+        ZERO.get_or_init(|| Integer::from(0u8))
     }
 
     fn one() -> &'static Self {
-        ONE.get_or_init(|| MPInteger::from(1u8))
+        ONE.get_or_init(|| Integer::from(1u8))
     }
 
     fn two() -> &'static Self {
-        TWO.get_or_init(|| MPInteger::from(2u8))
+        TWO.get_or_init(|| Integer::from(2u8))
     }
     fn three() -> &'static Self {
-        THREE.get_or_init(|| MPInteger::from(3u8))
+        THREE.get_or_init(|| Integer::from(3u8))
     }
     fn four() -> &'static Self {
-        FOR.get_or_init(|| MPInteger::from(4u8))
+        FOR.get_or_init(|| Integer::from(4u8))
     }
     fn five() -> &'static Self {
-        FIVE.get_or_init(|| MPInteger::from(5u8))
+        FIVE.get_or_init(|| Integer::from(5u8))
     }
 }
 
-#[cfg(feature = "num-bigint")]
-impl Operations for BigUint {
-    fn is_even(&self) -> bool {
-        &(self % Self::two()) == Self::zero()
-    }
-
-    fn nb_bits(&self) -> usize {
-        self.bits() as usize
-    }
-
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
-        self.modpow(exp, modulus)
-    }
-
-    fn mod_negate(&self, modulus: &Self) -> Self {
-        let bi = BigInt::from_biguint(Sign::Minus, self.clone());
-        let modulus_bi = BigInt::from_biguint(Sign::Plus, modulus.clone());
-        let neg: BigInt = &bi % &modulus_bi;
-        match neg.to_biguint() {
-            Some(n) => n,
-            None => (&neg + &modulus_bi).to_biguint().unwrap(),
-        }
-    }
-
-    fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self {
-        (self * other) % modulus
-    }
-
-    fn mod_square(&self, modulus: &Self) -> Self {
-        self.mod_multiply(self, modulus)
-    }
-
-    fn mod_inverse(&self, modulus: &Self) -> Self {
-        self.mod_exponentiate(&(modulus - Self::two()), modulus)
-    }
-}
-
-#[cfg(feature = "rug")]
-impl Operations for Integer {
+impl OperationsTrait for Integer {
     fn is_even(&self) -> bool {
         self.is_even()
     }
 
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
-        MPInteger::from(self.pow_mod_ref(exp, modulus).unwrap())
+        Integer::from(self.pow_mod_ref(exp, modulus).unwrap())
     }
 
     fn mod_negate(&self, modulus: &Self) -> Self {
@@ -257,7 +198,7 @@ impl Operations for Integer {
     }
 
     fn mod_square(&self, modulus: &Self) -> Self {
-        self.mod_exponentiate(MPInteger::two(), modulus)
+        self.mod_exponentiate(Integer::two(), modulus)
     }
 
     fn mod_inverse(&self, modulus: &Self) -> Self {
@@ -270,48 +211,26 @@ impl Operations for Integer {
     }
 
     fn mod_add(&self, other: &Self, modulus: &Self) -> Self {
-        let res = MPInteger::from(self + other);
+        let res = Integer::from(self + other);
         res.modulo(modulus)
     }
 
     fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
-        self.mod_add(&MPInteger::from(-other), modulus)
+        self.mod_add(&Integer::from(-other), modulus)
     }
 }
 
-#[cfg(feature = "num-bigint")]
-impl Hexa for BigUint {
-    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError> {
-        if !s.starts_with("0x") && !s.starts_with("0X") {
-            return Err(MPIntegerError::ParseError {
-                orig: s.to_string(),
-                fnname: "from_hexa_string".to_string(),
-            });
-        }
-        <BigUint>::from_str_radix(&s[2..], 16).map_err(|e| MPIntegerError::ParseErrorWithSource {
-            orig: s.to_string(),
-            fnname: "from_hexa_string".to_string(),
-            source: e,
-        })
-    }
-
-    fn to_hexa(&self) -> String {
-        format!("{}{}", "0x", self.to_str_radix(16))
-    }
-}
-
-#[cfg(feature = "rug")]
 impl Hexa for Integer {
-    fn from_hexa_string(s: &str) -> Result<Self, MPIntegerError> {
+    fn from_hexa_string(s: &str) -> Result<Self, IntegerError> {
         if !s.starts_with("0x") && !s.starts_with("0X") {
-            return Err(MPIntegerError::ParseError {
+            return Err(IntegerError::ParseError {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
             });
         }
         Integer::parse_radix(&s[2..], 16)
             .map(Integer::from)
-            .map_err(|e| MPIntegerError::ParseErrorWithSource {
+            .map_err(|e| IntegerError::ParseErrorWithSource {
                 orig: s.to_string(),
                 fnname: "from_hexa_string".to_string(),
                 source: e,
@@ -323,7 +242,7 @@ impl Hexa for Integer {
     }
 }
 
-impl Decode for MPInteger {
+impl DecodeTrait for Integer {
     fn base16_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
         ByteArray::base16_decode(s).map(|b| b.into_mp_integer())
     }
@@ -337,8 +256,8 @@ impl Decode for MPInteger {
     }
 }
 
-impl Encode for MPInteger {
-    type Error = MPIntegerError;
+impl EncodeTrait for Integer {
+    type Error = IntegerError;
     fn base16_encode(&self) -> Result<String, Self::Error> {
         Ok(ByteArray::try_from(self)?.base16_encode().unwrap())
     }
@@ -358,175 +277,191 @@ mod test {
 
     #[test]
     fn bit_length() {
-        assert_eq!(MPInteger::from(0u32).nb_bits(), 0);
-        assert_eq!(MPInteger::from(1u32).nb_bits(), 1);
-        assert_eq!(MPInteger::from(10u32).nb_bits(), 4);
+        assert_eq!(Integer::from(0u32).nb_bits(), 0);
+        assert_eq!(Integer::from(1u32).nb_bits(), 1);
+        assert_eq!(Integer::from(10u32).nb_bits(), 4);
     }
 
     #[test]
     fn byte_length() {
-        assert_eq!(MPInteger::from(0u32).byte_length(), 0);
-        assert_eq!(MPInteger::from(3u32).byte_length(), 1);
-        assert_eq!(MPInteger::from(23591u32).byte_length(), 2);
-        assert_eq!(MPInteger::from(23592u32).byte_length(), 2);
-        assert_eq!(MPInteger::from(4294967295u64).byte_length(), 4);
-        assert_eq!(MPInteger::from(4294967296u64).byte_length(), 5);
+        assert_eq!(Integer::from(0u32).byte_length(), 0);
+        assert_eq!(Integer::from(3u32).byte_length(), 1);
+        assert_eq!(Integer::from(23591u32).byte_length(), 2);
+        assert_eq!(Integer::from(23592u32).byte_length(), 2);
+        assert_eq!(Integer::from(4294967295u64).byte_length(), 4);
+        assert_eq!(Integer::from(4294967296u64).byte_length(), 5);
     }
 
     #[test]
     fn from_exa() {
-        assert_eq!(MPInteger::from_hexa_string("0x0").unwrap(), MPInteger::from(0u32));
-        assert_eq!(MPInteger::from_hexa_string("0xa").unwrap(), MPInteger::from(10u32));
-        assert_eq!(MPInteger::from_hexa_string("0xab").unwrap(), MPInteger::from(171u32));
-        assert_eq!(MPInteger::from_hexa_string("0x12D9E8").unwrap(), MPInteger::from(1235432u32));
-        assert!(MPInteger::from_hexa_string("123").is_err());
-        assert!(MPInteger::from_hexa_string("0xtt").is_err());
-        assert_eq!(MPInteger::from_hexa_string("0x12D9E8").unwrap(), MPInteger::from(1235432u32));
+        assert_eq!(
+            Integer::from_hexa_string("0x0").unwrap(),
+            Integer::from(0u32)
+        );
+        assert_eq!(
+            Integer::from_hexa_string("0xa").unwrap(),
+            Integer::from(10u32)
+        );
+        assert_eq!(
+            Integer::from_hexa_string("0xab").unwrap(),
+            Integer::from(171u32)
+        );
+        assert_eq!(
+            Integer::from_hexa_string("0x12D9E8").unwrap(),
+            Integer::from(1235432u32)
+        );
+        assert!(Integer::from_hexa_string("123").is_err());
+        assert!(Integer::from_hexa_string("0xtt").is_err());
+        assert_eq!(
+            Integer::from_hexa_string("0x12D9E8").unwrap(),
+            Integer::from(1235432u32)
+        );
     }
 
     #[test]
     fn from_exa_string_slice() {
         assert_eq!(
-            MPInteger::from_hexa_string_slice(&["0x0".to_string(), "0xa".to_string()]).unwrap(),
-            vec![MPInteger::from(0u32), MPInteger::from(10u32)]
+            Integer::from_hexa_string_slice(&["0x0".to_string(), "0xa".to_string()]).unwrap(),
+            vec![Integer::from(0u32), Integer::from(10u32)]
         );
-        assert!(
-            MPInteger::from_hexa_string_slice(&["123".to_string(), "0xa".to_string()]).is_err()
-        );
+        assert!(Integer::from_hexa_string_slice(&["123".to_string(), "0xa".to_string()]).is_err());
     }
 
     #[test]
     fn to_exa() {
-        assert_eq!(MPInteger::from(0u32).to_hexa(), "0x0");
-        assert_eq!(MPInteger::from(10u32).to_hexa(), "0xa");
-        assert_eq!(MPInteger::from(171u32).to_hexa(), "0xab");
-        assert_eq!(MPInteger::from(1235432u32).to_hexa(), "0x12d9e8");
+        assert_eq!(Integer::from(0u32).to_hexa(), "0x0");
+        assert_eq!(Integer::from(10u32).to_hexa(), "0xa");
+        assert_eq!(Integer::from(171u32).to_hexa(), "0xab");
+        assert_eq!(Integer::from(1235432u32).to_hexa(), "0x12d9e8");
     }
 
     #[test]
     fn test_is_even_odd() {
-        assert!(MPInteger::from(0u8).is_even());
-        assert!(MPInteger::from(2u8).is_even());
-        assert!(!MPInteger::from(3u8).is_even());
-        assert!(!MPInteger::from(0u8).is_odd());
-        assert!(!MPInteger::from(2u8).is_odd());
-        assert!(MPInteger::from(3u8).is_odd());
+        assert!(Integer::from(0u8).is_even());
+        assert!(Integer::from(2u8).is_even());
+        assert!(!Integer::from(3u8).is_even());
+        assert!(!Integer::from(0u8).is_odd());
+        assert!(!Integer::from(2u8).is_odd());
+        assert!(Integer::from(3u8).is_odd());
     }
 
     #[test]
     fn test_mod_multiply() {
         assert_eq!(
-            MPInteger::from(426u32).mod_multiply(
-                &MPInteger::from(964u32),
-                &MPInteger::from(235u32)
-            ),
-            MPInteger::from(119u32)
+            Integer::from(426u32).mod_multiply(&Integer::from(964u32), &Integer::from(235u32)),
+            Integer::from(119u32)
         );
-        let a = MPInteger::from(10123465234878998usize);
-        let b = MPInteger::from(65746311545646431usize);
-        let m = MPInteger::from(10005412336548794usize);
-        let res = MPInteger::from(4652135769797794usize);
+        let a = Integer::from(10123465234878998usize);
+        let b = Integer::from(65746311545646431usize);
+        let m = Integer::from(10005412336548794usize);
+        let res = Integer::from(4652135769797794usize);
         assert_eq!(a.mod_multiply(&b, &m), res)
     }
 
     #[test]
     fn test_mod_negate() {
         assert_eq!(
-            MPInteger::from(12u8).mod_negate(&MPInteger::from(10u32)),
-            MPInteger::from(8u32)
+            Integer::from(12u8).mod_negate(&Integer::from(10u32)),
+            Integer::from(8u32)
         );
     }
 
     #[test]
     fn test_mod_add() {
-        let modulo = MPInteger::from(7u8);
+        let modulo = Integer::from(7u8);
         assert_eq!(
-            MPInteger::from(5u8).mod_add(&MPInteger::from(3u8), &modulo),
-            MPInteger::from(1u32)
+            Integer::from(5u8).mod_add(&Integer::from(3u8), &modulo),
+            Integer::from(1u32)
         );
         assert_eq!(
-            MPInteger::from(5u8).mod_add(&MPInteger::from(-7i8), &modulo),
-            MPInteger::from(5u32)
+            Integer::from(5u8).mod_add(&Integer::from(-7i8), &modulo),
+            Integer::from(5u32)
         );
         assert_eq!(
-            MPInteger::from(5u8).mod_add(&MPInteger::from(-14i8), &modulo),
-            MPInteger::from(5u32)
+            Integer::from(5u8).mod_add(&Integer::from(-14i8), &modulo),
+            Integer::from(5u32)
         );
         assert_eq!(
-            MPInteger::from(-2i8).mod_add(&MPInteger::from(20i8), &modulo),
-            MPInteger::from(4u32)
+            Integer::from(-2i8).mod_add(&Integer::from(20i8), &modulo),
+            Integer::from(4u32)
         );
     }
 
     #[test]
     fn test_mod_sub() {
-        let modulo = MPInteger::from(7u8);
+        let modulo = Integer::from(7u8);
         assert_eq!(
-            MPInteger::from(5u8).mod_sub(&MPInteger::from(3u8), &modulo),
-            MPInteger::from(2u32)
+            Integer::from(5u8).mod_sub(&Integer::from(3u8), &modulo),
+            Integer::from(2u32)
         );
         assert_eq!(
-            MPInteger::from(5u8).mod_sub(&MPInteger::from(-6i8), &modulo),
-            MPInteger::from(4u32)
+            Integer::from(5u8).mod_sub(&Integer::from(-6i8), &modulo),
+            Integer::from(4u32)
         );
         assert_eq!(
-            MPInteger::from(5u8).mod_sub(&MPInteger::from(-15i8), &modulo),
-            MPInteger::from(6u32)
+            Integer::from(5u8).mod_sub(&Integer::from(-15i8), &modulo),
+            Integer::from(6u32)
         );
         assert_eq!(
-            MPInteger::from(-2i8).mod_sub(&MPInteger::from(20i8), &modulo),
-            MPInteger::from(6u32)
+            Integer::from(-2i8).mod_sub(&Integer::from(20i8), &modulo),
+            Integer::from(6u32)
         );
     }
 
     #[test]
     fn test_mod_inverse() {
         assert_eq!(
-            MPInteger::from(3u16).mod_inverse(&MPInteger::from(11u16)),
-            MPInteger::from(4u16)
+            Integer::from(3u16).mod_inverse(&Integer::from(11u16)),
+            Integer::from(4u16)
         );
         assert_eq!(
-            MPInteger::from(10u16).mod_inverse(&MPInteger::from(17u16)),
-            MPInteger::from(12u16)
+            Integer::from(10u16).mod_inverse(&Integer::from(17u16)),
+            Integer::from(12u16)
         );
     }
 
     #[test]
     fn base16_encode() {
-        assert_eq!(MPInteger::from(0u8).base16_encode().unwrap(), "00");
-        assert_eq!(MPInteger::from(10u8).base16_encode().unwrap(), "0A");
-        assert!(MPInteger::from(-2i64).base16_encode().is_err());
+        assert_eq!(Integer::from(0u8).base16_encode().unwrap(), "00");
+        assert_eq!(Integer::from(10u8).base16_encode().unwrap(), "0A");
+        assert!(Integer::from(-2i64).base16_encode().is_err());
     }
 
     #[test]
     fn base16_decode() {
-        assert_eq!(MPInteger::base16_decode("00").unwrap(), MPInteger::from(0u8));
-        assert_eq!(MPInteger::base16_decode("A1").unwrap(), MPInteger::from(161u8));
+        assert_eq!(Integer::base16_decode("00").unwrap(), Integer::from(0u8));
+        assert_eq!(Integer::base16_decode("A1").unwrap(), Integer::from(161u8));
     }
 
     #[test]
     fn base32_encode() {
-        assert_eq!(MPInteger::from(0u8).base32_encode().unwrap(), "AA======");
-        assert_eq!(MPInteger::from(10u8).base32_encode().unwrap(), "BI======");
-        assert!(MPInteger::from(-2i64).base32_encode().is_err());
+        assert_eq!(Integer::from(0u8).base32_encode().unwrap(), "AA======");
+        assert_eq!(Integer::from(10u8).base32_encode().unwrap(), "BI======");
+        assert!(Integer::from(-2i64).base32_encode().is_err());
     }
 
     #[test]
     fn base32_decode() {
-        assert_eq!(MPInteger::base32_decode("AA======").unwrap(), MPInteger::from(0u8));
-        assert_eq!(MPInteger::base32_decode("BI======").unwrap(), MPInteger::from(10u8));
+        assert_eq!(
+            Integer::base32_decode("AA======").unwrap(),
+            Integer::from(0u8)
+        );
+        assert_eq!(
+            Integer::base32_decode("BI======").unwrap(),
+            Integer::from(10u8)
+        );
     }
 
     #[test]
     fn base64_encode() {
-        assert_eq!(MPInteger::from(0u8).base64_encode().unwrap(), "AA==");
-        assert_eq!(MPInteger::from(10u8).base64_encode().unwrap(), "Cg==");
-        assert!(MPInteger::from(-2i64).base64_encode().is_err());
+        assert_eq!(Integer::from(0u8).base64_encode().unwrap(), "AA==");
+        assert_eq!(Integer::from(10u8).base64_encode().unwrap(), "Cg==");
+        assert!(Integer::from(-2i64).base64_encode().is_err());
     }
 
     #[test]
     fn base64_decode() {
-        assert_eq!(MPInteger::base64_decode("AA==").unwrap(), MPInteger::from(0u8));
-        assert_eq!(MPInteger::base64_decode("Cg==").unwrap(), MPInteger::from(10u8));
+        assert_eq!(Integer::base64_decode("AA==").unwrap(), Integer::from(0u8));
+        assert_eq!(Integer::base64_decode("Cg==").unwrap(), Integer::from(10u8));
     }
 }

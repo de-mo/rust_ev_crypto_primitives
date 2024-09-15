@@ -21,12 +21,11 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::{
-    integer::MPInteger,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    HashError, HashableMessage, Operations, RecursiveHashTrait,
+    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::ArgumentContext;
@@ -34,20 +33,20 @@ use super::ArgumentContext;
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct SingleValueProductStatement<'a> {
-    pub c_a: &'a MPInteger,
-    pub b: &'a MPInteger,
+    pub c_a: &'a Integer,
+    pub b: &'a Integer,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct SingleValueProductArgument<'a> {
-    pub c_d: &'a MPInteger,
-    pub c_lower_delta: &'a MPInteger,
-    pub c_upper_delta: &'a MPInteger,
-    pub a_tilde: &'a [MPInteger],
-    pub b_tilde: &'a [MPInteger],
-    pub r_tilde: &'a MPInteger,
-    pub s_tilde: &'a MPInteger,
+    pub c_d: &'a Integer,
+    pub c_lower_delta: &'a Integer,
+    pub c_upper_delta: &'a Integer,
+    pub a_tilde: &'a [Integer],
+    pub b_tilde: &'a [Integer],
+    pub r_tilde: &'a Integer,
+    pub s_tilde: &'a Integer,
 }
 
 /// Input of the verify algorithm
@@ -82,10 +81,7 @@ impl<'a> SingleValueProductStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(
-        c_a: &'a MPInteger,
-        b: &'a MPInteger,
-    ) -> Result<Self, SingleValueProductArgumentError> {
+    pub fn new(c_a: &'a Integer, b: &'a Integer) -> Result<Self, SingleValueProductArgumentError> {
         Ok(Self { c_a, b })
     }
 }
@@ -95,13 +91,13 @@ impl<'a> SingleValueProductArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        c_d: &'a MPInteger,
-        c_lower_delta: &'a MPInteger,
-        c_upper_delta: &'a MPInteger,
-        a_tilde: &'a [MPInteger],
-        b_tilde: &'a [MPInteger],
-        r_tilde: &'a MPInteger,
-        s_tilde: &'a MPInteger,
+        c_d: &'a Integer,
+        c_lower_delta: &'a Integer,
+        c_upper_delta: &'a Integer,
+        a_tilde: &'a [Integer],
+        b_tilde: &'a [Integer],
+        r_tilde: &'a Integer,
+        s_tilde: &'a Integer,
     ) -> Result<Self, SingleValueProductArgumentError> {
         if a_tilde.len() != b_tilde.len() {
             return Err(SingleValueProductArgumentError::ExponentVectorNotSameLen);
@@ -161,7 +157,7 @@ pub fn verify_single_value_product_argument(
         .c_upper_delta
         .mod_exponentiate(&x, p)
         .mod_multiply(argument.c_lower_delta, p);
-    let e: Vec<MPInteger> = argument
+    let e: Vec<Integer> = argument
         .a_tilde
         .iter()
         .skip(1)
@@ -194,7 +190,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &SingleValueProductStatement,
     argument: &SingleValueProductArgument,
-) -> Result<MPInteger, SingleValueProductArgumentError> {
+) -> Result<Integer, SingleValueProductArgumentError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -240,15 +236,15 @@ pub mod test {
     use serde_json::Value;
     use std::path::Path;
 
-    pub struct SVPStatementValues(pub MPInteger, pub MPInteger);
+    pub struct SVPStatementValues(pub Integer, pub Integer);
     pub struct SVPArgumentValues(
-        pub MPInteger,
-        pub MPInteger,
-        pub MPInteger,
-        pub Vec<MPInteger>,
-        pub Vec<MPInteger>,
-        pub MPInteger,
-        pub MPInteger,
+        pub Integer,
+        pub Integer,
+        pub Integer,
+        pub Vec<Integer>,
+        pub Vec<Integer>,
+        pub Integer,
+        pub Integer,
     );
 
     fn get_test_cases() -> Vec<Value> {

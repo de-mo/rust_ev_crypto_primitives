@@ -21,12 +21,11 @@ use std::{fmt::Display, iter::once};
 use thiserror::Error;
 
 use crate::{
-    integer::MPInteger,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    Constants, HashError, HashableMessage, Operations, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::{
@@ -40,14 +39,14 @@ use super::{
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct HadamardStatement<'a> {
-    cs_upper_a: &'a [MPInteger],
-    c_b: &'a MPInteger,
+    cs_upper_a: &'a [Integer],
+    c_b: &'a Integer,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct HadamardArgument<'a> {
-    cs_upper_b: &'a [MPInteger],
+    cs_upper_b: &'a [Integer],
     zero_argument: &'a ZeroArgument<'a>,
 }
 
@@ -101,7 +100,7 @@ pub fn verify_hadamard_argument(
     let y = get_y(context, statement, argument)?;
 
     let x_powers = (0..m)
-        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+        .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Vec<_>>();
 
     let cs_upper_d = argument
@@ -117,13 +116,13 @@ pub fn verify_hadamard_argument(
         .zip(x_powers.iter())
         .skip(1)
         .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
-        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
 
-    let minus_1_vec = vec![MPInteger::from(q - MPInteger::one()); n];
+    let minus_1_vec = vec![Integer::from(q - Integer::one()); n];
     let c_minus_1 = get_commitment(
         context.ep,
         minus_1_vec.as_slice(),
-        MPInteger::zero(),
+        Integer::zero(),
         context.ck,
     )
     .map_err(HadamardArgumentError::CommitmentError)?;
@@ -161,7 +160,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &HadamardStatement,
     argument: &HadamardArgument,
-) -> Result<MPInteger, HadamardArgumentError> {
+) -> Result<Integer, HadamardArgumentError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
@@ -174,7 +173,7 @@ fn get_y(
     context: &ArgumentContext,
     statement: &HadamardStatement,
     argument: &HadamardArgument,
-) -> Result<MPInteger, HadamardArgumentError> {
+) -> Result<Integer, HadamardArgumentError> {
     let mut vec = get_hashable_vector_for_x(context, statement, argument);
     vec.insert(0, HashableMessage::from("1"));
     Ok(HashableMessage::from(vec)
@@ -224,10 +223,7 @@ impl<'a> HadamardStatement<'a> {
     /// New statement cloning the data
     ///
     /// Return error if the domain is wrong
-    pub fn new(
-        cs_upper_a: &'a [MPInteger],
-        c_b: &'a MPInteger,
-    ) -> Result<Self, HadamardArgumentError> {
+    pub fn new(cs_upper_a: &'a [Integer], c_b: &'a Integer) -> Result<Self, HadamardArgumentError> {
         Ok(Self { cs_upper_a, c_b })
     }
 
@@ -241,7 +237,7 @@ impl<'a> HadamardArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        cs_upper_b: &'a [MPInteger],
+        cs_upper_b: &'a [Integer],
         zero_argument: &'a ZeroArgument,
     ) -> Result<Self, HadamardArgumentError> {
         if zero_argument.cs_d.len() != 2 * cs_upper_b.len() + 1 {
@@ -293,8 +289,8 @@ pub mod test {
     use serde_json::Value;
     use std::path::Path;
 
-    pub struct HadamardStatementValues(pub Vec<MPInteger>, pub MPInteger);
-    pub struct HadamardArgumentValues(pub Vec<MPInteger>, pub ZeroArgumentValues);
+    pub struct HadamardStatementValues(pub Vec<Integer>, pub Integer);
+    pub struct HadamardArgumentValues(pub Vec<Integer>, pub ZeroArgumentValues);
 
     fn get_test_cases() -> Vec<Value> {
         let test_file = Path::new("./")

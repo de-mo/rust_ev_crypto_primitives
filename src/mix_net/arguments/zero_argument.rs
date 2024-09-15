@@ -22,33 +22,32 @@ use thiserror::Error;
 
 use super::{star_map, ArgumentContext, StarMapError};
 use crate::{
-    integer::{Constants, MPInteger},
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    HashError, HashableMessage, Operations, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct ZeroStatement<'a> {
-    cs_upper_a: &'a [MPInteger],
-    cs_upper_b: &'a [MPInteger],
-    y: &'a MPInteger,
+    cs_upper_a: &'a [Integer],
+    cs_upper_b: &'a [Integer],
+    y: &'a Integer,
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct ZeroArgument<'a> {
-    pub c_upper_a_0: &'a MPInteger,
-    pub c_upper_b_m: &'a MPInteger,
-    pub cs_d: &'a [MPInteger],
-    pub as_prime: &'a [MPInteger],
-    pub bs_prime: &'a [MPInteger],
-    pub r_prime: &'a MPInteger,
-    pub s_prime: &'a MPInteger,
-    pub t_prime: &'a MPInteger,
+    pub c_upper_a_0: &'a Integer,
+    pub c_upper_b_m: &'a Integer,
+    pub cs_d: &'a [Integer],
+    pub as_prime: &'a [Integer],
+    pub bs_prime: &'a [Integer],
+    pub r_prime: &'a Integer,
+    pub s_prime: &'a Integer,
+    pub t_prime: &'a Integer,
 }
 
 /// Input of the verify algorithm
@@ -96,18 +95,18 @@ pub fn verify_zero_argument(
     let m = statement.m();
 
     let x = get_x(context, statement, argument)?;
-    let x_powers: Vec<MPInteger> = (0..2 * m + 1)
-        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+    let x_powers: Vec<Integer> = (0..2 * m + 1)
+        .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect();
 
-    let verif_upper_c_d = &argument.cs_d[m + 1] == MPInteger::one();
+    let verif_upper_c_d = &argument.cs_d[m + 1] == Integer::one();
 
     let prod_c_a = [argument.c_upper_a_0.clone()]
         .iter()
         .chain(statement.cs_upper_a.iter())
         .enumerate()
         .map(|(i, c)| c.mod_exponentiate(&x_powers[i], p))
-        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
     let comm_a = get_commitment(context.ep, argument.as_prime, argument.r_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_a = prod_c_a == comm_a;
@@ -117,7 +116,7 @@ pub fn verify_zero_argument(
         .chain(statement.cs_upper_b.iter().rev())
         .enumerate()
         .map(|(i, c)| c.mod_exponentiate(&x_powers[i], p))
-        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
     let comm_b = get_commitment(context.ep, argument.bs_prime, argument.s_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_b = prod_c_b == comm_b;
@@ -126,8 +125,8 @@ pub fn verify_zero_argument(
         .cs_d
         .iter()
         .enumerate()
-        .map(|(i, c)| c.mod_exponentiate(&x.mod_exponentiate(&MPInteger::from(i), q), p))
-        .fold(MPInteger::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+        .map(|(i, c)| c.mod_exponentiate(&x.mod_exponentiate(&Integer::from(i), q), p))
+        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
     let prod = star_map(q, statement.y, argument.as_prime, argument.bs_prime)
         .map_err(ZeroArgumentError::StarMapError)?;
     let comm_d = get_commitment(context.ep, &[prod], argument.t_prime, context.ck)
@@ -146,7 +145,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &ZeroStatement,
     argument: &ZeroArgument,
-) -> Result<MPInteger, ZeroArgumentError> {
+) -> Result<Integer, ZeroArgumentError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -187,9 +186,9 @@ impl<'a> ZeroStatement<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        cs_upper_a: &'a [MPInteger],
-        cs_upper_b: &'a [MPInteger],
-        y: &'a MPInteger,
+        cs_upper_a: &'a [Integer],
+        cs_upper_b: &'a [Integer],
+        y: &'a Integer,
     ) -> Result<Self, ZeroArgumentError> {
         if cs_upper_a.len() != cs_upper_b.len() {
             return Err(ZeroArgumentError::CommitmentVectorNotSameLen);
@@ -212,14 +211,14 @@ impl<'a> ZeroArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        c_upper_a_0: &'a MPInteger,
-        c_upper_b_m: &'a MPInteger,
-        cs_d: &'a [MPInteger],
-        as_prime: &'a [MPInteger],
-        bs_prime: &'a [MPInteger],
-        r_prime: &'a MPInteger,
-        s_prime: &'a MPInteger,
-        t_prime: &'a MPInteger,
+        c_upper_a_0: &'a Integer,
+        c_upper_b_m: &'a Integer,
+        cs_d: &'a [Integer],
+        as_prime: &'a [Integer],
+        bs_prime: &'a [Integer],
+        r_prime: &'a Integer,
+        s_prime: &'a Integer,
+        t_prime: &'a Integer,
     ) -> Result<Self, ZeroArgumentError> {
         if as_prime.len() != bs_prime.len() {
             return Err(ZeroArgumentError::ExponentVectorNotSameLen);
@@ -269,17 +268,17 @@ pub mod test {
     use serde_json::Value;
     use std::path::Path;
 
-    pub struct ZeroStatementValues(pub Vec<MPInteger>, pub Vec<MPInteger>, pub MPInteger);
+    pub struct ZeroStatementValues(pub Vec<Integer>, pub Vec<Integer>, pub Integer);
 
     pub struct ZeroArgumentValues(
-        pub MPInteger,
-        pub MPInteger,
-        pub Vec<MPInteger>,
-        pub Vec<MPInteger>,
-        pub Vec<MPInteger>,
-        pub MPInteger,
-        pub MPInteger,
-        pub MPInteger,
+        pub Integer,
+        pub Integer,
+        pub Vec<Integer>,
+        pub Vec<Integer>,
+        pub Vec<Integer>,
+        pub Integer,
+        pub Integer,
+        pub Integer,
     );
 
     fn get_test_cases() -> Vec<Value> {

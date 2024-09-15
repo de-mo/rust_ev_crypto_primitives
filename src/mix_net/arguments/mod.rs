@@ -21,30 +21,26 @@ mod shuffle_argument;
 mod single_value_product_argument;
 mod zero_argument;
 
-pub use shuffle_argument::{
-    verify_shuffle_argument,
-    ShuffleArgument,
-    ShuffleStatement,
-    ShuffleArgumentVerifyInput,
-    ShuffleArgumentError,
-    VerifyShuffleArgumentResult,
-};
 pub use hadamard_argument::HadamardArgument;
 pub use multi_exponentiation_argument::MultiExponentiationArgument;
 pub use product_argument::ProductArgument;
+pub use shuffle_argument::{
+    verify_shuffle_argument, ShuffleArgument, ShuffleArgumentError, ShuffleArgumentVerifyInput,
+    ShuffleStatement, VerifyShuffleArgumentResult,
+};
 pub use single_value_product_argument::SingleValueProductArgument;
 pub use zero_argument::ZeroArgument;
 
 use thiserror::Error;
 
 use super::commitments::CommitmentKey;
-use crate::{ integer::MPInteger, Constants, EncryptionParameters, Operations };
+use crate::{elgamal::EncryptionParameters, ConstantsTrait, Integer, OperationsTrait};
 
 /// context for all arguments verification functions
 #[derive(Clone, Debug)]
 pub struct ArgumentContext<'a> {
     ep: &'a EncryptionParameters,
-    pks: &'a [MPInteger],
+    pks: &'a [Integer],
     ck: &'a CommitmentKey,
 }
 
@@ -55,49 +51,45 @@ pub enum StarMapError {
 }
 
 pub fn star_map(
-    q: &MPInteger,
-    y: &MPInteger,
-    a: &[MPInteger],
-    b: &[MPInteger]
-) -> Result<MPInteger, StarMapError> {
+    q: &Integer,
+    y: &Integer,
+    a: &[Integer],
+    b: &[Integer],
+) -> Result<Integer, StarMapError> {
     if a.len() != b.len() {
         return Err(StarMapError::VectorNotSameLen);
     }
-    Ok(
-        a
-            .iter()
-            .zip(b.iter())
-            .enumerate()
-            .map(|(j, (a_j, b_j))|
-                a_j
-                    .mod_multiply(b_j, q)
-                    .mod_multiply(&y.mod_exponentiate(&MPInteger::from(j + 1), q), q)
-            )
-            .fold(MPInteger::zero().clone(), |acc, v| acc + v)
-            .modulo(q)
-    )
+    Ok(a.iter()
+        .zip(b.iter())
+        .enumerate()
+        .map(|(j, (a_j, b_j))| {
+            a_j.mod_multiply(b_j, q)
+                .mod_multiply(&y.mod_exponentiate(&Integer::from(j + 1), q), q)
+        })
+        .fold(Integer::zero().clone(), |acc, v| acc + v)
+        .modulo(q))
 }
 
 impl<'a> ArgumentContext<'a> {
     /// New context cloning the data
-    pub fn new(ep: &'a EncryptionParameters, pks: &'a [MPInteger], ck: &'a CommitmentKey) -> Self {
+    pub fn new(ep: &'a EncryptionParameters, pks: &'a [Integer], ck: &'a CommitmentKey) -> Self {
         Self { ep, pks, ck }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-    use crate::test_json_data::{ json_array_value_to_array_mpinteger, json_value_to_mpinteger };
-    use serde_json::Value;
     use super::*;
+    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use serde_json::Value;
+    use std::path::Path;
 
-    pub struct EncryptionParametersValues(pub MPInteger, pub MPInteger, pub MPInteger);
-    pub struct CommitmentKeyValues(pub MPInteger, pub Vec<MPInteger>);
+    pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
+    pub struct CommitmentKeyValues(pub Integer, pub Vec<Integer>);
 
     pub struct ContextValues(
         pub EncryptionParametersValues,
-        Vec<MPInteger>,
+        Vec<Integer>,
         pub CommitmentKeyValues,
     );
 
@@ -106,13 +98,13 @@ mod test {
             EncryptionParametersValues(
                 json_value_to_mpinteger(&context["p"]),
                 json_value_to_mpinteger(&context["q"]),
-                json_value_to_mpinteger(&context["g"])
+                json_value_to_mpinteger(&context["g"]),
             ),
             json_array_value_to_array_mpinteger(&context["pk"]),
             CommitmentKeyValues(
                 json_value_to_mpinteger(&context["ck"]["h"]),
-                json_array_value_to_array_mpinteger(&context["ck"]["g"])
-            )
+                json_array_value_to_array_mpinteger(&context["ck"]["g"]),
+            ),
         )
     }
 
@@ -130,18 +122,21 @@ mod test {
     pub fn context_from_json_value<'a>(
         values: &'a ContextValues,
         ep: &'a EncryptionParameters,
-        ck: &'a CommitmentKey
+        ck: &'a CommitmentKey,
     ) -> ArgumentContext<'a> {
         ArgumentContext::new(ep, &values.1, ck)
     }
 
     fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./").join("test_data").join("mixnet").join("bilinearMap.json");
+        let test_file = Path::new("./")
+            .join("test_data")
+            .join("mixnet")
+            .join("bilinearMap.json");
         let json = std::fs::read_to_string(test_file).unwrap();
         serde_json::from_str(&json).unwrap()
     }
 
-    fn get_input(tc: &Value) -> (MPInteger, Vec<MPInteger>, Vec<MPInteger>) {
+    fn get_input(tc: &Value) -> (Integer, Vec<Integer>, Vec<Integer>) {
         let input = tc["input"].clone();
         (
             json_value_to_mpinteger(&input["y"]),
@@ -159,7 +154,12 @@ mod test {
             let context = context_from_json_value(&context_values, &ep, &ck);
             let (y, a, b) = get_input(tc);
             let s_res = star_map(context.ep.q(), &y, &a, &b);
-            assert!(s_res.is_ok(), "Error unwraping {}: {}", tc["description"], s_res.unwrap_err());
+            assert!(
+                s_res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                s_res.unwrap_err()
+            );
             assert_eq!(
                 s_res.unwrap(),
                 json_value_to_mpinteger(&tc["output"]["value"]),

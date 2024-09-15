@@ -14,10 +14,11 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-use crate::{BasisCryptoError, ByteArray};
+use super::BasisCryptoError;
+use crate::ByteArray;
 use openssl::rand::rand_bytes;
 
-/// Random bytes of give size
+/// Random bytes of the given size
 pub fn random_bytes(size: usize) -> Result<ByteArray, BasisCryptoError> {
     let mut buf = vec![0u8; size];
     rand_bytes(&mut buf).map_err(|e| BasisCryptoError::RandomError {

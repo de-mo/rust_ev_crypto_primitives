@@ -16,16 +16,8 @@
 
 //! Module that implement some functions of the number theory that are necessary for the primitives
 //!
-use super::integer::{Constants, MPInteger, Operations};
+use crate::{ConstantsTrait, Integer, OperationsTrait};
 use thiserror::Error;
-
-#[cfg(feature = "num-bigint")]
-use miller_rabin;
-#[cfg(feature = "num-bigint")]
-use num_bigint::BigUint;
-
-#[cfg(feature = "rug")]
-use rug::Integer;
 
 /// Functionality on small primes
 ///
@@ -135,62 +127,6 @@ impl SmallPrimeTrait for usize {
     }
 }
 
-#[cfg(feature = "num-bigint")]
-impl NumberTheoryMethodTrait for BigUint {
-    fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError> {
-        if &(n % 2u8) == BigUint::zero() {
-            return Err(NumberTheoryError::DenominatorNotOdd(n.clone()));
-        }
-        let mut temp_a = self % n;
-        let mut temp_n = n.to_owned();
-        let mut t = 1i32;
-        while &temp_a != BigUint::zero() {
-            while &(&temp_a % 2u8) == BigUint::zero() {
-                temp_a = &temp_a / 2u8;
-                let r = &temp_n % 8u8;
-                if &r == BigUint::three() || &r == BigUint::five() {
-                    t = -t;
-                }
-            }
-            (temp_a, temp_n) = (temp_n.clone(), temp_a.clone());
-            if &(&temp_a % 4u8) == BigUint::three() && &(&temp_n % 4u8) == BigUint::three() {
-                t = -t;
-            }
-            temp_a = temp_a.clone() % temp_n.clone();
-        }
-        if &temp_n == BigUint::one() {
-            Ok(t)
-        } else {
-            Ok(0)
-        }
-    }
-
-    fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool {
-        let n_mod = self % modulus;
-        let b_mod = b % modulus;
-
-        if &b_mod == BigUint::one() {
-            return &n_mod == BigUint::one();
-        }
-
-        if &n_mod == BigUint::one() {
-            return &b_mod == BigUint::one();
-        }
-
-        let mut pow = BigUint::one().clone();
-        while pow < n_mod {
-            pow = pow.mod_multiply(&b_mod, modulus);
-        }
-
-        pow == n_mod
-    }
-
-    fn miller_rabin(&self, iterations: usize) -> bool {
-        miller_rabin::is_prime(self, iterations)
-    }
-}
-
-#[cfg(feature = "rug")]
 impl NumberTheoryMethodTrait for Integer {
     fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError> {
         Ok(self.jacobi(n))
@@ -227,7 +163,7 @@ pub enum NumberTheoryError {
     #[error("Out of range error for {n}: {msg}")]
     OutOfRange { msg: String, n: usize },
     #[error("Denominator {0} is not odd, but it must be.")]
-    DenominatorNotOdd(MPInteger),
+    DenominatorNotOdd(Integer),
     #[error("{0} is not quadratic residue of {1}")]
     CheckQuadraticResidue(String, String),
     #[error("Number {0} is not prime")]
@@ -263,32 +199,24 @@ mod test {
     #[test]
     fn test_jacobi() {
         assert_eq!(
-            MPInteger::from(1u8)
-                .mp_jacobi(&MPInteger::from(9u8))
-                .unwrap(),
+            Integer::from(1u8).mp_jacobi(&Integer::from(9u8)).unwrap(),
             1
         );
         assert_eq!(
-            MPInteger::from(9u8)
-                .mp_jacobi(&MPInteger::from(15u8))
-                .unwrap(),
+            Integer::from(9u8).mp_jacobi(&Integer::from(15u8)).unwrap(),
             0
         );
         assert_eq!(
-            MPInteger::from(7u8)
-                .mp_jacobi(&MPInteger::from(17u8))
-                .unwrap(),
+            Integer::from(7u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
             -1
         );
         assert_eq!(
-            MPInteger::from(19u8)
-                .mp_jacobi(&MPInteger::from(17u8))
-                .unwrap(),
+            Integer::from(19u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
             1
         );
         assert_eq!(
-            MPInteger::from(1001u32)
-                .mp_jacobi(&MPInteger::from(9907u32))
+            Integer::from(1001u32)
+                .mp_jacobi(&Integer::from(9907u32))
                 .unwrap(),
             -1
         );
@@ -296,60 +224,52 @@ mod test {
 
     #[test]
     fn test_is_quadratic_residue() {
-        assert!(!MPInteger::from(17u8).is_quadratic_residue(&MPInteger::from(3u8)));
-        assert!(MPInteger::from(17u8).is_quadratic_residue(&MPInteger::from(13u8)));
-        let p = MPInteger::from_hexa_string(
+        assert!(!Integer::from(17u8).is_quadratic_residue(&Integer::from(3u8)));
+        assert!(Integer::from(17u8).is_quadratic_residue(&Integer::from(13u8)));
+        let p = Integer::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
-        assert!(MPInteger::from(5u8).is_quadratic_residue(&p));
-        assert!(MPInteger::from(17u8).is_quadratic_residue(&p));
-        assert!(MPInteger::from(19u8).is_quadratic_residue(&p));
+        assert!(Integer::from(5u8).is_quadratic_residue(&p));
+        assert!(Integer::from(17u8).is_quadratic_residue(&p));
+        assert!(Integer::from(19u8).is_quadratic_residue(&p));
     }
 
     #[test]
     fn test_check_quadratic_residue() {
-        let p = MPInteger::from(11u8);
-        let g_ok = MPInteger::from(3u8);
-        let g_err = MPInteger::from(2u8);
+        let p = Integer::from(11u8);
+        let g_ok = Integer::from(3u8);
+        let g_err = Integer::from(2u8);
         assert!(g_ok.check_quadratic_residue(&p).is_none());
         assert!(g_err.check_quadratic_residue(&p).is_some());
     }
 
     #[test]
     fn test_miller_rabin() {
-        let p = MPInteger::from_hexa_string(
+        let p = Integer::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
         assert!(p.miller_rabin(1));
         assert!(p.miller_rabin(64));
-        let p = MPInteger::from(6u8);
+        let p = Integer::from(6u8);
         assert!(!p.miller_rabin(1))
     }
 
     #[test]
     fn test_check_prime() {
-        let p = MPInteger::from_hexa_string(
+        let p = Integer::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
         assert!(p.check_prime().is_none());
-        let p = MPInteger::from(6u8);
+        let p = Integer::from(6u8);
         assert!(p.check_prime().is_some())
     }
 
     #[test]
     fn test_is_mod_power_of() {
-        assert!(
-            MPInteger::from(1u8).is_mod_power_of(&MPInteger::from(1u8), &MPInteger::from(100u8))
-        );
-        assert!(
-            !MPInteger::from(1u8).is_mod_power_of(&MPInteger::from(2u8), &MPInteger::from(100u8))
-        );
-        assert!(
-            !MPInteger::from(2u8).is_mod_power_of(&MPInteger::from(1u8), &MPInteger::from(100u8))
-        );
-        assert!(
-            MPInteger::from(25u8).is_mod_power_of(&MPInteger::from(5u8), &MPInteger::from(100u8))
-        );
+        assert!(Integer::from(1u8).is_mod_power_of(&Integer::from(1u8), &Integer::from(100u8)));
+        assert!(!Integer::from(1u8).is_mod_power_of(&Integer::from(2u8), &Integer::from(100u8)));
+        assert!(!Integer::from(2u8).is_mod_power_of(&Integer::from(1u8), &Integer::from(100u8)));
+        assert!(Integer::from(25u8).is_mod_power_of(&Integer::from(5u8), &Integer::from(100u8)));
     }
 }
 

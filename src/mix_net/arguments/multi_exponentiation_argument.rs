@@ -21,14 +21,14 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::{
-    integer::MPInteger,
+    elgamal::Ciphertext,
+    elgamal::ElgamalError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         matrix::Matrix,
         MixNetResultTrait,
     },
-    Ciphertext, Constants, ElgamalError, HashError, HashableMessage, Operations,
-    RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::{ArgumentContext, StarMapError};
@@ -38,20 +38,20 @@ use super::{ArgumentContext, StarMapError};
 pub struct MultiExponentiationStatement<'a> {
     ciphertext_matrix: &'a Matrix<Ciphertext>,
     upper_c: &'a Ciphertext,
-    cs_upper_a: &'a [MPInteger],
+    cs_upper_a: &'a [Integer],
 }
 
 /// Argument in input of the verify algorithm
 #[derive(Debug, Clone)]
 pub struct MultiExponentiationArgument<'a> {
-    pub c_upper_a_0: &'a MPInteger,
-    pub cs_upper_b: &'a [MPInteger],
+    pub c_upper_a_0: &'a Integer,
+    pub cs_upper_b: &'a [Integer],
     pub upper_es: &'a [Ciphertext],
-    pub a_vec: &'a [MPInteger],
-    pub r: &'a MPInteger,
-    pub b: &'a MPInteger,
-    pub s: &'a MPInteger,
-    pub tau: &'a MPInteger,
+    pub a_vec: &'a [Integer],
+    pub r: &'a Integer,
+    pub b: &'a Integer,
+    pub s: &'a Integer,
+    pub tau: &'a Integer,
 }
 
 /// Input of the verify algorithm
@@ -109,10 +109,10 @@ pub fn verify_multi_exponentiation_argument(
 
     let x = get_x(context, statement, argument)?;
     let x_powers = (0..2 * m)
-        .map(|i| x.mod_exponentiate(&MPInteger::from(i), q))
+        .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Vec<_>>();
 
-    let verif_upper_c_b_m = &argument.cs_upper_b[m] == MPInteger::one();
+    let verif_upper_c_b_m = &argument.cs_upper_b[m] == Integer::one();
     let verif_upper_e_m = &argument.upper_es[m] == statement.upper_c;
 
     let prod_upper_c_a = statement
@@ -188,7 +188,7 @@ pub fn get_x(
     context: &ArgumentContext,
     statement: &MultiExponentiationStatement,
     argument: &MultiExponentiationArgument,
-) -> Result<MPInteger, MultiExponentiationArgumentError> {
+) -> Result<Integer, MultiExponentiationArgumentError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -213,7 +213,7 @@ impl<'a> MultiExponentiationStatement<'a> {
     pub fn new(
         ciphertext_matrix: &'a Matrix<Ciphertext>,
         upper_c: &'a Ciphertext,
-        cs_upper_a: &'a [MPInteger],
+        cs_upper_a: &'a [Integer],
     ) -> Result<Self, MultiExponentiationArgumentError> {
         if ciphertext_matrix.is_malformed() {
             return Err(MultiExponentiationArgumentError::CyphertextMatrixMalformed);
@@ -254,14 +254,14 @@ impl<'a> MultiExponentiationArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
-        c_upper_a_0: &'a MPInteger,
-        cs_upper_b: &'a [MPInteger],
+        c_upper_a_0: &'a Integer,
+        cs_upper_b: &'a [Integer],
         upper_es: &'a [Ciphertext],
-        a_vec: &'a [MPInteger],
-        r: &'a MPInteger,
-        b: &'a MPInteger,
-        s: &'a MPInteger,
-        tau: &'a MPInteger,
+        a_vec: &'a [Integer],
+        r: &'a Integer,
+        b: &'a Integer,
+        s: &'a Integer,
+        tau: &'a Integer,
     ) -> Result<Self, MultiExponentiationArgumentError> {
         if cs_upper_b.len() != upper_es.len() {
             return Err(MultiExponentiationArgumentError::CommitmentVectorNotSameLen);
@@ -406,16 +406,16 @@ pub mod test {
         )
     }
 
-    pub struct MEStatementValues(pub Matrix<Ciphertext>, pub Ciphertext, pub Vec<MPInteger>);
+    pub struct MEStatementValues(pub Matrix<Ciphertext>, pub Ciphertext, pub Vec<Integer>);
     pub struct MEArgumentValues(
-        pub MPInteger,
-        pub Vec<MPInteger>,
+        pub Integer,
+        pub Vec<Integer>,
         pub Vec<Ciphertext>,
-        pub Vec<MPInteger>,
-        pub MPInteger,
-        pub MPInteger,
-        pub MPInteger,
-        pub MPInteger,
+        pub Vec<Integer>,
+        pub Integer,
+        pub Integer,
+        pub Integer,
+        pub Integer,
     );
 
     fn get_statement_values(statement: &Value) -> MEStatementValues {

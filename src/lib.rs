@@ -17,64 +17,46 @@
 //! Crate implementing the cryptographic functions for E-Voting
 //!
 //! It is based on the specifications of Swiss Post, according to the following document version:
-//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.0
+//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.1
 //!
 //! The crate reduces actually at the necessary functions for the Verifier. The crate is grouped in modules releated
 //! to themes, like the specifications
 //!
-//! The module `crate::openssl_wrapper` contains a wrapper to openssl. Details about installation and functionalities
+//! The module `crate::basic_crypto_functions` contains a wrapper to openssl. Details about installation and functionalities
 //! can be found on the crate [openssl].
+//!
+//! The crate ist based on [rug] that is strongly performant, but GMP must be installed for compilation.
+//! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
 //!
 //! If a method should return an error, then each error type is specified per module and is transparent
 //! to the user of the crate.
 //!
 //! # Features
 //!
-//! Following features are possible:
-//! - "rug": Use `Integer` of crate [sug](https://crates.io/crates/rug) for mulitple precision numbers
-//! - "num-bigint": Use the `BigUint`of crate [num-bigint](https://crates.io/crates/num-bigint) for mulitple precision numbers
+//! Following feature is possible:
 //! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post.
 //!   This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
 //!   not to activate the feature
 //!
-//! The feature "rug" is strongly more performant, but GMP must be installed for compilation.
-//! See the requirements and installation path in the crate documentation [rug](https://crates.io/crates/rug)
 
-mod argon2;
-mod basic_crypto_functions;
+pub mod argon2;
+pub mod basic_crypto_functions;
 mod byte_array;
-mod direct_trust;
-mod elgamal;
+pub mod direct_trust;
+pub mod elgamal;
 mod hashing;
 mod integer;
-mod mix_net;
+pub mod mix_net;
 mod number_theory;
-mod random;
-mod signature;
-mod zero_knowledge_proofs;
+pub mod random;
+pub mod signature;
+pub mod zero_knowledge_proofs;
 
-pub use argon2::Argon2id;
-pub use basic_crypto_functions::{sha256_stream, Decrypter};
-pub use basic_crypto_functions::{BasisCryptoError, CertificateExtension};
-pub use byte_array::{ByteArray, Decode, Encode};
-pub use direct_trust::{DirectTrustCertificate, DirectTrustError, Keystore};
-pub use elgamal::{
-    verify_decryptions, Ciphertext, ElgamalError, EncryptionParameterDomainError,
-    EncryptionParameters, VerifyDecryptionsResult,
-};
+pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
-pub use integer::{ByteLength, Constants, Hexa, MPInteger as Integer, MPIntegerError, Operations};
-pub use mix_net::{
-    verify_shuffle, HadamardArgument, MultiExponentiationArgument, ProductArgument,
-    ShuffleArgument, ShuffleError, SingleValueProductArgument, VerifyShuffleResult, ZeroArgument,
-};
-pub use number_theory::SmallPrimeTrait;
-pub use random::random_bytes;
-pub use signature::{sign, verify_signature, SignatureError};
-pub use zero_knowledge_proofs::{
-    verify_decryption, verify_exponentiation, verify_plaintext_equality, verify_schnorr,
-    ZeroKnowledgeProofError,
-};
+pub use integer::{ByteLengthTrait, ConstantsTrait, Hexa, IntegerError, OperationsTrait};
+pub use number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait};
+pub use rug::Integer;
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
@@ -154,7 +136,7 @@ impl<T, E> DomainVerifications<T, E> {
 
 #[cfg(test)]
 mod test_json_data {
-    use crate::{integer::MPInteger, Hexa};
+    use crate::{Hexa, Integer};
     use serde_json::Value;
 
     pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
@@ -166,11 +148,11 @@ mod test_json_data {
             .collect()
     }
 
-    pub fn json_array_value_to_array_mpinteger(array: &Value) -> Vec<MPInteger> {
-        MPInteger::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
+    pub fn json_array_value_to_array_mpinteger(array: &Value) -> Vec<Integer> {
+        Integer::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
     }
 
-    pub fn json_value_to_mpinteger(value: &Value) -> MPInteger {
-        MPInteger::from_hexa_string(value.as_str().unwrap()).unwrap()
+    pub fn json_value_to_mpinteger(value: &Value) -> Integer {
+        Integer::from_hexa_string(value.as_str().unwrap()).unwrap()
     }
 }
