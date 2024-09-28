@@ -2,7 +2,7 @@
 name = "rust_ev_crypto_primitives"
 description = "Crypto Primitives necessary for E-Voting Applications."
 authors = ["Denis Morel"]
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 rust-version = "1.81"
 license = "LGPL-3.0+"
@@ -12,8 +12,7 @@ categories = ["cryptography", "mathematics"]
 keywords = ["math", "e-voting", "crypto"]
 
 [dependencies]
-openssl-sys = "0.9"
-openssl = "0.10"
+openssl = { version = "0.10", features = ["vendored"] }
 chrono = "0.4"
 thiserror = "1.0"
 data-encoding = "2.5"
