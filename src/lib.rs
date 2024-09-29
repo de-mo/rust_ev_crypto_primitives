@@ -39,6 +39,7 @@
 //!   not to activate the feature
 //!
 
+pub mod alphabets;
 pub mod argon2;
 pub mod basic_crypto_functions;
 mod byte_array;
