@@ -50,6 +50,7 @@ pub mod mix_net;
 mod number_theory;
 pub mod random;
 pub mod signature;
+pub mod string;
 pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
