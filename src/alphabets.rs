@@ -45,7 +45,7 @@ pub struct AlphabetLatin(&'static str);
 impl AlphabetLatin {
     /// Size of the alphabet
     pub fn size(&self) -> usize {
-        self.0.len()
+        self.0.chars().count()
     }
 
     /// Character at position `pos` of the alphabet
