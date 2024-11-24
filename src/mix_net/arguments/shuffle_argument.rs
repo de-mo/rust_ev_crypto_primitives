@@ -52,8 +52,8 @@ pub struct ShuffleStatement<'a> {
 pub struct ShuffleArgument<'a> {
     cs_upper_a: &'a [Integer],
     cs_upper_b: &'a [Integer],
-    product_argument: &'a ProductArgument<'a>,
-    multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>,
+    product_argument: ProductArgument<'a>,
+    multi_exponentiation_argument: MultiExponentiationArgument<'a>,
 }
 
 /// Input of the verify algorithm
@@ -158,7 +158,7 @@ pub fn verify_shuffle_argument(
         .map_err(ShuffleArgumentError::ProductArgumentError)?;
     let product_verif = verify_product_argument(
         context,
-        &ProductArgumentVerifyInput::new(context, &p_statement, argument.product_argument)
+        &ProductArgumentVerifyInput::new(context, &p_statement, &argument.product_argument)
             .map_err(ShuffleArgumentError::ProductArgumentError)?,
     )
     .map_err(ShuffleArgumentError::ProductArgumentError)?;
@@ -174,7 +174,7 @@ pub fn verify_shuffle_argument(
         context,
         &MultiExponentiationArgumentVerifyInput::new(
             &m_statement,
-            argument.multi_exponentiation_argument,
+            &argument.multi_exponentiation_argument,
         )
         .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?,
     )
@@ -330,8 +330,8 @@ impl<'a> ShuffleArgument<'a> {
     pub fn new(
         cs_upper_a: &'a [Integer],
         cs_upper_b: &'a [Integer],
-        product_argument: &'a ProductArgument<'a>,
-        multi_exponentiation_argument: &'a MultiExponentiationArgument<'a>,
+        product_argument: ProductArgument<'a>,
+        multi_exponentiation_argument: MultiExponentiationArgument<'a>,
     ) -> Result<Self, ShuffleArgumentError> {
         let m = cs_upper_a.len();
         let n = multi_exponentiation_argument.n();
@@ -462,8 +462,8 @@ mod test {
 
     fn get_argument<'a>(
         values: &'a ShuffleArgumentValues,
-        pe: &'a ProductArgument<'a>,
-        me: &'a MultiExponentiationArgument<'a>,
+        pe: ProductArgument<'a>,
+        me: MultiExponentiationArgument<'a>,
     ) -> ShuffleArgument<'a> {
         ShuffleArgument::new(&values.0, &values.1, pe, me).unwrap()
     }
@@ -488,10 +488,10 @@ mod test {
             let hadamard_argument = product_argument_values
                 .1
                 .as_ref()
-                .map(|vs| get_hadamard_argument(vs, zero_argument.as_ref().unwrap()));
+                .map(|vs| get_hadamard_argument(vs, zero_argument.unwrap()));
             let product_argument =
-                get_product_argument(product_argument_values, &hadamard_argument, &svp_argument);
-            let argument = get_argument(&argument_values, &product_argument, &me_argument);
+                get_product_argument(product_argument_values, hadamard_argument, svp_argument);
+            let argument = get_argument(&argument_values, product_argument, me_argument);
             let input = ShuffleArgumentVerifyInput::new(&context, &statement, &argument).unwrap();
             let x_res = verify_shuffle_argument(&context, &input);
             assert!(

@@ -46,8 +46,8 @@ pub struct ProductStatement<'a> {
 #[derive(Debug, Clone)]
 pub struct ProductArgument<'a> {
     c_b: Option<&'a Integer>,
-    hadamard_arg: Option<&'a HadamardArgument<'a>>,
-    single_value_product_arg: &'a SingleValueProductArgument<'a>,
+    hadamard_arg: Option<HadamardArgument<'a>>,
+    single_value_product_arg: SingleValueProductArgument<'a>,
 }
 
 /// Input of the verify algorithm
@@ -121,7 +121,7 @@ pub fn verify_product_argument(
                 context,
                 &SingleValueProductVerifyInput::new(
                     &s_statement,
-                    argument.single_value_product_arg,
+                    &argument.single_value_product_arg,
                 )
                 .map_err(ProductArgumentError::SingleValueProductArgument)?,
             )
@@ -136,7 +136,7 @@ pub fn verify_product_argument(
                 context,
                 &SingleValueProductVerifyInput::new(
                     &s_statement,
-                    argument.single_value_product_arg,
+                    &argument.single_value_product_arg,
                 )
                 .map_err(ProductArgumentError::SingleValueProductArgument)?,
             )
@@ -190,8 +190,8 @@ impl<'a> ProductArgument<'a> {
     /// Return error if the domain is wrong
     pub fn new(
         c_b: Option<&'a Integer>,
-        hadamard_arg: Option<&'a HadamardArgument<'a>>,
-        single_value_product_arg: &'a SingleValueProductArgument,
+        hadamard_arg: Option<HadamardArgument<'a>>,
+        single_value_product_arg: SingleValueProductArgument<'a>,
     ) -> Result<Self, ProductArgumentError> {
         if (c_b.is_some() && hadamard_arg.is_none()) || (c_b.is_none() && hadamard_arg.is_some()) {
             return Err(ProductArgumentError::BothNoneOrSome);
@@ -307,10 +307,10 @@ pub mod test {
 
     pub fn get_argument<'a>(
         values: &'a ProductArgumentValues,
-        ha: &'a Option<HadamardArgument>,
-        svp: &'a SingleValueProductArgument,
+        ha: Option<HadamardArgument<'a>>,
+        svp: SingleValueProductArgument<'a>,
     ) -> ProductArgument<'a> {
-        ProductArgument::new(values.2.as_ref(), ha.as_ref(), svp).unwrap()
+        ProductArgument::new(values.2.as_ref(), ha, svp).unwrap()
     }
 
     #[test]
@@ -331,8 +331,8 @@ pub mod test {
             let hadamard_argument = argument_values
                 .1
                 .as_ref()
-                .map(|vs| get_hadamard_argument(vs, zero_argument.as_ref().unwrap()));
-            let argument = get_argument(&argument_values, &hadamard_argument, &svp_argument);
+                .map(|vs| get_hadamard_argument(vs, zero_argument.unwrap()));
+            let argument = get_argument(&argument_values, hadamard_argument, svp_argument);
             let input = ProductArgumentVerifyInput::new(&context, &statement, &argument).unwrap();
             let x_res = verify_product_argument(&context, &input);
             assert!(

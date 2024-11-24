@@ -47,7 +47,7 @@ pub struct HadamardStatement<'a> {
 #[derive(Debug, Clone)]
 pub struct HadamardArgument<'a> {
     cs_upper_b: &'a [Integer],
-    zero_argument: &'a ZeroArgument<'a>,
+    zero_argument: ZeroArgument<'a>,
 }
 
 /// Input of the verify algorithm
@@ -145,7 +145,7 @@ pub fn verify_hadamard_argument(
         &y,
     )
     .map_err(HadamardArgumentError::ZeroArgumentError)?;
-    let zero_inputs = ZeroArgumentVerifyInput::new(&zero_statement, argument.zero_argument)
+    let zero_inputs = ZeroArgumentVerifyInput::new(&zero_statement, &argument.zero_argument)
         .map_err(HadamardArgumentError::ZeroArgumentError)?;
 
     Ok(HadamardArgumentResult {
@@ -238,7 +238,7 @@ impl<'a> HadamardArgument<'a> {
     /// Return error if the domain is wrong
     pub fn new(
         cs_upper_b: &'a [Integer],
-        zero_argument: &'a ZeroArgument,
+        zero_argument: ZeroArgument<'a>,
     ) -> Result<Self, HadamardArgumentError> {
         if zero_argument.cs_d.len() != 2 * cs_upper_b.len() + 1 {
             return Err(HadamardArgumentError::CommitmentVectorNotCorrectLen);
@@ -321,7 +321,7 @@ pub mod test {
 
     pub fn get_argument<'a>(
         values: &'a HadamardArgumentValues,
-        zero: &'a ZeroArgument<'a>,
+        zero: ZeroArgument<'a>,
     ) -> HadamardArgument<'a> {
         HadamardArgument::new(&values.0, zero).unwrap()
     }
@@ -337,7 +337,7 @@ pub mod test {
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let statement = get_statement(&statement_values);
             let zero_argument = get_zero_argument(&argument_values.1);
-            let argument = get_argument(&argument_values, &zero_argument);
+            let argument = get_argument(&argument_values, zero_argument);
             let input = HadamardArgumentVerifyInput::new(&statement, &argument).unwrap();
             let x_res = verify_hadamard_argument(&context, &input);
             assert!(
