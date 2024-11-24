@@ -21,15 +21,19 @@ mod shuffle_argument;
 mod single_value_product_argument;
 mod zero_argument;
 
-pub use hadamard_argument::HadamardArgument;
-pub use multi_exponentiation_argument::MultiExponentiationArgument;
-pub use product_argument::ProductArgument;
+pub use hadamard_argument::{HadamardArgument, HadamardArgumentError};
+pub use multi_exponentiation_argument::{
+    MultiExponentiationArgument, MultiExponentiationArgumentError,
+};
+pub use product_argument::{ProductArgument, ProductArgumentError};
 pub use shuffle_argument::{
     verify_shuffle_argument, ShuffleArgument, ShuffleArgumentError, ShuffleArgumentVerifyInput,
     ShuffleStatement, VerifyShuffleArgumentResult,
 };
-pub use single_value_product_argument::SingleValueProductArgument;
-pub use zero_argument::ZeroArgument;
+pub use single_value_product_argument::{
+    SingleValueProductArgument, SingleValueProductArgumentError,
+};
+pub use zero_argument::{ZeroArgument, ZeroArgumentError};
 
 use thiserror::Error;
 
