@@ -17,10 +17,12 @@
 //! Implementation of El Gamal functionalitiies
 
 mod ciphertext;
+mod combined_public_keys;
 mod dercryption;
 mod encryption_parameters;
 
 pub use ciphertext::Ciphertext;
+pub use combined_public_keys::combine_public_keys;
 pub use dercryption::{verify_decryptions, VerifyDecryptionsResult};
 pub use encryption_parameters::{EncryptionParameterDomainError, EncryptionParameters};
 
