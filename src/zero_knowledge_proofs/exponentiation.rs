@@ -41,7 +41,7 @@ pub enum ExponentiationProofError {
 fn compute_phi_exponentiation(
     ep: &EncryptionParameters,
     x: &Integer,
-    gs: &[Integer],
+    gs: &[&Integer],
 ) -> Vec<Integer> {
     gs.iter().map(|g| g.mod_exponentiate(x, ep.p())).collect()
 }
@@ -52,8 +52,8 @@ fn compute_phi_exponentiation(
 /// Return [ExponentiationError] if preconditions are not satisfied
 pub fn verify_exponentiation(
     ep: &EncryptionParameters,
-    gs: &Vec<Integer>,
-    ys: &Vec<Integer>,
+    gs: &[&Integer],
+    ys: &[&Integer],
     (e, z): (&Integer, &Integer),
     i_aux: &Vec<String>,
 ) -> Result<bool, ExponentiationProofError> {
@@ -85,7 +85,11 @@ pub fn verify_exponentiation(
     let f_list = vec![
         HashableMessage::from(ep.p()),
         HashableMessage::from(ep.q()),
-        HashableMessage::from(gs),
+        HashableMessage::from(
+            gs.iter()
+                .map(|g| HashableMessage::from(*g))
+                .collect::<Vec<_>>(),
+        ),
     ];
     let f = HashableMessage::from(&f_list);
     let c_prime_s: Vec<Integer> = zip(&xs, ys)
@@ -99,7 +103,11 @@ pub fn verify_exponentiation(
     let h_aux = HashableMessage::from(&h_aux_l);
     let l_final: Vec<HashableMessage> = vec![
         f,
-        HashableMessage::from(ys),
+        HashableMessage::from(
+            ys.iter()
+                .map(|y| HashableMessage::from(*y))
+                .collect::<Vec<_>>(),
+        ),
         HashableMessage::from(&c_prime_s),
         h_aux,
     ];
@@ -149,8 +157,8 @@ mod test {
         let add_info: Vec<String> = vec!["test-0".to_string()];
         assert!(verify_exponentiation(
             &EncryptionParameters::from((&p, &q, &g)),
-            &gs,
-            &ys,
+            gs.iter().collect::<Vec<_>>().as_slice(),
+            ys.iter().collect::<Vec<_>>().as_slice(),
             (&e, &z),
             &add_info
         )
@@ -192,8 +200,8 @@ mod test {
         let add_info: Vec<String> = vec!["test-0".to_string(), "test-1".to_string()];
         assert!(verify_exponentiation(
             &EncryptionParameters::from((&p, &q, &g)),
-            &gs,
-            &ys,
+            gs.iter().collect::<Vec<_>>().as_slice(),
+            ys.iter().collect::<Vec<_>>().as_slice(),
             (&e, &z),
             &add_info
         )
@@ -245,8 +253,8 @@ mod test {
         let add_info: Vec<String> = vec!["test-0".to_string(), "test-1".to_string()];
         assert!(verify_exponentiation(
             &EncryptionParameters::from((&p, &q, &g)),
-            &gs,
-            &ys,
+            gs.iter().collect::<Vec<_>>().as_slice(),
+            ys.iter().collect::<Vec<_>>().as_slice(),
             (&e, &z),
             &add_info
         )
