@@ -39,7 +39,7 @@ pub fn verify_decryptions(
     upper_cs: &[Ciphertext],
     pks: &[Integer],
     upper_cs_prime: &[Ciphertext],
-    pi_dec: &[(Integer, Vec<Integer>)],
+    pi_dec: &[(&Integer, &[Integer])],
     i_aux: &[String],
 ) -> Result<VerifyDecryptionsResult, ElgamalError> {
     let upper_n = upper_cs.len();
@@ -69,14 +69,8 @@ pub fn verify_decryptions(
             .zip(pi_dec.iter())
             .map(|((c_i, c_prime_i), pi_i)| {
                 let verif_gamma = c_i.gamma == c_prime_i.gamma;
-                let verif_decryption = verify_decryption(
-                    ep,
-                    c_i,
-                    pks,
-                    &c_prime_i.phis,
-                    i_aux,
-                    (&pi_i.0, pi_i.1.as_slice()),
-                )?;
+                let verif_decryption =
+                    verify_decryption(ep, c_i, pks, &c_prime_i.phis, i_aux, (pi_i.0, pi_i.1))?;
                 Ok(VerifyDecryptionResultOneCiphertext {
                     verif_gamma,
                     verif_decryption,
