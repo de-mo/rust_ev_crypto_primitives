@@ -69,8 +69,8 @@ pub fn verify_decryptions(
             .zip(pi_dec.iter())
             .map(|((c_i, c_prime_i), pi_i)| {
                 let verif_gamma = c_i.gamma == c_prime_i.gamma;
-                let verif_decryption =
-                    verify_decryption(ep, c_i, pks, &c_prime_i.phis, i_aux, (pi_i.0, pi_i.1))?;
+                let m = c_prime_i.phis.as_slice();
+                let verif_decryption = verify_decryption(ep, c_i, pks, m, i_aux, (pi_i.0, pi_i.1))?;
                 Ok(VerifyDecryptionResultOneCiphertext {
                     verif_gamma,
                     verif_decryption,
@@ -138,7 +138,7 @@ impl From<&[VerifyDecryptionResultOneCiphertext]> for VerifyDecryptionsResult {
                 .enumerate()
                 .filter(|(_, err)| !err.is_ok())
                 .map(|(i, err)| (i, *err))
-                .collect::<Vec<(usize, VerifyDecryptionResultOneCiphertext)>>(),
+                .collect::<Vec<_>>(),
         }
     }
 }

@@ -92,6 +92,7 @@ fn verify_decryption_impl(
     let fs = vec![ep.p(), ep.q(), ep.g(), &upper_c.gamma];
     let ys: Vec<Integer> = pks
         .iter()
+        .take(l)
         .cloned()
         .chain(
             upper_c
@@ -128,7 +129,7 @@ fn verify_decryption_impl(
 
 #[cfg(test)]
 mod test {
-    use crate::Hexa;
+    use crate::{DecodeTrait, Hexa};
 
     use super::*;
 
@@ -269,6 +270,61 @@ mod test {
             &pks,
             &ms,
             &[],
+            (&e, &zs),
+        );
+        assert!(res.is_ok());
+        assert!(res.unwrap())
+    }
+
+    #[test]
+    fn test_smaller_ciphertext_as_public_key() {
+        let p = Integer::base64_decode(
+            "jA4DatkpgfS1r6X1Q5iYA0sS2KakO3pabCF5uww/NyUxmZLOWP1E70Wq1jYs7FMgqAXPvfWn2cCdVGrU5ZcoHWim7FjtyhZPFw15XXewjoOsBUDoqf1Pg5mNakQpQAVEhqMRQ4s5FY1nCB5FvsAUnd8gCONEyIo75r6nj0BmZSoKYCGICT0nBnD0tpW3DwLInQZc5L+x1j39j+CGQI9wCk4+FhAyrK4nNMSsHv3vRUuxdsJber7KZ8d0eqRcyuRZdTbbBDmwz0GlxEmSrP4KRt6gohGN25y7myXQkza1alJpsNOGmBR7GSipM6/gagxRroVzAHBCVNp20g9d7UUZ32DA11pbBrjvEIWMNtZBKGr5Px4d+BJPljxBsbANBqu3d4gfrc5j0Me03yRbPwWq39r5sNFFrIMURmqaOa9l6kVkBBvgDiBt1ult+X787mO6orBoyLXMMCU8qy3zIdzCi5Kfq4Wn8i1C5af7SowhOfV33XNoRnMfPp3CSZaWi1wv"
+        ).unwrap();
+        let q = Integer::base64_decode(
+            "RgcBtWyUwPpa19L6ocxMAaWJbFNSHb0tNhC83YYfm5KYzMlnLH6id6LVaxsWdimQVALn3vrT7OBOqjVqcsuUDrRTdix25Qsni4a8rrvYR0HWAqB0VP6nwczGtSIUoAKiQ1GIocWcisazhA8i32AKTu+QBHGiZEUd819Tx6AzMpUFMBDEBJ6Tgzh6W0rbh4FkToMucl/Y6x7+x/BDIEe4BScfCwgZVlcTmmJWD373oqXYu2EtvV9lM+O6PVIuZXIsupttghzYZ6DS4iTJVn8FI29QUQjG7c5dzZLoSZtatSk02GnDTAo9jJRUmdfwNQYo10K5gDghKm07aQeu9qKM77Bga60tg1x3iELGG2sglDV8n48O/Aknyx4g2NgGg1Xbu8QP1ucx6GPab5Itn4LVb+182Gii1kGKIzVNHNey9SKyAg3wBxA263S2/L9+dzHdUVg0ZFrmGBKeVZb5kO5hRclP1cLT+RahctP9pUYQnPq77rm0IzmPn07hJMtLRa4X"
+        ).unwrap();
+        let g = Integer::base64_decode("Ag==").unwrap();
+        let gamma = Integer::base64_decode(
+            "hwImEFXuMLcCmXcexszjkKQvXs3rq0FIYF6+nVjx7yo0DRG2ce9ivF59LsXgGjJcQ61vELuhzNvAK2m2wdti24zdkdB3Yn/ZQdVHh97xjP9cXDosTUumhye9wXhfHzqcKomS5njrlR8+Lzkc3PzUZRl877DmFflAw68yOZLJIZrqq0hf9zgdBNdYi9Tz1BaMMTqkQ3ZI4ZCkdO0XAmZ+mV4UJT4B4YLIBekSAR94UDHfe6hGvDib4LqU1BDC43xU3BdX2jC3e9gzysvqMjg5cUS0prUAY4lgYOhuzaa2P/P9RUicr/oYRhFdlsCMLutvRrYCdKF8CpZQ3fkYlOcQeW4dtMaLjzgPiL5/Dnxl1ews2zoWF5RaJemZT2XvebtrXO2yWDHwfelHcsUmgBzWgNYepEA/cbA/p7MmqWsLfHPCVUMf1Hhw/VFW/H3JJalXxSR1ulQugXwN3Yjnu73em3bHngZ4KDs1Pk+BkEZXnDJGeYDAlNu04A949d4y9r4n"
+        ).unwrap();
+        let phis: Vec<Integer> = [
+            "i5b35oK7XPck5dxccqr2/YdbRi8djAqEWOirAP3BZ0D1IHcY7QBaPt1vRrr8aQmAk7hwhNhQRmZcXr8WJPlm/QzPBlxaWxd9oejQscZj2123hnw2/IR10X7zZM16J55QnQq6q0nJ/Y/w8du6zjbtES2cpUPEoCKpBS9wONsOpL/mlAGkKxRrqxFWNl/P90qm2HaCbHvuX7Y+bG6Q4y4+sp6ztInG/Y8R9PAxknVN65u2eYp8kJNGcUl5QPTF68TJFoOAu1cV7IfiJm3s7+d6spmGCXeyoZJCcHDcscC7h1xzQpHxf3x8NnX5Emq9BVzqsLJNw32OYLnnCec3n102VfauPneSQRmFok0ZaMix+pmJIodUuugdw49wZmdsmax2vvvbn85PGkc2QfYV9KFgfIRLugJI+3guiiS2xbOnldR//3RgnWHrVuCLPEtb6C6pm3gaWXKV8z6KB+ZqCl8tXOVRRRDK5OSfpsXksq0wk811WFbcFxFsY42rWd/X44Of"
+        ]
+            .iter()
+            .map(|s| Integer::base64_decode(s).unwrap())
+            .collect();
+        let pks: Vec<Integer> = [
+            "RRvARDZPWY04Itn3uIfnxpwpMen52V0oHuEFNCbOOIcku63jiz2nQ9YNnlaO5Oi332Go1xsJJrfUTEhhxvi57uuLqRbwzm6mv9o2CabIGxLZVO82KMnQqSv/ACDoFNtWWxBjQBGOjDeJgiJMfp7qW+M+O3urhbh4OMvUQhYC46LhiGMyTjn3hq0YWN2MdVHHbr8URaGVwBO56F6+FWQN8+wHJFbCd+ksqQsJqq9We4PZPAIVpuez4UPsK5TNl8ll2LaicHVFF9SEh6vvAZKxZqKHczvG6mcZ0xLwKKeQhCvV5otqjdH2A0dFkcakb/zdluhFitU9XGYUGO9A18CCH0Rslhcc5q/ll/jAq/59jtXsjPG8QbBX036MeTD/V3fwtzC5lKyEcOFvNb2qo/4Pq6gsVqj2Mvf2BbJiEeigApZWyU6z+KrH20EY2sMmds08F0CGO0u98f2bu9HKQuc4KVNVsjXLTiXbHbwBkFJwL3kM9d234Cu6BewsImTvBG5p",
+            "NNGbZx1wv60uB+K961wkBD82r1ZBpJxuUOifQ0ELt3mdjlypJOFDFmxaas6qp0GV/h882lcFzq0VjwQdhLukJgpOgVXQaJpahGeHGO9oMFfD9+lAvF1wvKegSoiHkIad/CfvsQ+Q7hy9XdwVhw7s0yRCnlPISEcCG/RiRunZFtIvaVl/Mw+VFKWMyYiu31X5GQO58iTfArGbsXEUntCFNj4bMt8KsZixfFejT5I4Kb1S+Ef6Cs5XgZeUzmfGuFSy34rkqNLIGo8e1qSlBz9QxgNlH6g2s1Ys8sOt6XMA/rhLYd58WH8YJ1S/dgWd0mgCPsAE4sMpsNJ8Z90atybHz0E4rPwdu2pshFyZVHzQ2vFxTbAh9i2oM24gYBrexfnVvEjGpJm9/3l2yEdQSKK4tSDwfARROJzW4epcnZBSP7dGtNI2PbN2NdX+LaQ6Ro5nTAqYj6pcG6Wgeh4xvmF9aFVN69tC7ad3in5rMyRaxkPPCnfjcfXihT3vKugZJYpE"
+        ]
+            .iter()
+            .map(|s| Integer::base64_decode(s).unwrap())
+            .collect();
+        let ms: Vec<Integer> = [
+            "b1+42/kkpZlIkQBzHZB0V37PAoSNwfFyLFCeV8KCBKqe9bWGYRdkPCLNLL7ZG5p2YY5OleT509M3hHAXJQnxY5RY8ccI0wvMk8Bifr2zD0iogU35RbcUq8geI0hYN8r3m93ttjxnbg4G+/uqKeR6NEdmTmiSEnkvqoiyETUK7eONu5Vxpw7rGrxIezv4odUeKBeWLJcy7ICrvj2CQQANbAID1mVdgtRKik2PPm+UXbrlycg7Q3uDnTrjYJlm1hDC6dhlblKMozusNYO28acLRkqHlG1CqkHoT+GMifkJYw1GyolylePRkCCgXxK2pDWLoj+nIH9zTwztT2XDRfrYKVrBEjYwx1VMvS2HoxpHOOnhw7BTcsyapV9vMyYkySGaONEGDIGohmGIi4ZIU/w+NDry2r1bMpUOYM1CtR6J4i6RHHC+7yE9kWU7pWI/mlkj0HOWY3V255jnJ6INyiT8O5osIxfdsU/cL0pCUlnKEhWQndySJFSWoIw1vdFn5qFX"
+        ]
+            .iter()
+            .map(|s| Integer::base64_decode(s).unwrap())
+            .collect();
+        let e = Integer::base64_decode("p3pQAidAXNZEqIy6TEp/pE6TFumQ1x7J52OeHJv89SA=").unwrap();
+        let zs: Vec<Integer> = [
+            "IZTHyehy21Yz9o3Ix+S/0vgIRN4hnx7Q+/5+NJfViW7grhaTmokMKuGwpe+/AwGBk+QXZJHSLGNwhht1kSAQNCAlHxYTGXkPjbGw4+QTdA+A3jMaJAeMfQLoCwPDaldNbyb/J+usnofX+j0SGUW3ObAMVcUVWh/JyPG/KVjilmf2sdAqji8qX0N3bkN/7Sb7YH0rhJa9zk0pe7EIlUVaVHYfRUqd8eIe31A5NQJ2wavwavCewHwYvANq5e3274x0Cd9AHQ1EPC3NQiVms+8xyKCtEZ516F7cwiyLIrXeTbuywmssUZq9ru6+ZfsgtOPGmRzDlBdblKNDGj/+0UnjbSGgrm99W+75zZZVZVpa6tPV6n1bbiTd8msQAuMFdYz3qQ7NPUqy3WpuwUH9KvkXU3KP/k7ZaG+VmLEbMbXrIhcrARwIYwLS8aCmzyB5kBuLxSXyEeKiQdhiz/fqUUZlv3CoUHOSdmvAyAcia7my8uDUW1x0gbS4ByWIFdjIr/ee"
+        ]
+            .iter()
+            .map(|s| Integer::base64_decode(s).unwrap())
+            .collect();
+        let res = verify_decryption(
+            &EncryptionParameters::from((&p, &q, &g)),
+            &Ciphertext::from_expanded(&gamma, &phis),
+            &pks,
+            &ms,
+            &[
+                "71A1AB434A03A212E143869E580CA311".to_string(),
+                "49E21ADEFC8BE89CED94F4104BFFB219".to_string(),
+                "MixDecOnline".to_string(),
+                "1".to_string(),
+            ],
             (&e, &zs),
         );
         assert!(res.is_ok());
