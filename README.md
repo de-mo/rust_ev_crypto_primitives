@@ -20,6 +20,8 @@ The crate uses the crate [openssl](https://docs.rs/openssl/latest/openssl/) to w
 
 The crate uses the crate [rug](https://crates.io/crates/rug) to wrap the functions of the library GMP for the performant big integers. Please check the installation guide of the crate.
 
+In particular the build on Windows must be perfomerd with MSYS2 (see [windows](https://docs.rs/gmp-mpfr-sys/1.6.4/gmp_mpfr_sys/index.html#building-on-windows) for details).
+
 ## Licence
 
 Rug is free software: you can redistribute it and/or modify it under the terms 
