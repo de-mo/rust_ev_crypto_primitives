@@ -155,7 +155,7 @@ impl ByteArray {
         }
         let bs = self.to_bytes();
         //println!("bs: {:?}", bs);
-        let length = (n + 8 - 1) / 8;
+        let length = n.div_ceil(8);
         //println!("length: {:?}", length);
         let offset = self.len() - length;
         //println!("offset: {:?}", length);

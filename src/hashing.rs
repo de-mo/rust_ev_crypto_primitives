@@ -127,7 +127,7 @@ pub enum HashError {
     WrongHashed(String),
 }
 
-impl<'a> HashableMessage<'a> {
+impl HashableMessage<'_> {
     /// Hashable to byte_array accordind the specification of Swiss Post (Algorithm 5.5)
     fn to_hashable_byte_array(&self) -> Result<ByteArray, HashError> {
         match self {
@@ -205,7 +205,7 @@ impl<'a> HashableMessage<'a> {
     }
 }
 
-impl<'a> RecursiveHashTrait for HashableMessage<'a> {
+impl RecursiveHashTrait for HashableMessage<'_> {
     type Error = HashError;
 
     fn recursive_hash(&self) -> Result<ByteArray, HashError> {
@@ -261,7 +261,7 @@ impl<'a> From<&'a ByteArray> for HashableMessage<'a> {
     }
 }
 
-impl<'a> From<ByteArray> for HashableMessage<'a> {
+impl From<ByteArray> for HashableMessage<'_> {
     fn from(value: ByteArray) -> Self {
         HashableMessage::ByteArray(value)
     }
@@ -273,7 +273,7 @@ impl<'a> From<&'a Integer> for HashableMessage<'a> {
     }
 }
 
-impl<'a> From<Integer> for HashableMessage<'a> {
+impl From<Integer> for HashableMessage<'_> {
     fn from(value: Integer) -> Self {
         HashableMessage::Int(value)
     }
@@ -285,7 +285,7 @@ impl<'a> From<&'a usize> for HashableMessage<'a> {
     }
 }
 
-impl<'a> From<usize> for HashableMessage<'a> {
+impl From<usize> for HashableMessage<'_> {
     fn from(value: usize) -> Self {
         HashableMessage::USize(value)
     }
@@ -297,7 +297,7 @@ impl<'a> From<&'a String> for HashableMessage<'a> {
     }
 }
 
-impl<'a> From<String> for HashableMessage<'a> {
+impl From<String> for HashableMessage<'_> {
     fn from(value: String) -> Self {
         HashableMessage::String(value)
     }
@@ -316,7 +316,7 @@ impl<'a> From<&'a NaiveDateTime> for HashableMessage<'a> {
     }
 }
 
-impl<'a> From<bool> for HashableMessage<'a> {
+impl From<bool> for HashableMessage<'_> {
     fn from(value: bool) -> Self {
         match value {
             true => HashableMessage::String("true".to_string()),
