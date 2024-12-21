@@ -61,4 +61,8 @@ pub enum ElgamalError {
     LNotConsistentForTheProofs,
     #[error(transparent)]
     ZeroKnowledgeProofError(#[from] ZeroKnowledgeProofError),
+    #[error("Error in inputs of combined public keys {0}")]
+    CombinedPublicKeysInput(String),
+    #[error("Error processing combined public keys {0}")]
+    CombinedPublicKeysProcess(String),
 }
