@@ -76,7 +76,7 @@ pub struct MultiExponentiationArgumentResult {
 pub enum MultiExponentiationArgumentError {
     #[error("Ciphertext matrix is malformed")]
     CyphertextMatrixMalformed,
-    #[error("Ciphertext not same l")]
+    #[error("Ciphertext not same length")]
     CyphertextNotSameL,
     #[error("Commitment vectors c_b is not equal to ciphertext vector")]
     CommitmentVectorNotSameLen,
