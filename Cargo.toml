@@ -13,7 +13,6 @@ keywords = ["math", "e-voting", "crypto"]
 
 [dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
-chrono = "0.4"
 thiserror = "2"
 data-encoding = "2.5"
 num-traits = "0.2"
