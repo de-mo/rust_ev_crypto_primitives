@@ -21,7 +21,6 @@ use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
     ByteArray, ByteArrayError, Integer, IntegerError, GROUP_PARAMETER_Q_LENGTH, SECURITY_STRENGTH,
 };
-use chrono::NaiveDateTime;
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -306,13 +305,6 @@ impl From<String> for HashableMessage<'_> {
 impl<'a> From<&'a str> for HashableMessage<'a> {
     fn from(value: &'a str) -> Self {
         HashableMessage::RStr(value)
-    }
-}
-
-impl<'a> From<&'a NaiveDateTime> for HashableMessage<'a> {
-    fn from(value: &'a NaiveDateTime) -> Self {
-        let s = value.format("%Y-%m-%dT%H:%M").to_string();
-        HashableMessage::String(s)
     }
 }
 
