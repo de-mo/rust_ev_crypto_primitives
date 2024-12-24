@@ -96,7 +96,7 @@ impl Ciphertext {
         a: &[Integer],
         ep: &EncryptionParameters,
     ) -> Self {
-        let ones_cipher = Self::from(vec![Integer::one().clone(); cs.len()].as_slice());
+        let ones_cipher = Self::from(vec![Integer::one().clone(); cs[0].l() + 1].as_slice());
         cs.iter()
             .zip(a.iter())
             .map(|(c, a)| c.get_ciphertext_exponentiation(a, ep))
