@@ -76,8 +76,8 @@ pub struct MultiExponentiationArgumentResult {
 pub enum MultiExponentiationArgumentError {
     #[error("Ciphertext matrix is malformed")]
     CyphertextMatrixMalformed,
-    #[error("Ciphertext not same length")]
-    CyphertextNotSameL,
+    #[error("Ciphertext not same length in {0}")]
+    CyphertextNotSameL(String),
     #[error("Commitment vectors c_b is not equal to ciphertext vector")]
     CommitmentVectorNotSameLen,
     #[error("{0} is not consistent")]
@@ -225,7 +225,9 @@ impl<'a> MultiExponentiationStatement<'a> {
         for j in 0..ciphertext_matrix.nb_columns() {
             let col = ciphertext_matrix.column(j);
             if !col.iter().all(|e| e.l() == l) {
-                return Err(MultiExponentiationArgumentError::CyphertextNotSameL);
+                return Err(MultiExponentiationArgumentError::CyphertextNotSameL(
+                    "MultiExponentiationStatement (C to ciphertext_matrix)".to_string(),
+                ));
             }
         }
         Ok(Self {
@@ -268,7 +270,9 @@ impl<'a> MultiExponentiationArgument<'a> {
         }
         let l = upper_es[0].l();
         if !upper_es.iter().all(|e| e.l() == l) {
-            return Err(MultiExponentiationArgumentError::CyphertextNotSameL);
+            return Err(MultiExponentiationArgumentError::CyphertextNotSameL(
+                "MultiExponentiationArgument (in E)".to_string(),
+            ));
         }
         Ok(Self {
             c_upper_a_0,
