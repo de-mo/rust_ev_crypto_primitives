@@ -133,7 +133,7 @@ pub fn verify_shuffle_argument(
         .map(|(c_a_i, c_b_i)| c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p))
         .collect();
 
-    let xs = (0..upper_n + 1)
+    let xs = (0..upper_n)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Vec<_>>();
 
@@ -163,8 +163,14 @@ pub fn verify_shuffle_argument(
     )
     .map_err(ShuffleArgumentError::ProductArgumentError)?;
 
+    statement
+        .upper_cs
+        .iter()
+        .enumerate()
+        .for_each(|(i, c)| println!("  l at pos {} = {}", i, c.l()));
     let upper_c =
         Ciphertext::get_ciphertext_vector_exponentiation(statement.upper_cs, &xs, context.ep);
+    println!("verify_shuffle_argument: Length of C {}", upper_c.l());
     let cipher_matrix = Matrix::to_matrix(statement.upper_c_primes, (m, n))
         .map_err(ShuffleArgumentError::MatrixError)?;
     let m_statement =
