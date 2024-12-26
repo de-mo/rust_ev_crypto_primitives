@@ -91,6 +91,9 @@ pub trait OperationsTrait: Sized {
     fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Self {
         self.mod_multiply(&divisor.mod_inverse(modulus), modulus)
     }
+
+    /// Multi Exponentation modulo (prouct of b_^e_i mod modulus)
+    fn mod_multi_exponentiate(bases: &[Self], exponents: &[Self], modulus: &Self) -> Self;
 }
 
 /// Transformation from or to String in hexadecimal according to the specifications
@@ -217,6 +220,16 @@ impl OperationsTrait for Integer {
 
     fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
         self.mod_add(&Integer::from(-other), modulus)
+    }
+
+    fn mod_multi_exponentiate(bases: &[Self], exponents: &[Self], modulus: &Self) -> Self {
+        bases
+            .iter()
+            .zip(exponents.iter())
+            .map(|(b, e)| b.mod_exponentiate(e, modulus))
+            .fold(Self::one().to_owned(), |acc, n| {
+                acc.mod_multiply(&n, modulus)
+            })
     }
 }
 
@@ -418,6 +431,19 @@ mod test {
             Integer::from(10u16).mod_inverse(&Integer::from(17u16)),
             Integer::from(12u16)
         );
+    }
+
+    #[test]
+    fn test_mod_multi_exp() {
+        let bases = [Integer::from(7), Integer::from(9), Integer::from(12)];
+        let exponents = [Integer::from(8), Integer::from(2), Integer::from(7)];
+        let modulus = Integer::from(21);
+        let res = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus);
+        let t1 = bases[0].mod_exponentiate(&exponents[0], &modulus);
+        let t2 = bases[1].mod_exponentiate(&exponents[1], &modulus);
+        let t3 = bases[2].mod_exponentiate(&exponents[2], &modulus);
+        let expected = t1.mod_multiply(&t2.mod_multiply(&t3, &modulus), &modulus);
+        assert_eq!(res, expected);
     }
 
     #[test]
