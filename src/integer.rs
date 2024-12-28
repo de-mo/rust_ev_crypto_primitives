@@ -22,9 +22,16 @@
 
 use crate::{ByteArray, DecodeTrait, EncodeTrait};
 use rug::Integer;
-use std::fmt::Debug;
 use std::sync::OnceLock;
+use std::{fmt::Debug, sync::LazyLock};
 use thiserror::Error;
+use tracing::info;
+
+#[cfg(feature = "gmpmee")]
+use rug_gmpmee::{
+    fpowm::{cache_base_modulus, cache_fpown, cache_init_precomp},
+    spown::spowm,
+};
 
 /// Trait to implement constant numbers
 pub trait ConstantsTrait: Sized {
@@ -40,6 +47,104 @@ pub trait ConstantsTrait: Sized {
     fn four() -> &'static Self;
     /// Five
     fn five() -> &'static Self;
+}
+
+struct OperationOptimization {}
+
+static OP_OPTIMIZATION: LazyLock<OperationOptimization> = LazyLock::new(OperationOptimization::new);
+
+pub fn prepare_fixed_based_optimization(
+    base: &Integer,
+    modulus: &Integer,
+    block_width: usize,
+    exponent_bitlen: usize,
+) {
+    OP_OPTIMIZATION.prepare_fixed_base_exponentiate(base, modulus, block_width, exponent_bitlen);
+}
+
+#[cfg(not(feature = "gmpmee"))]
+impl OperationsOptimizationTrait for OperationOptimization {
+    fn new() -> Self {
+        info!("No optimization used (feature GMPMEE deactivated)");
+        Self {}
+    }
+}
+
+#[cfg(feature = "gmpmee")]
+impl OperationsOptimizationTrait for OperationOptimization {
+    fn new() -> Self {
+        info!("Optimization of GMPMEE used");
+        Self {}
+    }
+
+    fn is_optimized(&self) -> bool {
+        true
+    }
+
+    fn prepare_fixed_base_exponentiate(
+        &self,
+        base: &Integer,
+        modulus: &Integer,
+        block_width: usize,
+        exponent_bitlen: usize,
+    ) {
+        let _ = cache_init_precomp(base, modulus, block_width, exponent_bitlen);
+    }
+
+    fn is_fpowm_optimized_for(&self, base: &Integer, modulus: &Integer) -> bool {
+        match cache_base_modulus() {
+            Some(tu) => tu == (base, modulus),
+            None => false,
+        }
+    }
+
+    fn optimized_fpowm(&self, exponent: &Integer) -> Option<Integer> {
+        cache_fpown(exponent)
+    }
+
+    fn optimized_spowm(
+        &self,
+        bases: &[Integer],
+        exponents: &[Integer],
+        modulus: &Integer,
+    ) -> Option<Integer> {
+        spowm(bases, exponents, modulus).ok()
+    }
+}
+
+/// Trait to add optimization to operations of [Integer]
+pub trait OperationsOptimizationTrait: Sized {
+    fn new() -> Self;
+
+    fn is_optimized(&self) -> bool {
+        false
+    }
+
+    fn prepare_fixed_base_exponentiate(
+        &self,
+        _base: &Integer,
+        _modulus: &Integer,
+        _block_width: usize,
+        _exponent_bitlen: usize,
+    ) {
+    }
+
+    fn is_fpowm_optimized_for(&self, _base: &Integer, _modulus: &Integer) -> bool {
+        false
+    }
+
+    fn optimized_fpowm(&self, _exponent: &Integer) -> Option<Integer> {
+        None
+    }
+
+    fn optimized_spowm(
+        &self,
+        _bases: &[Integer],
+        _exponents: &[Integer],
+        _modulus: &Integer,
+    ) -> Option<Integer> {
+        None
+    }
 }
 
 /// Trait to extend operations of [Integer]
@@ -183,7 +288,10 @@ impl OperationsTrait for Integer {
     }
 
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
-        Integer::from(self.pow_mod_ref(exp, modulus).unwrap())
+        match OP_OPTIMIZATION.is_fpowm_optimized_for(self, modulus) {
+            true => OP_OPTIMIZATION.optimized_fpowm(exp).unwrap(),
+            false => Integer::from(self.pow_mod_ref(exp, modulus).unwrap()),
+        }
     }
 
     fn mod_negate(&self, modulus: &Self) -> Self {
@@ -223,13 +331,18 @@ impl OperationsTrait for Integer {
     }
 
     fn mod_multi_exponentiate(bases: &[Self], exponents: &[Self], modulus: &Self) -> Self {
-        bases
-            .iter()
-            .zip(exponents.iter())
-            .map(|(b, e)| b.mod_exponentiate(e, modulus))
-            .fold(Self::one().to_owned(), |acc, n| {
-                acc.mod_multiply(&n, modulus)
-            })
+        match OP_OPTIMIZATION.is_optimized() {
+            true => OP_OPTIMIZATION
+                .optimized_spowm(bases, exponents, modulus)
+                .unwrap(),
+            false => bases
+                .iter()
+                .zip(exponents.iter())
+                .map(|(b, e)| b.mod_exponentiate(e, modulus))
+                .fold(Self::one().to_owned(), |acc, n| {
+                    acc.mod_multiply(&n, modulus)
+                }),
+        }
     }
 }
 
@@ -286,7 +399,10 @@ impl EncodeTrait for Integer {
 
 #[cfg(test)]
 mod test {
+    use std::time::SystemTime;
+
     use super::*;
+    use rug::rand::RandState;
 
     #[test]
     fn bit_length() {
@@ -489,5 +605,33 @@ mod test {
     fn base64_decode() {
         assert_eq!(Integer::base64_decode("AA==").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("Cg==").unwrap(), Integer::from(10u8));
+    }
+
+    #[test]
+    fn test_performance_fpowm() {
+        let p =  Integer::from(Integer::parse_radix(
+            "CE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867", 16
+        ).unwrap());
+        let mut rand = RandState::new();
+        let b: Integer = Integer::from(Integer::random_bits(2048, &mut rand));
+        let e = Integer::from(Integer::random_bits(1024, &mut rand));
+        let begin_rug = SystemTime::now();
+        let res_rug = b.mod_exponentiate(&e, &p);
+        let duration_rug = begin_rug.elapsed().unwrap();
+        prepare_fixed_based_optimization(&b, &p, 16, 1024);
+        let begin_fpowm = SystemTime::now();
+        let res_fpowm = b.mod_exponentiate(&e, &p);
+        let duration_fpowm = begin_fpowm.elapsed().unwrap();
+        assert_eq!(res_fpowm, res_rug);
+        if cfg!(feature = "gmpmee") {
+            assert!(
+                duration_rug > duration_fpowm,
+                "The duration of fpown (={} ms) is bigger than duration with rug (={} ms)",
+                duration_fpowm.as_millis(),
+                duration_rug.as_millis()
+            );
+            //println!("Duration rug: {} micro s", duration_rug.as_micros());
+            //println!("Duration fpowm: {} micro s", duration_fpowm.as_micros());
+        }
     }
 }

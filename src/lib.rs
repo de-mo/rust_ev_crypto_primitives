@@ -56,7 +56,10 @@ pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
-pub use integer::{ByteLengthTrait, ConstantsTrait, Hexa, IntegerError, OperationsTrait};
+pub use integer::{
+    prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerError,
+    OperationsTrait,
+};
 pub use number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait};
 pub use rug::Integer;
 

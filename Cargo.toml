@@ -20,11 +20,16 @@ argon2 = "0.5"
 rug = { version = "1" }
 rug-miller-rabin = { version = "0.1" }
 lazy_static = "1"
+rug-gmpmee = { version = "0.1", optional = true }
+tracing = "0.1"
 
 # Dev dpendencies
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+rug = { version = "1", features = ["rand"] }
 
 [features]
+default = ["gmpmee"]
 checks = []
+gmpmee = ["dep:rug-gmpmee"]
