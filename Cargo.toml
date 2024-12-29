@@ -42,3 +42,8 @@ harness = false
 [[bench]]
 name = "byte_array"
 harness = false
+
+[[bench]]
+name = "elgamal"
+harness = false
+required-features = ["gmpmee"]
