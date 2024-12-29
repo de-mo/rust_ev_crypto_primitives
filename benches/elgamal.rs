@@ -1,8 +1,11 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use rug::Integer;
-use rust_ev_crypto_primitives::{elgamal::combine_public_keys, DecodeTrait};
+use rust_ev_crypto_primitives::{elgamal::{combine_public_keys, EncryptionParameters}, DecodeTrait};
 
 static P_BASE64: &str = "jA4DatkpgfS1r6X1Q5iYA0sS2KakO3pabCF5uww/NyUxmZLOWP1E70Wq1jYs7FMgqAXPvfWn2cCdVGrU5ZcoHWim7FjtyhZPFw15XXewjoOsBUDoqf1Pg5mNakQpQAVEhqMRQ4s5FY1nCB5FvsAUnd8gCONEyIo75r6nj0BmZSoKYCGICT0nBnD0tpW3DwLInQZc5L+x1j39j+CGQI9wCk4+FhAyrK4nNMSsHv3vRUuxdsJber7KZ8d0eqRcyuRZdTbbBDmwz0GlxEmSrP4KRt6gohGN25y7myXQkza1alJpsNOGmBR7GSipM6/gagxRroVzAHBCVNp20g9d7UUZ32DA11pbBrjvEIWMNtZBKGr5Px4d+BJPljxBsbANBqu3d4gfrc5j0Me03yRbPwWq39r5sNFFrIMURmqaOa9l6kVkBBvgDiBt1ult+X787mO6orBoyLXMMCU8qy3zIdzCi5Kfq4Wn8i1C5af7SowhOfV33XNoRnMfPp3CSZaWi1wv";
+static Q_BASE64: &str =  "RgcBtWyUwPpa19L6ocxMAaWJbFNSHb0tNhC83YYfm5KYzMlnLH6id6LVaxsWdimQVALn3vrT7OBOqjVqcsuUDrRTdix25Qsni4a8rrvYR0HWAqB0VP6nwczGtSIUoAKiQ1GIocWcisazhA8i32AKTu+QBHGiZEUd819Tx6AzMpUFMBDEBJ6Tgzh6W0rbh4FkToMucl/Y6x7+x/BDIEe4BScfCwgZVlcTmmJWD373oqXYu2EtvV9lM+O6PVIuZXIsupttghzYZ6DS4iTJVn8FI29QUQjG7c5dzZLoSZtatSk02GnDTAo9jJRUmdfwNQYo10K5gDghKm07aQeu9qKM77Bga60tg1x3iELGG2sglDV8n48O/Aknyx4g2NgGg1Xbu8QP1ucx6GPab5Itn4LVb+182Gii1kGKIzVNHNey9SKyAg3wBxA263S2/L9+dzHdUVg0ZFrmGBKeVZb5kO5hRclP1cLT+RahctP9pUYQnPq77rm0IzmPn07hJMtLRa4X";
+static G_BASE64: &str =  "Ag==";
+
 static PKS_BASE64: &[&[&str]] = &[    
     &[
         "F8Eagy7YS1k1Som6/zx3EUsXTt6+ucEo52Q4KQc/1XT+7id3YGPu4obdT8oDa0QDrCWaeDsn/xtzUqmQefEFrFxJi1BdYR1LkhgTPwOqdDRNnEQ9ExuM8+x35TM4YZsZXdDVYeaiDFoxYuK7BhaGhMZPCVavtVIlbdg8azRfpFpyQsGdq8w/VzQyKnZr4zEHqsGL6sbHkZL7Y6ekbyf8YJzr+AHIoIsuBAAwOd0piCxfXoKHNLE6irsC6z1OnjDzj+91IDEfoS8oPM+L5J/nDGUaD5R7ds65j1qJhKoSMMEB9/f+3/7GNXnIXCSqWIoCFoNJNI9c8kr3oRIkJ2Aaf6RCIccwD3UkG1dKvUBFZSwzfWCF/+qrSk1AM+kCSBO4AITzxW4IM4BJSbgyQ+EAknpBD073U4d4mplJA9urFLrXecJSl32VoYcFI5l1co8yp1tnmacXCmjdk4YsPlS3+pgj4Sr09uQcwlC4QQw+TYptxMc31JgvVkx9halfZWLV",
@@ -26,8 +29,15 @@ static PKS_BASE64: &[&[&str]] = &[
     ]
 ];
 
-pub fn combine_public_keys_bench(c: &mut Criterion) {
+fn encryption_parameters() -> EncryptionParameters {
     let p = Integer::base64_decode(P_BASE64).unwrap();
+    let q = Integer::base64_decode(Q_BASE64).unwrap();
+    let g = Integer::base64_decode(G_BASE64).unwrap();
+    EncryptionParameters::from((&p,&q,&g))
+}
+
+pub fn combine_public_keys_bench(c: &mut Criterion) {
+    let p = encryption_parameters().p().clone();
     let pks = PKS_BASE64
         .iter()
         .map(|&s_slice| 
@@ -38,5 +48,10 @@ pub fn combine_public_keys_bench(c: &mut Criterion) {
     c.bench_function("combine_public_keys", |b| b.iter(|| combine_public_keys(&p, pks.as_slice()).unwrap()));
 }
 
-criterion_group!(benches, combine_public_keys_bench);
+pub fn get_small_prime_group_members_bench(c: &mut Criterion) {
+    let ep = encryption_parameters();
+    c.bench_function("get_small_prime_group_members_bench", |b| b.iter(|| ep.get_small_prime_group_members(5000)));
+}
+
+criterion_group!(benches, combine_public_keys_bench, get_small_prime_group_members_bench);
 criterion_main!(benches);
