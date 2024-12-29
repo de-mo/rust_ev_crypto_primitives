@@ -40,7 +40,7 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
             msg: "Error digest_init".to_string(),
             source: e,
         })?;
-    ctx.digest_update(&byte_array.to_bytes())
+    ctx.digest_update(byte_array.to_bytes())
         .map_err(|e| BasisCryptoError::HashError {
             msg: "Error digest_update".to_string(),
             source: e,
@@ -111,7 +111,7 @@ pub fn shake128(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
     let mut digest = vec![0; length];
     hash_xof(
         MessageDigest::shake_128(),
-        &byte_array.to_bytes(),
+        byte_array.to_bytes(),
         digest.as_mut_slice(),
     )
     .map_err(|e| BasisCryptoError::HashError {
@@ -129,7 +129,7 @@ pub fn shake256(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
     let mut digest = vec![0; length];
     hash_xof(
         MessageDigest::shake_256(),
-        &byte_array.to_bytes(),
+        byte_array.to_bytes(),
         digest.as_mut_slice(),
     )
     .map_err(|e| BasisCryptoError::HashError {

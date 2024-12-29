@@ -71,7 +71,7 @@ pub fn verify(
             source: e,
         })?;
     verifier
-        .verify_oneshot(&signature.to_bytes(), &hashed.to_bytes())
+        .verify_oneshot(signature.to_bytes(), hashed.to_bytes())
         .map_err(|e| BasisCryptoError::SignatureVerify {
             msg: "Error verify_oneshot".to_string(),
             source: e,
@@ -120,7 +120,7 @@ pub fn sign(skey: &PKeyRef<Private>, hashed: &ByteArray) -> Result<ByteArray, Ba
             source: e,
         })?;
     signer
-        .update(&hashed.to_bytes())
+        .update(hashed.to_bytes())
         .map_err(|e| BasisCryptoError::Sign {
             msg: "Error updating the signer".to_string(),
             source: e,
@@ -131,5 +131,3 @@ pub fn sign(skey: &PKeyRef<Private>, hashed: &ByteArray) -> Result<ByteArray, Ba
     })?;
     Ok(ByteArray::from_bytes(&signature))
 }
-
-

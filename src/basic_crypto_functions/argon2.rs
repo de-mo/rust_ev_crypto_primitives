@@ -42,7 +42,7 @@ pub fn argon2_has_password(
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut out = vec![0u8; output_size];
     argon
-        .hash_password_into(&pwd.to_bytes(), &salt.to_bytes(), &mut out)
+        .hash_password_into(pwd.to_bytes(), salt.to_bytes(), &mut out)
         .map_err(|e| BasisCryptoError::Argon2Error {
             msg: "Creating the parameters".to_string(),
             argon2_error_source: e,

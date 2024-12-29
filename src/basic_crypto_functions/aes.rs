@@ -47,7 +47,7 @@ impl Decrypter {
         let mut plaintext = vec![0; data_len + self.block_size];
         let count = self
             .crypter_mut()
-            .update(&input.to_bytes(), &mut plaintext)
+            .update(input.to_bytes(), &mut plaintext)
             .map_err(|e| BasisCryptoError::AesGcmError {
                 msg: "Updating crypter".to_string(),
                 source: e,
