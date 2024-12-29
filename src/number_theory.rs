@@ -37,14 +37,14 @@ pub trait NumberTheoryMethodTrait: ToString {
     /// See [Jacobi symbol](https://en.wikipedia.org/wiki/Jacobi_symbol#Calculating_the_Jacobi_symbol)
     ///
     /// Return an error if the given number n is not odd.
-    fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError>;
+    fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError>;
 
     /// Determine if n is a power of b, e.g. n = b^x for any x
     fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool;
 
     /// Determine of the number n is a quadratic residue of p
     fn is_quadratic_residue(&self, p: &Self) -> bool {
-        self.mp_jacobi(p).unwrap() == 1
+        self.jacobi_symbol(p).unwrap() == 1
     }
 
     /// Determine if a number is prime according to Miller-Rabin Test
@@ -128,7 +128,7 @@ impl SmallPrimeTrait for usize {
 }
 
 impl NumberTheoryMethodTrait for Integer {
-    fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError> {
+    fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError> {
         Ok(self.jacobi(n))
     }
 
@@ -199,24 +199,32 @@ mod test {
     #[test]
     fn test_jacobi() {
         assert_eq!(
-            Integer::from(1u8).mp_jacobi(&Integer::from(9u8)).unwrap(),
+            Integer::from(1u8)
+                .jacobi_symbol(&Integer::from(9u8))
+                .unwrap(),
             1
         );
         assert_eq!(
-            Integer::from(9u8).mp_jacobi(&Integer::from(15u8)).unwrap(),
+            Integer::from(9u8)
+                .jacobi_symbol(&Integer::from(15u8))
+                .unwrap(),
             0
         );
         assert_eq!(
-            Integer::from(7u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
+            Integer::from(7u8)
+                .jacobi_symbol(&Integer::from(17u8))
+                .unwrap(),
             -1
         );
         assert_eq!(
-            Integer::from(19u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
+            Integer::from(19u8)
+                .jacobi_symbol(&Integer::from(17u8))
+                .unwrap(),
             1
         );
         assert_eq!(
             Integer::from(1001u32)
-                .mp_jacobi(&Integer::from(9907u32))
+                .jacobi_symbol(&Integer::from(9907u32))
                 .unwrap(),
             -1
         );
