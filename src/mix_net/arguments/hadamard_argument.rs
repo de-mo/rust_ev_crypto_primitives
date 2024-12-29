@@ -165,7 +165,7 @@ fn get_x(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
             .map_err(HadamardArgumentError::HashError)?
-            .into_mp_integer(),
+            .into_integer(),
     )
 }
 
@@ -179,7 +179,7 @@ fn get_y(
     Ok(HashableMessage::from(vec)
         .recursive_hash()
         .map_err(HadamardArgumentError::HashError)?
-        .into_mp_integer())
+        .into_integer())
 }
 
 fn get_hashable_vector_for_x<'a>(

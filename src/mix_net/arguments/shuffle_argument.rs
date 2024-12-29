@@ -195,7 +195,7 @@ pub fn get_x(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer(),
+            .into_integer(),
     )
 }
 
@@ -208,7 +208,7 @@ pub fn get_y(
         HashableMessage::from(get_hashable_vector_for_y(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer(),
+            .into_integer(),
     )
 }
 
@@ -221,7 +221,7 @@ pub fn get_z(
         HashableMessage::from(get_hashable_vector_for_z(context, statement, argument))
             .recursive_hash()
             .map_err(ShuffleArgumentError::HashError)?
-            .into_mp_integer(),
+            .into_integer(),
     )
 }
 

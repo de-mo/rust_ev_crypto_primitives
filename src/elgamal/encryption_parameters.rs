@@ -87,8 +87,8 @@ impl EncryptionParameters {
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
         let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
             .map_err(ElgamalError::OpenSSLError)?;
-        let q_b = q_b_hat.prepend_byte(2u8);
-        let q_prime: Integer = q_b.into_mp_integer() >> 3;
+        let q_b = q_b_hat.new_prepend_byte(2u8);
+        let q_prime: Integer = q_b.into_integer() >> 3;
         let q = &q_prime - Integer::from(&q_prime % 6u8) + Integer::five();
         let rs: Vec<Integer> = SMALL_PRIMES
             .iter()

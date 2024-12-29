@@ -30,8 +30,8 @@ impl Decrypter {
     /// New Decrypter
     pub fn new(nonce: &ByteArray, encryption_key: &ByteArray) -> Result<Self, BasisCryptoError> {
         let mut res = Self {
-            nonce: nonce.to_bytes(),
-            encryption_key: encryption_key.to_bytes(),
+            nonce: nonce.to_bytes().to_vec(),
+            encryption_key: encryption_key.to_bytes().to_vec(),
             block_size: Self::cipher().block_size(),
             crypter: None,
         };

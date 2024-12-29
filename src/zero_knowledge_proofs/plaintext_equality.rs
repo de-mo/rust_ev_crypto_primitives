@@ -78,7 +78,7 @@ pub fn verify_plaintext_equality(
     ])
     .recursive_hash()
     .map_err(PlaintextProofError::HashError)?
-    .into_mp_integer();
+    .into_integer();
     Ok(&e_prime == e)
 }
 

@@ -123,7 +123,7 @@ fn verify_decryption_impl(
     ])
     .recursive_hash()
     .map_err(DecryptionProofError::HashError)?
-    .into_mp_integer();
+    .into_integer();
     Ok(&e_prime == e)
 }
 

@@ -159,7 +159,7 @@ fn get_x(
     ])
     .recursive_hash()
     .map_err(ZeroArgumentError::HashError)?
-    .into_mp_integer())
+    .into_integer())
 }
 
 impl MixNetResultTrait for ZeroArgumentResult {

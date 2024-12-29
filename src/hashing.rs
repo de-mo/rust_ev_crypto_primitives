@@ -130,30 +130,30 @@ impl HashableMessage<'_> {
     /// Hashable to byte_array accordind the specification of Swiss Post (Algorithm 5.5)
     fn to_hashable_byte_array(&self) -> Result<ByteArray, HashError> {
         match self {
-            HashableMessage::RByteArray(b) => Ok(b.prepend_byte(0u8)),
-            HashableMessage::ByteArray(b) => Ok(b.prepend_byte(0u8)),
+            HashableMessage::RByteArray(b) => Ok(b.new_prepend_byte(0u8)),
+            HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::RInt(i) => Ok(ByteArray::try_from(*i)
                 .map_err(HashError::IntegerError)?
-                .prepend_byte(1u8)),
+                .new_prepend_byte(1u8)),
             HashableMessage::Int(i) => Ok(ByteArray::try_from(i)
                 .map_err(HashError::IntegerError)?
-                .prepend_byte(1u8)),
-            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
-            HashableMessage::USize(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
-            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),
-            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),
-            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).prepend_byte(2u8)),
+                .new_prepend_byte(1u8)),
+            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).new_prepend_byte(1u8)),
+            HashableMessage::USize(i) => Ok(ByteArray::from(i).new_prepend_byte(1u8)),
+            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
+            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
+            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).new_prepend_byte(2u8)),
             HashableMessage::Composite(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.recursive_hash()?);
+                    res.extend(&e.recursive_hash()?);
                 }
                 Ok(res)
             }
             HashableMessage::CompositeR(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.recursive_hash()?);
+                    res.extend(&e.recursive_hash()?);
                 }
                 Ok(res)
             }
@@ -167,30 +167,30 @@ impl HashableMessage<'_> {
     /// Hashable to byte_array for "OfLength" accordind the specification of Swiss Post (Algorithm 5.7)
     fn to_hashable_byte_array_of_length(&self, length: usize) -> Result<ByteArray, HashError> {
         match self {
-            HashableMessage::RByteArray(b) => Ok(b.prepend_byte(0u8)),
-            HashableMessage::ByteArray(b) => Ok(b.prepend_byte(0u8)),
+            HashableMessage::RByteArray(b) => Ok(b.new_prepend_byte(0u8)),
+            HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::RInt(i) => Ok(ByteArray::try_from(*i)
                 .map_err(HashError::IntegerError)?
-                .prepend_byte(1u8)),
+                .new_prepend_byte(1u8)),
             HashableMessage::Int(i) => Ok(ByteArray::try_from(i)
                 .map_err(HashError::IntegerError)?
-                .prepend_byte(1u8)),
-            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).prepend_byte(1u8)),
-            HashableMessage::USize(i) => Ok(ByteArray::from(i).prepend_byte(1u8)),
-            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),
-            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).prepend_byte(2u8)),
-            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).prepend_byte(2u8)),
+                .new_prepend_byte(1u8)),
+            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).new_prepend_byte(1u8)),
+            HashableMessage::USize(i) => Ok(ByteArray::from(i).new_prepend_byte(1u8)),
+            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
+            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
+            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).new_prepend_byte(2u8)),
             HashableMessage::Composite(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.recursive_hash_of_length(length)?);
+                    res = res.new_append(&e.recursive_hash_of_length(length)?);
                 }
                 Ok(res)
             }
             HashableMessage::CompositeR(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.append(&e.recursive_hash_of_length(length)?);
+                    res = res.new_append(&e.recursive_hash_of_length(length)?);
                 }
                 Ok(res)
             }
@@ -249,7 +249,7 @@ impl RecursiveHashTrait for HashableMessage<'_> {
         }
         let h_prime = HashableMessage::from(parameters)
             .recursive_hash_of_length(GROUP_PARAMETER_Q_LENGTH + 2 * SECURITY_STRENGTH)?
-            .into_mp_integer();
+            .into_integer();
         Ok(h_prime.modulo(q))
     }
 }

@@ -59,7 +59,7 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 /// # Error
 /// [OpensslError] if something is going wrong
 pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
-    sha256_stream(&mut byte_array.to_bytes().as_slice())
+    sha256_stream(&mut byte_array.to_bytes())
 }
 
 /// Wrapper for SHA256 for a stream reader

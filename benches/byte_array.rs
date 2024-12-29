@@ -4,8 +4,7 @@ use rust_ev_crypto_primitives::{random::random_bytes, ByteArray};
 
 pub fn from_bytes_bench(c: &mut Criterion) {
     let bytes = random_bytes(1000).unwrap();
-    let binding = bytes.to_bytes();
-    let bytes_slice = binding.as_slice();
+    let bytes_slice = bytes.to_bytes();
     c.bench_function("from_bytes", |b| {
         b.iter(|| ByteArray::from_bytes(bytes_slice))
     });
@@ -13,7 +12,7 @@ pub fn from_bytes_bench(c: &mut Criterion) {
 
 pub fn into_integer_bench(c: &mut Criterion) {
     let bytes = random_bytes(1000).unwrap();
-    c.bench_function("into_integer", |b| b.iter(|| bytes.into_mp_integer()));
+    c.bench_function("into_integer", |b| b.iter(|| bytes.into_integer()));
 }
 
 pub fn cut_bit_length_bench(c: &mut Criterion) {

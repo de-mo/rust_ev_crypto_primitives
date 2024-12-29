@@ -203,7 +203,7 @@ pub fn get_x(
     ])
     .recursive_hash()
     .map_err(MultiExponentiationArgumentError::HashError)?
-    .into_mp_integer())
+    .into_integer())
 }
 
 impl<'a> MultiExponentiationStatement<'a> {

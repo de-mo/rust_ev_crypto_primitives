@@ -77,7 +77,7 @@ pub fn verify_schnorr(
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
         .map_err(SchnorrProofError::HashError)?
-        .into_mp_integer();
+        .into_integer();
     Ok(&e_prime == e)
 }
 
