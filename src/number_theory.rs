@@ -90,7 +90,7 @@ pub trait NumberTheoryMethodTrait: ToString {
 
 impl SmallPrimeTrait for usize {
     fn is_small_prime(&self) -> Result<bool, NumberTheoryError> {
-        if *self >= Self::pow(2, 31) {
+        if *self >= SMALL_PRIMES_LIMIT {
             return Err(NumberTheoryError::OutOfRange {
                 msg: "to big. Must be less thant 2^31".to_string(),
                 n: *self,
@@ -111,9 +111,8 @@ impl SmallPrimeTrait for usize {
         if self % 2 == 0 || self % 3 == 0 {
             return Ok(false);
         }
-        let small_primes = SMALL_PRIMES.to_vec();
-        if self <= small_primes.last().unwrap() {
-            return Ok(small_primes.contains(self));
+        if self <= SMALL_PRIMES.last().unwrap() {
+            return Ok(SMALL_PRIMES.contains(self));
         }
         let mut i = 5;
         let limit = (f64::sqrt(*self as f64) as usize) + 1;
@@ -194,6 +193,8 @@ mod test {
         assert!(104729.is_small_prime().unwrap());
         assert!(!104730.is_small_prime().unwrap());
         assert!(111317.is_small_prime().unwrap());
+        assert!(usize::pow(2, 31).is_small_prime().is_err());
+        assert!((usize::pow(2, 31) - 1).is_small_prime().unwrap());
     }
 
     #[test]
@@ -280,6 +281,8 @@ mod test {
         assert!(Integer::from(25u8).is_mod_power_of(&Integer::from(5u8), &Integer::from(100u8)));
     }
 }
+
+pub const SMALL_PRIMES_LIMIT: usize = 2147483648; //2^31 according to the definition of Swiss Post
 
 pub const SMALL_PRIMES: &[usize] = &[
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
