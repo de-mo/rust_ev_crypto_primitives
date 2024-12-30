@@ -98,7 +98,7 @@ pub fn verify_exponentiation(
     let mut h_aux_l: Vec<HashableMessage> = vec![];
     h_aux_l.push(HashableMessage::from("ExponentiationProof"));
     if !i_aux.is_empty() {
-        h_aux_l.push(HashableMessage::from(i_aux));
+        h_aux_l.push(HashableMessage::from(i_aux.as_slice()));
     }
     let h_aux = HashableMessage::from(&h_aux_l);
     let l_final: Vec<HashableMessage> = vec![
@@ -108,7 +108,7 @@ pub fn verify_exponentiation(
                 .map(|y| HashableMessage::from(*y))
                 .collect::<Vec<_>>(),
         ),
-        HashableMessage::from(&c_prime_s),
+        HashableMessage::from(c_prime_s.as_slice()),
         h_aux,
     ];
     let e_prime = HashableMessage::from(&l_final)

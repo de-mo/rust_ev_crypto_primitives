@@ -24,7 +24,7 @@ pub fn recursive_hash_bench(c: &mut Criterion) {
     l.push(HashableMessage::from(&bu4));
     let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
     l.push(HashableMessage::from(&ba));
-    l.push(HashableMessage::Composite(nl));
+    l.push(HashableMessage::from(nl));
     let value = HashableMessage::from(&l);
     c.bench_function("recursive_hash", |b| {
         b.iter(|| value.recursive_hash().unwrap())

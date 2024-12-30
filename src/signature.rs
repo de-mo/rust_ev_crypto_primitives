@@ -62,7 +62,16 @@ pub fn verify_signature(
     let pub_key = pkey.pkey_public().as_ref();
 
     // Calculate hash
-    let h = HashableMessage::from(vec![message.to_owned(), additional_context.to_owned()])
+    // Precalulate hash of message and additional_context to avoid problem with lifetimes
+    let h_vec = vec![
+        HashableMessage::Hashed(message.recursive_hash().map_err(SignatureError::Hash)?),
+        HashableMessage::Hashed(
+            additional_context
+                .recursive_hash()
+                .map_err(SignatureError::Hash)?,
+        ),
+    ];
+    let h = HashableMessage::from(h_vec)
         .recursive_hash()
         .map_err(SignatureError::Hash)?;
 
@@ -108,7 +117,16 @@ pub fn sign(
         .pkey_private();
 
     // Calculate hash
-    let h = HashableMessage::from(vec![message.to_owned(), additional_context.to_owned()])
+    // Precalulate hash of message and additional_context to avoid problem with lifetimes
+    let h_vec = vec![
+        HashableMessage::Hashed(message.recursive_hash().map_err(SignatureError::Hash)?),
+        HashableMessage::Hashed(
+            additional_context
+                .recursive_hash()
+                .map_err(SignatureError::Hash)?,
+        ),
+    ];
+    let h = HashableMessage::from(h_vec)
         .recursive_hash()
         .map_err(SignatureError::Hash)?;
 

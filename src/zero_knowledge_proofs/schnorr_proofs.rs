@@ -65,9 +65,9 @@ pub fn verify_schnorr(
     let mut l: Vec<HashableMessage> = vec![];
     l.push(HashableMessage::from("SchnorrProof"));
     if !i_aux.is_empty() {
-        l.push(HashableMessage::from(i_aux));
+        l.push(HashableMessage::from(i_aux.as_slice()));
     }
-    let h_aux = HashableMessage::Composite(l);
+    let h_aux = HashableMessage::from(l);
     let l_final: Vec<HashableMessage> = vec![
         f,
         HashableMessage::from(y),

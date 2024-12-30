@@ -72,8 +72,8 @@ pub fn verify_plaintext_equality(
     }
     let e_prime = HashableMessage::from(vec![
         HashableMessage::from(fs),
-        HashableMessage::from(&ys.to_vec()),
-        HashableMessage::from(&c_prime),
+        HashableMessage::from(ys.as_slice()),
+        HashableMessage::from(c_prime.as_slice()),
         HashableMessage::from(&h_aux),
     ])
     .recursive_hash()

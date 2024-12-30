@@ -109,16 +109,16 @@ fn verify_decryption_impl(
         .collect();
     let mut h_aux: Vec<HashableMessage> = vec![
         HashableMessage::from("DecryptionProof"),
-        HashableMessage::from(&upper_c.phis),
+        HashableMessage::from(upper_c.phis.as_slice()),
         HashableMessage::from(ms),
     ];
     if !i_aux.is_empty() {
         h_aux.push(HashableMessage::from(i_aux));
     }
     let e_prime = HashableMessage::from(vec![
-        HashableMessage::from(&fs),
-        HashableMessage::from(&ys),
-        HashableMessage::from(&c_primes),
+        HashableMessage::from(fs.as_slice()),
+        HashableMessage::from(ys.as_slice()),
+        HashableMessage::from(c_primes.as_slice()),
         HashableMessage::from(h_aux),
     ])
     .recursive_hash()

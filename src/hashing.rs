@@ -21,7 +21,7 @@ use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
     ByteArray, ByteArrayError, Integer, IntegerError, GROUP_PARAMETER_Q_LENGTH, SECURITY_STRENGTH,
 };
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 use thiserror::Error;
 
 /// Trait implementing defining an interface for objects implementing a recursive hash function.
@@ -98,17 +98,11 @@ pub trait RecursiveHashTrait {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashableMessage<'a> {
-    RByteArray(&'a ByteArray),
-    ByteArray(ByteArray),
-    RInt(&'a Integer),
-    Int(Integer),
-    RUSize(&'a usize),
-    USize(usize),
-    RString(&'a String),
-    RStr(&'a str),
-    String(String),
-    Composite(Vec<HashableMessage<'a>>),
-    CompositeR(Vec<&'a HashableMessage<'a>>),
+    ByteArray(Cow<'a, ByteArray>),
+    Integer(Cow<'a, Integer>),
+    USize(Cow<'a, usize>),
+    String(Cow<'a, str>),
+    Composite(Vec<Cow<'a, HashableMessage<'a>>>),
     Hashed(ByteArray),
     HashedOfLength(ByteArray),
 }
@@ -130,27 +124,13 @@ impl HashableMessage<'_> {
     /// Hashable to byte_array accordind the specification of Swiss Post (Algorithm 5.5)
     fn to_hashable_byte_array(&self) -> Result<ByteArray, HashError> {
         match self {
-            HashableMessage::RByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
-            HashableMessage::RInt(i) => Ok(ByteArray::try_from(*i)
+            HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
                 .map_err(HashError::IntegerError)?
                 .new_prepend_byte(1u8)),
-            HashableMessage::Int(i) => Ok(ByteArray::try_from(i)
-                .map_err(HashError::IntegerError)?
-                .new_prepend_byte(1u8)),
-            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).new_prepend_byte(1u8)),
-            HashableMessage::USize(i) => Ok(ByteArray::from(i).new_prepend_byte(1u8)),
-            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
-            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
-            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).new_prepend_byte(2u8)),
+            HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
+            HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),
             HashableMessage::Composite(c) => {
-                let mut res = ByteArray::from_bytes(b"\x03");
-                for e in c.iter() {
-                    res.extend(&e.recursive_hash()?);
-                }
-                Ok(res)
-            }
-            HashableMessage::CompositeR(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
                     res.extend(&e.recursive_hash()?);
@@ -158,49 +138,38 @@ impl HashableMessage<'_> {
                 Ok(res)
             }
             HashableMessage::Hashed(b) => Ok(b.clone()),
-            HashableMessage::HashedOfLength(_) => {
-                Err(HashError::WrongHashed("RecursiveHashOfLength".to_string()))
-            }
+            HashableMessage::HashedOfLength(_) => Err(HashError::WrongHashed(
+                "Hashed expected in to_hashable_byte_array".to_string(),
+            )),
         }
     }
 
     /// Hashable to byte_array for "OfLength" accordind the specification of Swiss Post (Algorithm 5.7)
     fn to_hashable_byte_array_of_length(&self, length: usize) -> Result<ByteArray, HashError> {
         match self {
-            HashableMessage::RByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
-            HashableMessage::RInt(i) => Ok(ByteArray::try_from(*i)
+            HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
                 .map_err(HashError::IntegerError)?
                 .new_prepend_byte(1u8)),
-            HashableMessage::Int(i) => Ok(ByteArray::try_from(i)
-                .map_err(HashError::IntegerError)?
-                .new_prepend_byte(1u8)),
-            HashableMessage::RUSize(i) => Ok(ByteArray::from(*i).new_prepend_byte(1u8)),
-            HashableMessage::USize(i) => Ok(ByteArray::from(i).new_prepend_byte(1u8)),
-            HashableMessage::RString(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
-            HashableMessage::String(s) => Ok(ByteArray::from(s.as_str()).new_prepend_byte(2u8)),
-            HashableMessage::RStr(s) => Ok(ByteArray::from(*s).new_prepend_byte(2u8)),
+            HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
+            HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),
             HashableMessage::Composite(c) => {
                 let mut res = ByteArray::from_bytes(b"\x03");
                 for e in c.iter() {
-                    res = res.new_append(&e.recursive_hash_of_length(length)?);
+                    res.extend(&e.recursive_hash_of_length(length)?);
                 }
                 Ok(res)
             }
-            HashableMessage::CompositeR(c) => {
-                let mut res = ByteArray::from_bytes(b"\x03");
-                for e in c.iter() {
-                    res = res.new_append(&e.recursive_hash_of_length(length)?);
-                }
-                Ok(res)
-            }
-            HashableMessage::Hashed(_) => Err(HashError::WrongHashed("RecursiveHash".to_string())),
+            HashableMessage::Hashed(_) => Err(HashError::WrongHashed(
+                "HashedOfLength expected in to_hashable_byte_array_of_length".to_string(),
+            )),
             HashableMessage::HashedOfLength(b) => Ok(b.clone()),
         }
     }
 
     pub fn is_hashed(&self) -> bool {
         matches!(self, HashableMessage::Hashed(_))
+            || matches!(self, HashableMessage::HashedOfLength(_))
     }
 }
 
@@ -231,24 +200,31 @@ impl RecursiveHashTrait for HashableMessage<'_> {
     }
 
     fn recursive_hash_to_zq(&self, q: &Integer) -> Result<Integer, HashError> {
-        let hashable_q = HashableMessage::from(q);
-        let hashable_message = HashableMessage::from("RecursiveHash");
+        let length = GROUP_PARAMETER_Q_LENGTH + 2 * SECURITY_STRENGTH;
+        let hashable_q = HashableMessage::from(q.clone());
+        let hashable_message = HashableMessage::from("RecursiveHash".to_string());
+        //let hash_self = HashableMessage::HashedOfLength(self.recursive_hash_of_length(length)?);
         let mut parameters = vec![&hashable_q, &hashable_message];
+        let values = match self {
+            HashableMessage::Composite(v) => v
+                .iter()
+                .map(|e| e.recursive_hash_of_length(length))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(HashableMessage::HashedOfLength)
+                .collect::<Vec<_>>(),
+            _ => vec![HashableMessage::HashedOfLength(
+                self.recursive_hash_of_length(length)?,
+            )],
+        };
+
         match self {
-            HashableMessage::Composite(v) => {
-                for e in v.iter() {
-                    parameters.push(e);
-                }
-            }
-            HashableMessage::CompositeR(v) => {
-                for e in v.iter() {
-                    parameters.push(e);
-                }
-            }
-            _ => parameters.push(self),
+            HashableMessage::Composite(_) => parameters.extend(values.iter()),
+            _ => parameters.push(&values[0]),
         }
+
         let h_prime = HashableMessage::from(parameters)
-            .recursive_hash_of_length(GROUP_PARAMETER_Q_LENGTH + 2 * SECURITY_STRENGTH)?
+            .recursive_hash_of_length(length)?
             .into_integer();
         Ok(h_prime.modulo(q))
     }
@@ -256,166 +232,166 @@ impl RecursiveHashTrait for HashableMessage<'_> {
 
 impl<'a> From<&'a ByteArray> for HashableMessage<'a> {
     fn from(value: &'a ByteArray) -> Self {
-        HashableMessage::RByteArray(value)
+        Self::ByteArray(Cow::Borrowed(value))
     }
 }
 
 impl From<ByteArray> for HashableMessage<'_> {
     fn from(value: ByteArray) -> Self {
-        HashableMessage::ByteArray(value)
+        Self::ByteArray(Cow::Owned(value))
     }
 }
 
 impl<'a> From<&'a Integer> for HashableMessage<'a> {
     fn from(value: &'a Integer) -> Self {
-        HashableMessage::RInt(value)
+        Self::Integer(Cow::Borrowed(value))
     }
 }
 
 impl From<Integer> for HashableMessage<'_> {
     fn from(value: Integer) -> Self {
-        HashableMessage::Int(value)
+        Self::Integer(Cow::Owned(value))
     }
 }
 
 impl<'a> From<&'a usize> for HashableMessage<'a> {
     fn from(value: &'a usize) -> Self {
-        HashableMessage::RUSize(value)
+        Self::USize(Cow::Borrowed(value))
     }
 }
 
 impl From<usize> for HashableMessage<'_> {
     fn from(value: usize) -> Self {
-        HashableMessage::USize(value)
+        Self::USize(Cow::Owned(value))
     }
 }
 
 impl<'a> From<&'a String> for HashableMessage<'a> {
     fn from(value: &'a String) -> Self {
-        HashableMessage::RString(value)
+        Self::String(Cow::Borrowed(value))
     }
 }
 
 impl From<String> for HashableMessage<'_> {
     fn from(value: String) -> Self {
-        HashableMessage::String(value)
+        Self::String(Cow::Owned(value))
     }
 }
 
 impl<'a> From<&'a str> for HashableMessage<'a> {
     fn from(value: &'a str) -> Self {
-        HashableMessage::RStr(value)
+        Self::String(Cow::Borrowed(value))
     }
 }
 
 impl From<bool> for HashableMessage<'_> {
     fn from(value: bool) -> Self {
         match value {
-            true => HashableMessage::String("true".to_string()),
-            false => HashableMessage::String("false".to_string()),
+            true => Self::from("true".to_string()),
+            false => Self::from("false".to_string()),
         }
     }
 }
 
-impl<'a> From<Vec<HashableMessage<'a>>> for HashableMessage<'a> {
-    fn from(value: Vec<HashableMessage<'a>>) -> Self {
-        HashableMessage::Composite(value)
+impl From<Vec<Self>> for HashableMessage<'_> {
+    fn from(value: Vec<Self>) -> Self {
+        Self::Composite(value.into_iter().map(Cow::Owned).collect::<Vec<_>>())
     }
 }
-impl<'a> From<&'a Vec<HashableMessage<'a>>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<HashableMessage<'a>>) -> Self {
-        let res: Vec<&HashableMessage> = value.iter().collect();
-        HashableMessage::CompositeR(res)
-    }
-}
-
-impl<'a> From<&'a Vec<String>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<String>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a [String]> for HashableMessage<'a> {
-    fn from(value: &'a [String]) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<&'a String>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<&'a String>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(|s| HashableMessage::from(*s)).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<ByteArray>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<ByteArray>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<Integer>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<Integer>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<&'a Integer>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<&'a Integer>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(|n| HashableMessage::from(*n)).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a [Integer]> for HashableMessage<'a> {
-    fn from(value: &'a [Integer]) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<Vec<&'a Integer>> for HashableMessage<'a> {
-    fn from(value: Vec<&'a Integer>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(|n| HashableMessage::from(*n)).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<usize>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<usize>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<Vec<Integer>>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<Vec<Integer>>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<Vec<usize>>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<Vec<usize>>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
-    }
-}
-
-impl<'a> From<&'a Vec<Vec<String>>> for HashableMessage<'a> {
-    fn from(value: &'a Vec<Vec<String>>) -> Self {
-        let l: Vec<HashableMessage> = value.iter().map(HashableMessage::from).collect();
-        HashableMessage::from(l)
+impl<'a> From<&'a Vec<Self>> for HashableMessage<'a> {
+    fn from(value: &'a Vec<Self>) -> Self {
+        Self::Composite(value.iter().map(Cow::Borrowed).collect::<Vec<_>>())
     }
 }
 
 impl<'a> From<Vec<&'a Self>> for HashableMessage<'a> {
     fn from(value: Vec<&'a Self>) -> Self {
-        HashableMessage::CompositeR(value)
+        Self::Composite(value.iter().map(|&h| Cow::Borrowed(h)).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<&'a [String]> for HashableMessage<'a> {
+    fn from(value: &'a [String]) -> Self {
+        Self::from(value.iter().map(Self::from).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<&'a [&'a String]> for HashableMessage<'a> {
+    fn from(value: &'a [&'a String]) -> Self {
+        Self::from(
+            value
+                .iter()
+                .map(|&s| Self::from(s.as_str()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl<'a> From<&'a [ByteArray]> for HashableMessage<'a> {
+    fn from(value: &'a [ByteArray]) -> Self {
+        Self::from(value.iter().map(Self::from).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<&'a [Integer]> for HashableMessage<'a> {
+    fn from(value: &'a [Integer]) -> Self {
+        Self::from(value.iter().map(Self::from).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<&'a [&'a Integer]> for HashableMessage<'a> {
+    fn from(value: &'a [&'a Integer]) -> Self {
+        Self::from(value.iter().map(|&n| Self::from(n)).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<Vec<&'a Integer>> for HashableMessage<'a> {
+    fn from(value: Vec<&'a Integer>) -> Self {
+        Self::from(
+            value
+                .iter()
+                .map(|n| HashableMessage::from(*n))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl<'a> From<&'a [usize]> for HashableMessage<'a> {
+    fn from(value: &'a [usize]) -> Self {
+        Self::from(value.iter().map(HashableMessage::from).collect::<Vec<_>>())
+    }
+}
+
+impl<'a> From<&'a [Vec<Integer>]> for HashableMessage<'a> {
+    fn from(value: &'a [Vec<Integer>]) -> Self {
+        Self::from(
+            value
+                .iter()
+                .map(|v| Self::from(v.as_slice()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl<'a> From<&'a [Vec<usize>]> for HashableMessage<'a> {
+    fn from(value: &'a [Vec<usize>]) -> Self {
+        Self::from(
+            value
+                .iter()
+                .map(|v| Self::from(v.as_slice()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl<'a> From<&'a [Vec<String>]> for HashableMessage<'a> {
+    fn from(value: &'a [Vec<String>]) -> Self {
+        Self::from(
+            value
+                .iter()
+                .map(|v| Self::from(v.as_slice()))
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -435,7 +411,7 @@ mod test {
     }
 
     #[test]
-    fn test_mp_integer() {
+    fn test_integer() {
         let i = Integer::from_hexa_string(
             "0xB7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF324E7738926CFBE5F4BF8D8D8C31D763DA06C80ABB1185EB4F7C7B5757F5958490CFD47D7C19BB42158D9554F7B46BCED55C4D79FD5F24D6613C31C3839A2DDF8A9A276BCFBFA1C877C56284DAB79CD4C2B3293D20E9E5EAF02AC60ACC93ED874422A52ECB238FEEE5AB6ADD835FD1A0753D0A8F78E537D2B95BB79D8DCAEC642C1E9F23B829B5C2780BF38737DF8BB300D01334A0D0BD8645CBFA73A6160FFE393C48CBBBCA060F0FF8EC6D31BEB5CCEED7F2F0BB088017163BC60DF45A0ECB1BCD289B06CBBFEA21AD08E1847F3F7378D56CED94640D6EF0D3D37BE69D0063"
         ).unwrap();
@@ -462,7 +438,7 @@ mod test {
     }
 
     #[test]
-    fn test_mp_integer_list() {
+    fn test_integer_list() {
         let inputs = [
             "0x41AFF17DA7F61150FCBC221E26D5BBEC1F540A3A3F13106FB45EB0E7C330C108AB338C525220A1D2D20EB77C642E7F360879A7B42BD2D191891F5A8CDBE7858407A7E7945A3518B0CC89A05BD3A61FD08235E0608F0AD678A99A385A668953A5591778CEBFCC8E3AF6F60DBA277320A58423FA436BEAACDEE2D5A2CDE86060BA8CF5BE70C4418E67B27FFEB96742FE6546C0ED533191B78BF88C8605D9ACF212016CB1735B1EC2ECC1491B73B82A5B348DB70A87FE0199899658CCD198CC53C7DD774D386A44867BB65EFF6704A6DD14AD462B13847B932FE4258C70F5FC20996FD9B2093EC0FD849070B5DDDDF741B8DFEFB972CFFE3A91E778CBEDE3A9CE1D",
             "0x35E854073500849CB2807B093D5F86176533B04DD81309D771A6461064E4A6E2B7F464D0502E9F2E2F5AD7AB4E225025E65A98CEEE2906C86158E7C432C4F50A149CD31A6C17CA1A000EC879B5CC0EF8E825EF8B83D4111D8AB59FCAB34694F112F5D3C2527F9121A50C95D975D3653972A9F17BFFBA26D542508EC57274202CCFF787EBC5E2E89F3EBEBFF17419B9338D47BF745901BE43D4A132FC503C9D07D7C3D3C35D303CD86C0F44B138E116CAA72B2DEFDA6D56BE841B980732EAE986710882143DAE385EE1832487F824A7AB404DFDFA903BEBDFC7682CE8D08F77B37E3B0AB99F40CAC2BA0EE8B6F64DE4BA3568A22359B114AE560656B8F59D0357",
@@ -472,13 +448,15 @@ mod test {
             .iter()
             .map(|e| Integer::from_hexa_string(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash().unwrap();
+        let r = HashableMessage::from(bis.as_slice())
+            .recursive_hash()
+            .unwrap();
         let e = ByteArray::base64_decode("Qn1sWr2uZ87jwjeEoJa9zS6dc6S92oC0X83yxpyv2ZA=").unwrap();
         assert_eq!(r, e);
     }
 
     #[test]
-    fn test_mp_integer_list_len1() {
+    fn test_integer_list_len1() {
         let inputs = [
             "0xA4D9B0B481FB03073E4B3EEE862FA2AA667AED37DD201FF41F786166C98D01AB3CEED0249FA1F12F23DEF203A98C53A294F5DE1A54A98EAA36F7232336FDFE89F28AD86789BCB67B5E41AFF9CE6EE5639A12B763D2A170E0B8208838079A622B11FC7DCDAC3DE178803E767028FEB607C2954834A8A53B400894E2CF7591D9E68CB987D2B5F05C5A799A38A513E53C451E6DF746C5C32FBAFE9AED6B8A1722AC15D40F1CA1DAC5F058618829514811F13516A18A4142D1B69830803A4910A89A5938491F75AFE9C07AC138CCB9B548814794A7B5A6E4F22CD2365FED5011A1E7DD26955958C8A9FCDEE31B9C6AABB6B50CC8E595144F4CCCAFFC74656DA135E3",
         ];
@@ -486,7 +464,9 @@ mod test {
             .iter()
             .map(|e| Integer::from_hexa_string(e).unwrap())
             .collect();
-        let r = HashableMessage::from(&bis).recursive_hash().unwrap();
+        let r = HashableMessage::from(bis.as_slice())
+            .recursive_hash()
+            .unwrap();
         let e = ByteArray::base64_decode("+e9LVZg0L5uHLbnUv8pIVVm28y+QZMtfG1edAFx2oPM=").unwrap();
         assert_eq!(r, e);
     }
@@ -505,7 +485,7 @@ mod test {
         l.push(HashableMessage::from(&bi2));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
+        let r = HashableMessage::from(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("rHGUCWqWKTj9KBY3GgSeNEXZfraTDK+ZGIhlSxpVs5c=").unwrap();
         assert_eq!(r, e);
     }
@@ -531,8 +511,8 @@ mod test {
         l.push(HashableMessage::from(&bu4));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
+        l.push(HashableMessage::from(nl));
+        let r = HashableMessage::from(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -558,8 +538,8 @@ mod test {
         l.push(HashableMessage::from(&bu4));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
+        l.push(HashableMessage::from(nl));
+        let r = HashableMessage::from(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -587,8 +567,8 @@ mod test {
         l.push(HashableMessage::from(&bu4));
         let ba = ByteArray::base64_decode("YcOpYm5zaXRwcSBi").unwrap();
         l.push(HashableMessage::from(&ba));
-        l.push(HashableMessage::Composite(nl));
-        let r = HashableMessage::Composite(l).recursive_hash().unwrap();
+        l.push(HashableMessage::from(nl));
+        let r = HashableMessage::from(l).recursive_hash().unwrap();
         let e = ByteArray::base64_decode("HYq9bWhqsm+/Sh8omWJGg2om5sQ2zosPIEhaIQ2m9GE=").unwrap();
         assert_eq!(r, e);
     }
@@ -604,14 +584,17 @@ mod test {
         let v1 = vec![Integer::from(2u8)];
         let v2 = vec![Integer::from(3u8), Integer::from(4u8)];
         let v3 = vec![Integer::from(5u8)];
-        res.push(HashableMessage::from(&v1));
-        res.push(HashableMessage::from(&v2));
-        res.push(HashableMessage::from(&v3));
-        assert_eq!(HashableMessage::from(&data), HashableMessage::from(res))
+        res.push(HashableMessage::from(v1.as_slice()));
+        res.push(HashableMessage::from(v2.as_slice()));
+        res.push(HashableMessage::from(v3.as_slice()));
+        assert_eq!(
+            HashableMessage::from(data.as_slice()),
+            HashableMessage::from(res)
+        )
     }
 
     #[test]
-    fn test_zq_test_string() {
+    fn test_zq_string() {
         let q = Integer::from_hexa_string(
             "0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF3380470C368DF93ADCD920EF5B23A4D23EFEFDCB31961F5830DB2395DFC26130A2724E1682619277886F289E9FA88A5C5AE9BA6C9E5C43CE3EA97FEB95D0557393BED3DD0DA578A446C741B578A432F361BD5B43B7F3485AB88909C1579A0D7F4A7BBDE783641DC7FAB3AF84BC83A56CD3C3DE2DCDEA5862C9BE9F6F261D3C9CB20CE6B"
         ).unwrap();
@@ -624,7 +607,7 @@ mod test {
     }
 
     #[test]
-    fn test_zq_test_bytearray() {
+    fn test_zq_bytearray() {
         let q = Integer::from_hexa_string(
             "0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF3380470C368DF93ADCD920EF5B23A4D23EFEFDCB31961F5830DB2395DFC26130A2724E1682619277886F289E9FA88A5C5AE9BA6C9E5C43CE3EA97FEB95D0557393BED3DD0DA578A446C741B578A432F361BD5B43B7F3485AB88909C1579A0D7F4A7BBDE783641DC7FAB3AF84BC83A56CD3C3DE2DCDEA5862C9BE9F6F261D3C9CB20CE6B"
         ).unwrap();
@@ -637,7 +620,7 @@ mod test {
     }
 
     #[test]
-    fn test_zq_test_integer() {
+    fn test_zq_integer() {
         let q = Integer::from_hexa_string(
             "0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF3380470C368DF93ADCD920EF5B23A4D23EFEFDCB31961F5830DB2395DFC26130A2724E1682619277886F289E9FA88A5C5AE9BA6C9E5C43CE3EA97FEB95D0557393BED3DD0DA578A446C741B578A432F361BD5B43B7F3485AB88909C1579A0D7F4A7BBDE783641DC7FAB3AF84BC83A56CD3C3DE2DCDEA5862C9BE9F6F261D3C9CB20CE6B"
         ).unwrap();
