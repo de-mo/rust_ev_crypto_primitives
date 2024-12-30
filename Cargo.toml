@@ -51,3 +51,8 @@ required-features = ["gmpmee"]
 [[bench]]
 name = "hashing"
 harness = false
+
+[[bench]]
+name = "zero_knowledge_proofs"
+harness = false
+required-features = ["gmpmee"]
