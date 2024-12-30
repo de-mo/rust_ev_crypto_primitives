@@ -47,3 +47,7 @@ harness = false
 name = "elgamal"
 harness = false
 required-features = ["gmpmee"]
+
+[[bench]]
+name = "hashing"
+harness = false
