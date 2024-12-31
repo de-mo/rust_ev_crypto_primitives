@@ -208,20 +208,16 @@ impl RecursiveHashTrait for HashableMessage<'_> {
         let values = match self {
             HashableMessage::Composite(v) => v
                 .iter()
-                .map(|e| e.recursive_hash_of_length(length))
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .map(HashableMessage::HashedOfLength)
-                .collect::<Vec<_>>(),
+                .map(|e| {
+                    e.recursive_hash_of_length(length)
+                        .map(HashableMessage::HashedOfLength)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
             _ => vec![HashableMessage::HashedOfLength(
                 self.recursive_hash_of_length(length)?,
             )],
         };
-
-        match self {
-            HashableMessage::Composite(_) => parameters.extend(values.iter()),
-            _ => parameters.push(&values[0]),
-        }
+        parameters.extend(values.iter());
 
         let h_prime = HashableMessage::from(parameters)
             .recursive_hash_of_length(length)?
