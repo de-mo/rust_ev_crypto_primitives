@@ -53,13 +53,8 @@ struct OperationOptimization {}
 
 static OP_OPTIMIZATION: LazyLock<OperationOptimization> = LazyLock::new(OperationOptimization::new);
 
-pub fn prepare_fixed_based_optimization(
-    base: &Integer,
-    modulus: &Integer,
-    block_width: usize,
-    exponent_bitlen: usize,
-) {
-    OP_OPTIMIZATION.prepare_fixed_base_exponentiate(base, modulus, block_width, exponent_bitlen);
+pub fn prepare_fixed_based_optimization(base: &Integer, modulus: &Integer) {
+    OP_OPTIMIZATION.prepare_fixed_base_exponentiate(base, modulus, 16, modulus.nb_bits() - 1);
 }
 
 #[cfg(not(feature = "gmpmee"))]
@@ -618,7 +613,7 @@ mod test {
         let begin_rug = SystemTime::now();
         let res_rug = b.mod_exponentiate(&e, &p);
         let duration_rug = begin_rug.elapsed().unwrap();
-        prepare_fixed_based_optimization(&b, &p, 16, 1024);
+        prepare_fixed_based_optimization(&b, &p);
         let begin_fpowm = SystemTime::now();
         let res_fpowm = b.mod_exponentiate(&e, &p);
         let duration_fpowm = begin_fpowm.elapsed().unwrap();
