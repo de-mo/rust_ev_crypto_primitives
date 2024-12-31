@@ -17,7 +17,7 @@
 //! Module that implement key derivation functions with argon2id
 //!
 use crate::{
-    basic_crypto_functions::{argon2_has_password, random_bytes, BasisCryptoError},
+    basic_crypto_functions::{argon2_hash_password, random_bytes, BasisCryptoError},
     ByteArray,
 };
 
@@ -97,7 +97,7 @@ impl Argon2id {
         input_keying_material: &ByteArray,
         salt: &ByteArray,
     ) -> Result<ByteArray, BasisCryptoError> {
-        argon2_has_password(
+        argon2_hash_password(
             self.memory_usage_parameter,
             self.parallelism_parameter,
             self.iteration_count,

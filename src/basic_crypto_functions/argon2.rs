@@ -21,7 +21,7 @@ use argon2::{Algorithm, Argon2, ParamsBuilder, Version};
 pub(super) use argon2::Error as Argon2Error;
 
 /// Hash password with Argon2id
-pub fn argon2_has_password(
+pub fn argon2_hash_password(
     memory: u32,
     parallelism: u32,
     iterations: u32,
