@@ -15,10 +15,10 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
-    elgamal::EncryptionParameterDomainError,
-    elgamal::EncryptionParameters,
+    elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
-    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait, VerifyDomainTrait,
+    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
+    VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -31,11 +31,18 @@ pub enum SchnorrProofError {
     CheckElgamal(Vec<EncryptionParameterDomainError>),
     #[error(transparent)]
     HashError(#[from] HashError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 /// Compute Phi Schnorr according to specifications of Swiss Post (Algorithm 10.1)
-fn compute_phi_schnorr(ep: &EncryptionParameters, x: &Integer) -> Integer {
-    ep.g().mod_exponentiate(x, ep.p())
+fn compute_phi_schnorr(
+    ep: &EncryptionParameters,
+    x: &Integer,
+) -> Result<Integer, SchnorrProofError> {
+    ep.g()
+        .mod_exponentiate(x, ep.p())
+        .map_err(SchnorrProofError::IntegerError)
 }
 
 /// Verify Schnorr Proof according to specifications of Swiss Post (Algorithm 10.3)
@@ -57,17 +64,17 @@ pub fn verify_schnorr(
             return Err(SchnorrProofError::CheckNumberTheory(e));
         }
     }
-    let x = compute_phi_schnorr(ep, z);
+    let x = compute_phi_schnorr(ep, z)?;
     let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
     // e in Z_q => modulo q
     // x, y in G_q => modulo p
-    let c_prime = x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p());
+    let c_prime = x.mod_multiply(&y.mod_exponentiate(e, ep.p())?.mod_inverse(ep.p())?, ep.p());
     let mut l: Vec<HashableMessage> = vec![];
     l.push(HashableMessage::from("SchnorrProof"));
     if !i_aux.is_empty() {
-        l.push(HashableMessage::from(i_aux));
+        l.push(HashableMessage::from(i_aux.as_slice()));
     }
-    let h_aux = HashableMessage::Composite(l);
+    let h_aux = HashableMessage::from(l);
     let l_final: Vec<HashableMessage> = vec![
         f,
         HashableMessage::from(y),
@@ -77,7 +84,7 @@ pub fn verify_schnorr(
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
         .map_err(SchnorrProofError::HashError)?
-        .into_mp_integer();
+        .into_integer();
     Ok(&e_prime == e)
 }
 
@@ -89,7 +96,7 @@ mod test {
 
     #[test]
     fn test_verify_schnorr_check_wrong() {
-        let p = Integer::from(12u8);
+        let p = Integer::from(13u8);
         let q=  Integer::from_hexa_string("0x5BF0A8B1457695355FB8AC404E7A79E3B1738B079C5A6D2B53C26C8228C867F799273B9C49367DF2FA5FC6C6C618EBB1ED0364055D88C2F5A7BE3DABABFACAC24867EA3EBE0CDDA10AC6CAAA7BDA35E76AAE26BCFEAF926B309E18E1C1CD16EFC54D13B5E7DFD0E43BE2B1426D5BCE6A6159949E9074F2F5781563056649F6C3A21152976591C7F772D5B56EC1AFE8D03A9E8547BC729BE95CADDBCEC6E57632160F4F91DC14DAE13C05F9C39BEFC5D98068099A50685EC322E5FD39D30B07FF1C9E2465DDE5030787FC763698DF5AE6776BF9785D84400B8B1DE306FA2D07658DE6944D8365DFF510D68470C23F9FB9BC6AB676CA3206B77869E9BDF34E8031").unwrap();
         let g = Integer::from_hexa_string("0x4").unwrap();
         let e = Integer::from_hexa_string(

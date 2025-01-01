@@ -21,6 +21,8 @@ mod shuffle_argument;
 mod single_value_product_argument;
 mod zero_argument;
 
+use std::ops::ControlFlow;
+
 pub use hadamard_argument::{HadamardArgument, HadamardArgumentError};
 pub use multi_exponentiation_argument::{
     MultiExponentiationArgument, MultiExponentiationArgumentError,
@@ -38,7 +40,9 @@ pub use zero_argument::{ZeroArgument, ZeroArgumentError};
 use thiserror::Error;
 
 use super::commitments::CommitmentKey;
-use crate::{elgamal::EncryptionParameters, ConstantsTrait, Integer, OperationsTrait};
+use crate::{
+    elgamal::EncryptionParameters, ConstantsTrait, Integer, IntegerError, OperationsTrait,
+};
 
 /// context for all arguments verification functions
 #[derive(Clone, Debug)]
@@ -52,6 +56,8 @@ pub struct ArgumentContext<'a> {
 pub enum StarMapError {
     #[error("vectors a and b have not the same size")]
     VectorNotSameLen,
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 pub fn star_map(
@@ -63,15 +69,24 @@ pub fn star_map(
     if a.len() != b.len() {
         return Err(StarMapError::VectorNotSameLen);
     }
-    Ok(a.iter()
+    match a
+        .iter()
         .zip(b.iter())
         .enumerate()
         .map(|(j, (a_j, b_j))| {
-            a_j.mod_multiply(b_j, q)
-                .mod_multiply(&y.mod_exponentiate(&Integer::from(j + 1), q), q)
+            y.mod_exponentiate(&Integer::from(j + 1), q)
+                .map(|v| a_j.mod_multiply(b_j, q).mod_multiply(&v, q))
+                .map_err(StarMapError::IntegerError)
+            //a_j.mod_multiply(b_j, q)
+            //    .mod_multiply(&y.mod_exponentiate(&Integer::from(j + 1), q), q)
         })
-        .fold(Integer::zero().clone(), |acc, v| acc + v)
-        .modulo(q))
+        .try_fold(Integer::zero().clone(), |acc, v_res| match v_res {
+            Ok(v) => ControlFlow::Continue(acc + v),
+            Err(e) => ControlFlow::Break(e),
+        }) {
+        ControlFlow::Continue(v) => Ok(v.modulo(q)),
+        ControlFlow::Break(e) => Err(e),
+    }
 }
 
 impl<'a> ArgumentContext<'a> {

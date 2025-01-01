@@ -20,7 +20,7 @@ use thiserror::Error;
 
 use crate::{
     basic_crypto_functions::shake256,
-    number_theory::{NumberTheoryMethodTrait, SMALL_PRIMES},
+    number_theory::{NumberTheoryMethodTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
     ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
     VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
@@ -87,8 +87,8 @@ impl EncryptionParameters {
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
         let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
             .map_err(ElgamalError::OpenSSLError)?;
-        let q_b = q_b_hat.prepend_byte(2u8);
-        let q_prime: Integer = q_b.into_mp_integer() >> 3;
+        let q_b = q_b_hat.new_prepend_byte(2u8);
+        let q_prime: Integer = q_b.into_integer() >> 3;
         let q = &q_prime - Integer::from(&q_prime % 6u8) + Integer::five();
         let rs: Vec<Integer> = SMALL_PRIMES
             .iter()
@@ -147,10 +147,10 @@ impl EncryptionParameters {
         desired_number: usize,
     ) -> Result<Vec<usize>, ElgamalError> {
         let mut current = 5usize;
-        let mut res = vec![];
+        let mut res = Vec::with_capacity(desired_number);
         while res.len() < desired_number
             && &Integer::from(current) < self.p()
-            && current < usize::pow(2, 31)
+            && current < SMALL_PRIMES_LIMIT
         {
             let is_prime = current.is_small_prime().unwrap();
             if is_prime && Integer::from(current).is_quadratic_residue(self.p()) {

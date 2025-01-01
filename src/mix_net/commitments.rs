@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::{
     elgamal::EncryptionParameters, ConstantsTrait, HashError, HashableMessage, Integer,
-    OperationsTrait, RecursiveHashTrait,
+    IntegerError, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::matrix::{Matrix, MatrixError};
@@ -38,6 +38,8 @@ pub enum CommitmentError {
     HashError(#[from] HashError),
     #[error(transparent)]
     MatrixError(#[from] MatrixError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
     #[error("Matrix is mallformed in: {0}")]
     MalformedMatrix(String),
     #[error("Size {0} of random vector must be {1}")]
@@ -67,7 +69,7 @@ impl CommitmentKey {
             .recursive_hash_to_zq(ep.q())
             .map_err(CommitmentError::HashError)?
                 + Integer::one();
-            let w = u.mod_square(ep.p());
+            let w = u.mod_square(ep.p())?;
             if &w != Integer::one() && &w != ep.g() && !v.contains(&w) {
                 v.push(w);
                 count += 1;
@@ -109,12 +111,12 @@ pub fn get_commitment(
     if ck.gs.len() < a.len() {
         return Err(CommitmentError::SmallCommitmentKey);
     }
-    let prod: rug::Integer = a
-        .iter()
-        .enumerate()
-        .map(|(i, a)| ck.gs[i].mod_exponentiate(a, ep.p()))
-        .fold(Integer::one().clone(), |acc, v| acc * v);
-    let c = ck.h.mod_exponentiate(r, ep.p()).mod_multiply(&prod, ep.p());
+    let prod = Integer::mod_multi_exponentiate(&ck.gs, a, ep.p())?;
+    println!("prod of get_commitment = {}", &prod);
+    let c =
+        ck.h.mod_exponentiate(r, ep.p())
+            .map_err(CommitmentError::IntegerError)?
+            .mod_multiply(&prod, ep.p());
     Ok(c)
 }
 

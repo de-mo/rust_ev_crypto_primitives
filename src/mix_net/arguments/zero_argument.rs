@@ -16,7 +16,7 @@
 
 //! Module implementing the verification for the Zero Argument (§9.3.5)
 
-use std::fmt::Display;
+use std::{fmt::Display, iter::once};
 
 use thiserror::Error;
 
@@ -26,7 +26,8 @@ use crate::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 /// Statement in input of the verify algorithm
@@ -81,6 +82,8 @@ pub enum ZeroArgumentError {
     CommitmentError(#[from] CommitmentError),
     #[error("StarMapError: {0}")]
     StarMapError(#[from] StarMapError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 /// Algorithm 9.23
@@ -97,36 +100,30 @@ pub fn verify_zero_argument(
     let x = get_x(context, statement, argument)?;
     let x_powers: Vec<Integer> = (0..2 * m + 1)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ZeroArgumentError::IntegerError)?;
 
     let verif_upper_c_d = &argument.cs_d[m + 1] == Integer::one();
 
-    let prod_c_a = [argument.c_upper_a_0.clone()]
-        .iter()
-        .chain(statement.cs_upper_a.iter())
-        .enumerate()
-        .map(|(i, c)| c.mod_exponentiate(&x_powers[i], p))
-        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+    let mut prod_c_a_bases_iter = once(argument.c_upper_a_0).chain(statement.cs_upper_a.iter());
+    let prod_c_a =
+        Integer::mod_multi_exponentiate_iter(&mut prod_c_a_bases_iter, &mut x_powers.iter(), p)
+            .map_err(ZeroArgumentError::IntegerError)?;
     let comm_a = get_commitment(context.ep, argument.as_prime, argument.r_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_a = prod_c_a == comm_a;
 
-    let prod_c_b = [argument.c_upper_b_m.clone()]
-        .iter()
-        .chain(statement.cs_upper_b.iter().rev())
-        .enumerate()
-        .map(|(i, c)| c.mod_exponentiate(&x_powers[i], p))
-        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+    let mut prod_c_b_bases_iter =
+        once(argument.c_upper_b_m).chain(statement.cs_upper_b.iter().rev());
+    let prod_c_b =
+        Integer::mod_multi_exponentiate_iter(&mut prod_c_b_bases_iter, &mut x_powers.iter(), p)
+            .map_err(ZeroArgumentError::IntegerError)?;
     let comm_b = get_commitment(context.ep, argument.bs_prime, argument.s_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_b = prod_c_b == comm_b;
 
-    let prod_c_d = argument
-        .cs_d
-        .iter()
-        .enumerate()
-        .map(|(i, c)| c.mod_exponentiate(&x.mod_exponentiate(&Integer::from(i), q), p))
-        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+    let prod_c_d = Integer::mod_multi_exponentiate(argument.cs_d, &x_powers, p)
+        .map_err(ZeroArgumentError::IntegerError)?;
     let prod = star_map(q, statement.y, argument.as_prime, argument.bs_prime)
         .map_err(ZeroArgumentError::StarMapError)?;
     let comm_d = get_commitment(context.ep, &[prod], argument.t_prime, context.ck)
@@ -159,7 +156,7 @@ fn get_x(
     ])
     .recursive_hash()
     .map_err(ZeroArgumentError::HashError)?
-    .into_mp_integer())
+    .into_integer())
 }
 
 impl MixNetResultTrait for ZeroArgumentResult {

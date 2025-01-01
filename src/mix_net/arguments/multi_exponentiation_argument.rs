@@ -16,19 +16,19 @@
 
 //! Module implementing the verification for the Multi-Exponentiation Argument (§9.3.2)
 
-use std::fmt::Display;
+use std::{fmt::Display, ops::ControlFlow};
 
 use thiserror::Error;
 
 use crate::{
-    elgamal::Ciphertext,
-    elgamal::ElgamalError,
+    elgamal::{Ciphertext, ElgamalError},
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         matrix::Matrix,
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 use super::{ArgumentContext, StarMapError};
@@ -92,6 +92,8 @@ pub enum MultiExponentiationArgumentError {
     StarMapError(#[from] StarMapError),
     #[error("ElgamalError: {0}")]
     ElgamalError(#[from] ElgamalError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 /// Algorithm 9.16
@@ -110,53 +112,78 @@ pub fn verify_multi_exponentiation_argument(
     let x = get_x(context, statement, argument)?;
     let x_powers = (0..2 * m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(MultiExponentiationArgumentError::IntegerError)?;
 
     let verif_upper_c_b_m = &argument.cs_upper_b[m] == Integer::one();
     let verif_upper_e_m = &argument.upper_es[m] == statement.upper_c;
 
-    let prod_upper_c_a = statement
-        .cs_upper_a
-        .iter()
-        .zip(x_powers.iter().skip(1))
-        .map(|(c_a_i, x_i)| c_a_i.mod_exponentiate(x_i, p))
-        .fold(argument.c_upper_a_0.clone(), |acc, v| {
-            acc.mod_multiply(&v, p)
-        });
+    let prod_upper_c_a = argument.c_upper_a_0.mod_multiply(
+        &Integer::mod_multi_exponentiate_iter(
+            &mut statement.cs_upper_a.iter(),
+            &mut x_powers.iter().skip(1),
+            p,
+        )
+        .map_err(MultiExponentiationArgumentError::IntegerError)?,
+        p,
+    );
+    /*statement
+    .cs_upper_a
+    .iter()
+    .zip(x_powers.iter().skip(1))
+    .map(|(c_a_i, x_i)| c_a_i.mod_exponentiate(x_i, p))
+    .fold(argument.c_upper_a_0.clone(), |acc, v| {
+        acc.mod_multiply(&v, p)
+    });*/
     let comm_upper_a = get_commitment(context.ep, argument.a_vec, argument.r, context.ck)
         .map_err(MultiExponentiationArgumentError::CommitmentError)?;
     let verif_upper_a = prod_upper_c_a == comm_upper_a;
 
-    let prod_upper_c_b = argument
-        .cs_upper_b
-        .iter()
-        .zip(x_powers.iter())
-        .skip(1)
-        .map(|(c_b_k, x_k)| c_b_k.mod_exponentiate(x_k, p))
-        .fold(argument.cs_upper_b[0].clone(), |acc, v| {
-            acc.mod_multiply(&v, p)
-        });
+    let prod_upper_c_b = Integer::mod_multi_exponentiate_iter(
+        &mut argument.cs_upper_b.iter(),
+        &mut x_powers.iter(),
+        p,
+    )
+    .map_err(MultiExponentiationArgumentError::IntegerError)?;
+    /*argument
+    .cs_upper_b
+    .iter()
+    .zip(x_powers.iter())
+    .skip(1)
+    .map(|(c_b_k, x_k)| c_b_k.mod_exponentiate(x_k, p))
+    .fold(argument.cs_upper_b[0].clone(), |acc, v| {
+        acc.mod_multiply(&v, p)
+    });*/
     let comm_upper_b = get_commitment(context.ep, &[argument.b.clone()], argument.s, context.ck)
         .map_err(MultiExponentiationArgumentError::CommitmentError)?;
     let verif_upper_b = prod_upper_c_b == comm_upper_b;
 
-    let prod_upper_e = argument
+    let prod_upper_e = match argument
         .upper_es
         .iter()
         .zip(x_powers.iter())
         .skip(1)
         .map(|(e_k, x_k)| e_k.get_ciphertext_exponentiation(x_k, context.ep))
-        .fold(argument.upper_es[0].clone(), |acc, e| {
-            acc.get_ciphertext_product(&e, context.ep)
-        });
+        .try_fold(argument.upper_es[0].clone(), |acc, e_res| match e_res {
+            Ok(e) => ControlFlow::Continue(acc.get_ciphertext_product(&e, context.ep)),
+            Err(e) => ControlFlow::Break(e),
+        }) {
+        ControlFlow::Continue(v) => Ok(v),
+        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ElgamalError(e)),
+    }?;
     let encrypted_upper_g_b = Ciphertext::get_ciphertext(
         context.ep,
-        vec![g.mod_exponentiate(argument.b, p); l].as_slice(),
+        vec![
+            g.mod_exponentiate(argument.b, p)
+                .map_err(MultiExponentiationArgumentError::IntegerError)?;
+            l
+        ]
+        .as_slice(),
         argument.tau,
         context.pks,
     )
     .map_err(MultiExponentiationArgumentError::ElgamalError)?;
-    let prod_c = statement
+    let prod_c = match statement
         .ciphertext_matrix
         .rows_iter()
         .zip(x_powers.iter().take(m).rev())
@@ -169,9 +196,16 @@ pub fn verify_multi_exponentiation_argument(
                 context.ep,
             )
         })
-        .fold(Ciphertext::neutral_for_mod_multiply(l), |acc, c| {
-            acc.get_ciphertext_product(&c, context.ep)
-        });
+        .try_fold(
+            Ciphertext::neutral_for_mod_multiply(l),
+            |acc, c_res| match c_res {
+                Ok(c) => ControlFlow::Continue(acc.get_ciphertext_product(&c, context.ep)),
+                Err(e) => ControlFlow::Break(e),
+            },
+        ) {
+        ControlFlow::Continue(c) => Ok(c),
+        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ElgamalError(e)),
+    }?;
     let verif_upper_e_upper_c =
         prod_upper_e == encrypted_upper_g_b.get_ciphertext_product(&prod_c, context.ep);
 
@@ -203,7 +237,7 @@ pub fn get_x(
     ])
     .recursive_hash()
     .map_err(MultiExponentiationArgumentError::HashError)?
-    .into_mp_integer())
+    .into_integer())
 }
 
 impl<'a> MultiExponentiationStatement<'a> {

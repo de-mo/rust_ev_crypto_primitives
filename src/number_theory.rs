@@ -37,14 +37,14 @@ pub trait NumberTheoryMethodTrait: ToString {
     /// See [Jacobi symbol](https://en.wikipedia.org/wiki/Jacobi_symbol#Calculating_the_Jacobi_symbol)
     ///
     /// Return an error if the given number n is not odd.
-    fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError>;
+    fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError>;
 
     /// Determine if n is a power of b, e.g. n = b^x for any x
     fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool;
 
     /// Determine of the number n is a quadratic residue of p
     fn is_quadratic_residue(&self, p: &Self) -> bool {
-        self.mp_jacobi(p).unwrap() == 1
+        self.jacobi_symbol(p).unwrap() == 1
     }
 
     /// Determine if a number is prime according to Miller-Rabin Test
@@ -90,7 +90,7 @@ pub trait NumberTheoryMethodTrait: ToString {
 
 impl SmallPrimeTrait for usize {
     fn is_small_prime(&self) -> Result<bool, NumberTheoryError> {
-        if *self >= Self::pow(2, 31) {
+        if *self >= SMALL_PRIMES_LIMIT {
             return Err(NumberTheoryError::OutOfRange {
                 msg: "to big. Must be less thant 2^31".to_string(),
                 n: *self,
@@ -111,9 +111,8 @@ impl SmallPrimeTrait for usize {
         if self % 2 == 0 || self % 3 == 0 {
             return Ok(false);
         }
-        let small_primes = SMALL_PRIMES.to_vec();
-        if self <= small_primes.last().unwrap() {
-            return Ok(small_primes.contains(self));
+        if self <= SMALL_PRIMES.last().unwrap() {
+            return Ok(SMALL_PRIMES.contains(self));
         }
         let mut i = 5;
         let limit = (f64::sqrt(*self as f64) as usize) + 1;
@@ -128,7 +127,10 @@ impl SmallPrimeTrait for usize {
 }
 
 impl NumberTheoryMethodTrait for Integer {
-    fn mp_jacobi(&self, n: &Self) -> Result<i32, NumberTheoryError> {
+    fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError> {
+        if n.is_even() {
+            return Err(NumberTheoryError::IsEven("n".to_string()));
+        }
         Ok(self.jacobi(n))
     }
 
@@ -170,6 +172,8 @@ pub enum NumberTheoryError {
     CheckPrime(String),
     #[error("Number {0} is not a power of {1}")]
     CheckIsPowerOf(String, String),
+    #[error("Number {0} must be odd")]
+    IsEven(String),
 }
 
 #[allow(clippy::items_after_test_module)]
@@ -194,32 +198,45 @@ mod test {
         assert!(104729.is_small_prime().unwrap());
         assert!(!104730.is_small_prime().unwrap());
         assert!(111317.is_small_prime().unwrap());
+        assert!(usize::pow(2, 31).is_small_prime().is_err());
+        assert!((usize::pow(2, 31) - 1).is_small_prime().unwrap());
     }
 
     #[test]
     fn test_jacobi() {
         assert_eq!(
-            Integer::from(1u8).mp_jacobi(&Integer::from(9u8)).unwrap(),
+            Integer::from(1u8)
+                .jacobi_symbol(&Integer::from(9u8))
+                .unwrap(),
             1
         );
         assert_eq!(
-            Integer::from(9u8).mp_jacobi(&Integer::from(15u8)).unwrap(),
+            Integer::from(9u8)
+                .jacobi_symbol(&Integer::from(15u8))
+                .unwrap(),
             0
         );
         assert_eq!(
-            Integer::from(7u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
+            Integer::from(7u8)
+                .jacobi_symbol(&Integer::from(17u8))
+                .unwrap(),
             -1
         );
         assert_eq!(
-            Integer::from(19u8).mp_jacobi(&Integer::from(17u8)).unwrap(),
+            Integer::from(19u8)
+                .jacobi_symbol(&Integer::from(17u8))
+                .unwrap(),
             1
         );
         assert_eq!(
             Integer::from(1001u32)
-                .mp_jacobi(&Integer::from(9907u32))
+                .jacobi_symbol(&Integer::from(9907u32))
                 .unwrap(),
             -1
         );
+        assert!(Integer::from(1001u32)
+            .jacobi_symbol(&Integer::from(4u32))
+            .is_err(),);
     }
 
     #[test]
@@ -272,6 +289,8 @@ mod test {
         assert!(Integer::from(25u8).is_mod_power_of(&Integer::from(5u8), &Integer::from(100u8)));
     }
 }
+
+pub const SMALL_PRIMES_LIMIT: usize = 2147483648; //2^31 according to the definition of Swiss Post
 
 pub const SMALL_PRIMES: &[usize] = &[
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,

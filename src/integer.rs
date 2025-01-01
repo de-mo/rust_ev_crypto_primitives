@@ -22,9 +22,16 @@
 
 use crate::{ByteArray, DecodeTrait, EncodeTrait};
 use rug::Integer;
-use std::fmt::Debug;
 use std::sync::OnceLock;
+use std::{fmt::Debug, sync::LazyLock};
 use thiserror::Error;
+use tracing::info;
+
+#[cfg(feature = "gmpmee")]
+use rug_gmpmee::{
+    fpowm::{cache_base_modulus, cache_fpown, cache_init_precomp},
+    spown::spowm,
+};
 
 /// Trait to implement constant numbers
 pub trait ConstantsTrait: Sized {
@@ -40,6 +47,131 @@ pub trait ConstantsTrait: Sized {
     fn four() -> &'static Self;
     /// Five
     fn five() -> &'static Self;
+}
+
+/// Default optimization
+struct OperationOptimization {}
+
+static OP_OPTIMIZATION: LazyLock<OperationOptimization> = LazyLock::new(OperationOptimization::new);
+
+/// Prepare the fixed base exponentiate for the cache
+pub fn prepare_fixed_based_optimization(
+    base: &Integer,
+    modulus: &Integer,
+) -> Result<bool, IntegerError> {
+    OP_OPTIMIZATION.prepare_fixed_base_exponentiate(base, modulus, 16, modulus.nb_bits() - 1)
+}
+
+#[cfg(not(feature = "gmpmee"))]
+impl OperationsOptimizationTrait for OperationOptimization {
+    fn new() -> Self {
+        info!("No optimization used (feature GMPMEE deactivated)");
+        Self {}
+    }
+}
+
+#[cfg(feature = "gmpmee")]
+impl OperationsOptimizationTrait for OperationOptimization {
+    fn new() -> Self {
+        info!("Optimization of GMPMEE used");
+        Self {}
+    }
+
+    fn is_optimized(&self) -> bool {
+        true
+    }
+
+    fn prepare_fixed_base_exponentiate(
+        &self,
+        base: &Integer,
+        modulus: &Integer,
+        block_width: usize,
+        exponent_bitlen: usize,
+    ) -> Result<bool, IntegerError> {
+        cache_init_precomp(base, modulus, block_width, exponent_bitlen).map_err(|e| {
+            IntegerError::GMPMEE {
+                msg: "prepare_fixed_base_exponentiate".to_string(),
+                error: e.to_string(),
+            }
+        })
+    }
+
+    fn is_fpowm_optimized_for(&self, base: &Integer, modulus: &Integer) -> bool {
+        match cache_base_modulus() {
+            Some(tu) => tu == (base, modulus),
+            None => false,
+        }
+    }
+
+    fn optimized_fpowm(&self, exponent: &Integer) -> Result<Integer, IntegerError> {
+        cache_fpown(exponent).ok_or(IntegerError::Optimization(
+            "cache_fpown return None".to_string(),
+        ))
+    }
+
+    fn optimized_spowm(
+        &self,
+        bases: &[Integer],
+        exponents: &[Integer],
+        modulus: &Integer,
+    ) -> Result<Integer, IntegerError> {
+        spowm(bases, exponents, modulus).map_err(|e| IntegerError::GMPMEE {
+            msg: "optimized_spowm".to_string(),
+            error: e.to_string(),
+        })
+    }
+}
+
+/// Trait to add optimization to operations of [Integer]
+pub trait OperationsOptimizationTrait: Sized {
+    /// New optimization
+    fn new() -> Self;
+
+    /// Does an optimization exist ?
+    ///
+    /// Return `false` per default
+    fn is_optimized(&self) -> bool {
+        false
+    }
+
+    /// Prepare the fixed base exponentiate
+    ///
+    /// Do nothing per default
+    fn prepare_fixed_base_exponentiate(
+        &self,
+        _base: &Integer,
+        _modulus: &Integer,
+        _block_width: usize,
+        _exponent_bitlen: usize,
+    ) -> Result<bool, IntegerError> {
+        Ok(false)
+    }
+
+    /// Is there an optimization of the given base en modulus ?
+    ///
+    /// Return `false` per default
+    fn is_fpowm_optimized_for(&self, _base: &Integer, _modulus: &Integer) -> bool {
+        false
+    }
+
+    /// Optimized fpown
+    ///
+    /// Return [IntegerError::Notimplemented] per default
+    fn optimized_fpowm(&self, _exponent: &Integer) -> Result<Integer, IntegerError> {
+        Err(IntegerError::Notimplemented("optimized_fpowm".to_string()))
+    }
+
+    /// Optimized spown
+    ///
+    /// Return [IntegerError::Notimplemented] per default
+    fn optimized_spowm(
+        &self,
+        _bases: &[Integer],
+        _exponents: &[Integer],
+        _modulus: &Integer,
+    ) -> Result<Integer, IntegerError> {
+        Err(IntegerError::Notimplemented("optimized_spowm".to_string()))
+    }
 }
 
 /// Trait to extend operations of [Integer]
@@ -62,12 +194,12 @@ pub trait OperationsTrait: Sized {
     fn mod_sub(&self, other: &Self, modulus: &Self) -> Self;
 
     /// Calculate the exponentiate modulo: self^exp % modulus
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self;
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, IntegerError>;
 
     /// Calculate the negative number modulo modulus (is a positive number): -self & modulus
     fn mod_negate(&self, modulus: &Self) -> Self;
 
-    /// Calculate the exponentiate modulo: self*other % modulus
+    /// Calculate the multiplication modulo: self*other % modulus
     fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self;
 
     /// multiply all elements of other with self (scalar product)
@@ -78,19 +210,38 @@ pub trait OperationsTrait: Sized {
             .collect()
     }
 
-    /// Calculate the multiplication modulo: self*other % modulus
-    fn mod_square(&self, modulus: &Self) -> Self {
-        self.mod_multiply(self, modulus)
-    }
+    /// Calculate the square modulo: self*2 % modulus
+    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerError>;
 
     /// Calculate the inverse modulo: self^(-1) % modulus
     ///
     /// Return the correct answer only if modulus is prime
-    fn mod_inverse(&self, modulus: &Self) -> Self;
+    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerError>;
 
-    fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Self {
-        self.mod_multiply(&divisor.mod_inverse(modulus), modulus)
+    fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Result<Self, IntegerError> {
+        Ok(self.mod_multiply(&divisor.mod_inverse(modulus)?, modulus))
     }
+
+    /// Multi Exponentation modulo (prouct of b_^e_i mod modulus)
+    fn mod_multi_exponentiate(
+        bases: &[Self],
+        exponents: &[Self],
+        modulus: &Self,
+    ) -> Result<Self, IntegerError>;
+
+    /// Multi Exponentation modulo using iterators (prouct of b_^e_i mod modulus)
+    ///
+    /// In many algorithms, the iterator are creating. It reduce the number of vector creation
+    fn mod_multi_exponentiate_iter<
+        'a,
+        'b,
+        T: Iterator<Item = &'a Integer>,
+        S: Iterator<Item = &'b Integer>,
+    >(
+        bases_iter: &mut T,
+        exponents_iter: &mut S,
+        modulus: &Self,
+    ) -> Result<Self, IntegerError>;
 }
 
 /// Transformation from or to String in hexadecimal according to the specifications
@@ -114,16 +265,30 @@ pub trait Hexa: Sized {
 // enum representing the errors with big integer
 #[derive(Error, Debug)]
 pub enum IntegerError {
-    #[error("Integer must be positive or zero")]
-    IsNegative,
+    #[error("Integer {0} must be positive or zero")]
+    IsNegative(String),
+    #[error("Integer {0} must be positive")]
+    IsNotPositive(String),
+    #[error("Integer {0} must be odd")]
+    IsEven(String),
     #[error("Error parsing {orig} in Integer in method {fnname}")]
     ParseError { orig: String, fnname: String },
+    #[error("Problem with optimization: {0}")]
+    Optimization(String),
+    #[error("Problem with rug integer: {0}")]
+    RugInteger(String),
+    #[error("Error in gmpmee: {msg}. Caused by: {error}")]
+    GMPMEE { msg: String, error: String },
     #[error("Error parsing {orig} in Integer in method {fnname} caused by {source}")]
     ParseErrorWithSource {
         orig: String,
         fnname: String,
         source: rug::integer::ParseIntegerError,
     },
+    #[error("Function {0} not implemented")]
+    Notimplemented(String),
+    #[error("Error by parameters of multi exponential: {0}")]
+    MultiExpParameters(String),
 }
 
 /// Trait to calculate byte length
@@ -179,8 +344,22 @@ impl OperationsTrait for Integer {
         self.is_even()
     }
 
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Self {
-        Integer::from(self.pow_mod_ref(exp, modulus).unwrap())
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, IntegerError> {
+        if self.is_negative() {
+            return Err(IntegerError::IsNegative("self (base)".to_string()));
+        }
+        if modulus.is_negative() {
+            return Err(IntegerError::IsNegative("modulus".to_string()));
+        }
+        if modulus.is_even() {
+            return Err(IntegerError::IsEven("modulus".to_string()));
+        }
+        match OP_OPTIMIZATION.is_fpowm_optimized_for(self, modulus) {
+            true => OP_OPTIMIZATION.optimized_fpowm(exp),
+            false => Ok(Integer::from(self.pow_mod_ref(exp, modulus).ok_or(
+                IntegerError::RugInteger("pow_mod_ref return none".to_string()),
+            )?)),
+        }
     }
 
     fn mod_negate(&self, modulus: &Self) -> Self {
@@ -197,11 +376,11 @@ impl OperationsTrait for Integer {
         Integer::from(self * other) % modulus
     }
 
-    fn mod_square(&self, modulus: &Self) -> Self {
+    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerError> {
         self.mod_exponentiate(Integer::two(), modulus)
     }
 
-    fn mod_inverse(&self, modulus: &Self) -> Self {
+    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerError> {
         let from = Integer::from(modulus - Self::two());
         self.mod_exponentiate(&from, modulus)
     }
@@ -216,7 +395,44 @@ impl OperationsTrait for Integer {
     }
 
     fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
-        self.mod_add(&Integer::from(-other), modulus)
+        self.mod_add(&other.mod_negate(modulus), modulus)
+    }
+
+    fn mod_multi_exponentiate(
+        bases: &[Self],
+        exponents: &[Self],
+        modulus: &Self,
+    ) -> Result<Self, IntegerError> {
+        Self::mod_multi_exponentiate_iter(&mut bases.iter(), &mut exponents.iter(), modulus)
+    }
+
+    fn mod_multi_exponentiate_iter<
+        'a,
+        'b,
+        T: Iterator<Item = &'a Integer>,
+        S: Iterator<Item = &'b Integer>,
+    >(
+        bases_iter: &mut T,
+        exponents_iter: &mut S,
+        modulus: &Self,
+    ) -> Result<Self, IntegerError> {
+        match OP_OPTIMIZATION.is_optimized() {
+            true => {
+                let (bases, exponents): (Vec<_>, Vec<_>) =
+                    bases_iter.cloned().zip(exponents_iter.cloned()).unzip();
+                OP_OPTIMIZATION.optimized_spowm(&bases, &exponents, modulus)
+            }
+            false => match bases_iter
+                .zip(exponents_iter)
+                .map(|(b, e)| b.mod_exponentiate(e, modulus))
+                .try_fold(Self::one().to_owned(), |acc, n_res| match n_res {
+                    Ok(n) => std::ops::ControlFlow::Continue(acc.mod_multiply(&n, modulus)),
+                    Err(e) => std::ops::ControlFlow::Break(e),
+                }) {
+                std::ops::ControlFlow::Continue(v) => Ok(v),
+                std::ops::ControlFlow::Break(e) => Err(e),
+            },
+        }
     }
 }
 
@@ -244,15 +460,15 @@ impl Hexa for Integer {
 
 impl DecodeTrait for Integer {
     fn base16_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
-        ByteArray::base16_decode(s).map(|b| b.into_mp_integer())
+        ByteArray::base16_decode(s).map(|b| b.into_integer())
     }
 
     fn base32_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
-        ByteArray::base32_decode(s).map(|b| b.into_mp_integer())
+        ByteArray::base32_decode(s).map(|b| b.into_integer())
     }
 
     fn base64_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
-        ByteArray::base64_decode(s).map(|b| b.into_mp_integer())
+        ByteArray::base64_decode(s).map(|b| b.into_integer())
     }
 }
 
@@ -273,7 +489,10 @@ impl EncodeTrait for Integer {
 
 #[cfg(test)]
 mod test {
+    use std::time::SystemTime;
+
     use super::*;
+    use rug::rand::RandState;
 
     #[test]
     fn bit_length() {
@@ -411,13 +630,121 @@ mod test {
     #[test]
     fn test_mod_inverse() {
         assert_eq!(
-            Integer::from(3u16).mod_inverse(&Integer::from(11u16)),
+            Integer::from(3u16)
+                .mod_inverse(&Integer::from(11u16))
+                .unwrap(),
             Integer::from(4u16)
         );
         assert_eq!(
-            Integer::from(10u16).mod_inverse(&Integer::from(17u16)),
+            Integer::from(10u16)
+                .mod_inverse(&Integer::from(17u16))
+                .unwrap(),
             Integer::from(12u16)
         );
+    }
+
+    #[test]
+    fn test_mod_multi_exp_1() {
+        let bases = [Integer::from(7)];
+        let exponents = [Integer::from(8)];
+        let modulus = Integer::from(23);
+        let res1 = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus).unwrap();
+        let res2 = Integer::mod_multi_exponentiate_iter(
+            &mut bases.iter(),
+            &mut exponents.iter(),
+            &modulus,
+        )
+        .unwrap();
+        let expected = bases[0].mod_exponentiate(&exponents[0], &modulus).unwrap();
+        assert_eq!(res1, expected);
+        assert_eq!(res2, expected);
+    }
+
+    #[test]
+    fn test_mod_multi_exp_1_not_same_size() {
+        let bases = [Integer::from(7)];
+        let exponents = [Integer::from(8), Integer::from(12)];
+        let modulus = Integer::from(23);
+        let res1 = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus).unwrap();
+        let res2 = Integer::mod_multi_exponentiate_iter(
+            &mut bases.iter(),
+            &mut exponents.iter(),
+            &modulus,
+        )
+        .unwrap();
+        let expected = bases[0].mod_exponentiate(&exponents[0], &modulus).unwrap();
+        assert_eq!(res1, expected);
+        assert_eq!(res2, expected);
+    }
+
+    #[test]
+    fn test_mod_multi_exp() {
+        let bases = [Integer::from(7), Integer::from(9), Integer::from(12)];
+        let exponents = [Integer::from(8), Integer::from(2), Integer::from(7)];
+        let modulus = Integer::from(21);
+        let res1 = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus).unwrap();
+        let res2 = Integer::mod_multi_exponentiate_iter(
+            &mut bases.iter(),
+            &mut exponents.iter(),
+            &modulus,
+        )
+        .unwrap();
+        let t1 = bases[0].mod_exponentiate(&exponents[0], &modulus).unwrap();
+        let t2 = bases[1].mod_exponentiate(&exponents[1], &modulus).unwrap();
+        let t3 = bases[2].mod_exponentiate(&exponents[2], &modulus).unwrap();
+        let expected = t1.mod_multiply(&t2.mod_multiply(&t3, &modulus), &modulus);
+        assert_eq!(res1, expected);
+        assert_eq!(res2, expected);
+    }
+
+    #[test]
+    fn test_mod_multi_exp_not_same_size() {
+        let bases = [
+            Integer::from(7),
+            Integer::from(9),
+            Integer::from(12),
+            Integer::from(15),
+        ];
+        let exponents = [Integer::from(8), Integer::from(2), Integer::from(7)];
+        let modulus = Integer::from(21);
+        let res1 = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus).unwrap();
+        let res2 = Integer::mod_multi_exponentiate_iter(
+            &mut bases.iter(),
+            &mut exponents.iter(),
+            &modulus,
+        )
+        .unwrap();
+        let t1 = bases[0].mod_exponentiate(&exponents[0], &modulus).unwrap();
+        let t2 = bases[1].mod_exponentiate(&exponents[1], &modulus).unwrap();
+        let t3 = bases[2].mod_exponentiate(&exponents[2], &modulus).unwrap();
+        let expected = t1.mod_multiply(&t2.mod_multiply(&t3, &modulus), &modulus);
+        assert_eq!(res1, expected);
+        assert_eq!(res2, expected);
+    }
+
+    #[test]
+    fn test_mod_multi_exp_not_same_size_2() {
+        let bases = [Integer::from(7), Integer::from(9), Integer::from(12)];
+        let exponents = [
+            Integer::from(8),
+            Integer::from(2),
+            Integer::from(7),
+            Integer::from(12),
+        ];
+        let modulus = Integer::from(21);
+        let res1 = Integer::mod_multi_exponentiate(&bases, &exponents, &modulus).unwrap();
+        let res2 = Integer::mod_multi_exponentiate_iter(
+            &mut bases.iter(),
+            &mut exponents.iter(),
+            &modulus,
+        )
+        .unwrap();
+        let t1 = bases[0].mod_exponentiate(&exponents[0], &modulus).unwrap();
+        let t2 = bases[1].mod_exponentiate(&exponents[1], &modulus).unwrap();
+        let t3 = bases[2].mod_exponentiate(&exponents[2], &modulus).unwrap();
+        let expected = t1.mod_multiply(&t2.mod_multiply(&t3, &modulus), &modulus);
+        assert_eq!(res1, expected);
+        assert_eq!(res2, expected);
     }
 
     #[test]
@@ -463,5 +790,33 @@ mod test {
     fn base64_decode() {
         assert_eq!(Integer::base64_decode("AA==").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("Cg==").unwrap(), Integer::from(10u8));
+    }
+
+    #[test]
+    fn test_performance_fpowm() {
+        let p =  Integer::from(Integer::parse_radix(
+            "CE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867", 16
+        ).unwrap());
+        let mut rand = RandState::new();
+        let b: Integer = Integer::from(Integer::random_bits(2048, &mut rand));
+        let e = Integer::from(Integer::random_bits(1024, &mut rand));
+        let begin_rug = SystemTime::now();
+        let res_rug = b.mod_exponentiate(&e, &p).unwrap();
+        let duration_rug = begin_rug.elapsed().unwrap();
+        assert!(prepare_fixed_based_optimization(&b, &p).is_ok());
+        let begin_fpowm = SystemTime::now();
+        let res_fpowm = b.mod_exponentiate(&e, &p).unwrap();
+        let duration_fpowm = begin_fpowm.elapsed().unwrap();
+        assert_eq!(res_fpowm, res_rug);
+        if cfg!(feature = "gmpmee") {
+            assert!(
+                duration_rug > duration_fpowm,
+                "The duration of fpown (={} ms) is bigger than duration with rug (={} ms)",
+                duration_fpowm.as_millis(),
+                duration_rug.as_millis()
+            );
+            //println!("Duration rug: {} micro s", duration_rug.as_micros());
+            //println!("Duration fpowm: {} micro s", duration_fpowm.as_micros());
+        }
     }
 }

@@ -25,7 +25,7 @@ use crate::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::ArgumentContext;
@@ -75,6 +75,8 @@ pub enum SingleValueProductArgumentError {
     HashError(#[from] HashError),
     #[error("CommitmentError: {0}")]
     CommitmentError(#[from] CommitmentError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 impl<'a> SingleValueProductStatement<'a> {
@@ -147,7 +149,7 @@ pub fn verify_single_value_product_argument(
 
     let prod_upper_c_a = statement
         .c_a
-        .mod_exponentiate(&x, p)
+        .mod_exponentiate(&x, p)?
         .mod_multiply(argument.c_d, p);
     let comm_upper_a = get_commitment(context.ep, argument.a_tilde, argument.r_tilde, context.ck)
         .map_err(SingleValueProductArgumentError::CommitmentError)?;
@@ -155,7 +157,7 @@ pub fn verify_single_value_product_argument(
 
     let prod_delta = argument
         .c_upper_delta
-        .mod_exponentiate(&x, p)
+        .mod_exponentiate(&x, p)?
         .mod_multiply(argument.c_lower_delta, p);
     let e: Vec<Integer> = argument
         .a_tilde
@@ -169,11 +171,15 @@ pub fn verify_single_value_product_argument(
                 .zip(argument.b_tilde.iter().take(n - 1)),
         )
         .map(|(a_i_plus_1, (b_i_plus_1, b_i))| {
-            x.mod_multiply(b_i_plus_1, q) - b_i.mod_multiply(a_i_plus_1, q).modulo(q)
+            x.mod_multiply(b_i_plus_1, q)
+                .mod_sub(&b_i.mod_multiply(a_i_plus_1, q), q)
         })
         .collect();
+    println!("e: {:?}", &e);
     let comm_delta = get_commitment(context.ep, &e, argument.s_tilde, context.ck)
         .map_err(SingleValueProductArgumentError::CommitmentError)?;
+    println!("prod_delta: {}", prod_delta);
+    println!("comm_delta: {}", comm_delta);
     let verif_delta = prod_delta == comm_delta;
 
     let verif_upper_b = argument.b_tilde[0] == argument.a_tilde[0]
@@ -204,7 +210,7 @@ fn get_x(
     ])
     .recursive_hash()
     .map_err(SingleValueProductArgumentError::HashError)?
-    .into_mp_integer())
+    .into_integer())
 }
 
 impl MixNetResultTrait for SingleValueProductArgumentResult {

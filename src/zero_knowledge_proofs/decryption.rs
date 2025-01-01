@@ -17,8 +17,8 @@
 use thiserror::Error;
 
 use crate::{
-    elgamal::Ciphertext, elgamal::EncryptionParameters, HashError, HashableMessage, Integer,
-    OperationsTrait, RecursiveHashTrait,
+    elgamal::{Ciphertext, EncryptionParameters},
+    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::ZeroKnowledgeProofError;
@@ -40,17 +40,26 @@ pub enum DecryptionProofError {
     LPositive(usize),
     #[error(transparent)]
     HashError(#[from] HashError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 fn compute_phi_decryption(
     ep: &EncryptionParameters,
     pre_images: &[Integer],
     base: &Integer,
-) -> Vec<Integer> {
+) -> Result<Vec<Integer>, DecryptionProofError> {
     pre_images
         .iter()
-        .map(|x| ep.g().mod_exponentiate(x, ep.p()))
-        .chain(pre_images.iter().map(|x| base.mod_exponentiate(x, ep.p())))
+        .map(|x| {
+            ep.g()
+                .mod_exponentiate(x, ep.p())
+                .map_err(DecryptionProofError::IntegerError)
+        })
+        .chain(pre_images.iter().map(|x| {
+            base.mod_exponentiate(x, ep.p())
+                .map_err(DecryptionProofError::IntegerError)
+        }))
         .collect()
 }
 
@@ -88,42 +97,46 @@ fn verify_decryption_impl(
     if l > k {
         return Err(DecryptionProofError::LSmallerOrEqualK(l, k));
     }
-    let xs = compute_phi_decryption(ep, zs, &upper_c.gamma);
+    let xs = compute_phi_decryption(ep, zs, &upper_c.gamma)?;
     let fs = vec![ep.p(), ep.q(), ep.g(), &upper_c.gamma];
-    let ys: Vec<Integer> = pks
+    let ys = pks
         .iter()
         .take(l)
         .cloned()
-        .chain(
-            upper_c
-                .phis
-                .iter()
-                .zip(ms.iter())
-                .map(|(phi, m)| phi.mod_divide(m, ep.p())),
-        )
-        .collect();
-    let c_primes: Vec<Integer> = xs
+        .map(Ok)
+        .chain(upper_c.phis.iter().zip(ms.iter()).map(|(phi, m)| {
+            phi.mod_divide(m, ep.p())
+                .map_err(DecryptionProofError::IntegerError)
+        }))
+        .collect::<Result<Vec<_>, _>>()?;
+    let c_primes = xs
         .iter()
         .zip(ys.iter())
-        .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
-        .collect();
+        .map(|(x, y)| {
+            y.mod_exponentiate(e, ep.p())
+                .and_then(|v| v.mod_inverse(ep.p()))
+                .map(|v| x.mod_multiply(&v, ep.p()))
+                .map_err(DecryptionProofError::IntegerError)
+        })
+        //.map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut h_aux: Vec<HashableMessage> = vec![
         HashableMessage::from("DecryptionProof"),
-        HashableMessage::from(&upper_c.phis),
+        HashableMessage::from(upper_c.phis.as_slice()),
         HashableMessage::from(ms),
     ];
     if !i_aux.is_empty() {
         h_aux.push(HashableMessage::from(i_aux));
     }
     let e_prime = HashableMessage::from(vec![
-        HashableMessage::from(&fs),
-        HashableMessage::from(&ys),
-        HashableMessage::from(&c_primes),
+        HashableMessage::from(fs.as_slice()),
+        HashableMessage::from(ys.as_slice()),
+        HashableMessage::from(c_primes.as_slice()),
         HashableMessage::from(h_aux),
     ])
     .recursive_hash()
     .map_err(DecryptionProofError::HashError)?
-    .into_mp_integer();
+    .into_integer();
     Ok(&e_prime == e)
 }
 
@@ -142,7 +155,7 @@ mod test {
             &Integer::from(13),
         );
         assert_eq!(
-            res,
+            res.unwrap(),
             [
                 Integer::from(8),
                 Integer::from(5),
