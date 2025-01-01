@@ -128,6 +128,9 @@ impl SmallPrimeTrait for usize {
 
 impl NumberTheoryMethodTrait for Integer {
     fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError> {
+        if n.is_even() {
+            return Err(NumberTheoryError::IsEven("n".to_string()));
+        }
         Ok(self.jacobi(n))
     }
 
@@ -169,6 +172,8 @@ pub enum NumberTheoryError {
     CheckPrime(String),
     #[error("Number {0} is not a power of {1}")]
     CheckIsPowerOf(String, String),
+    #[error("Number {0} must be odd")]
+    IsEven(String),
 }
 
 #[allow(clippy::items_after_test_module)]
@@ -229,6 +234,9 @@ mod test {
                 .unwrap(),
             -1
         );
+        assert!(Integer::from(1001u32)
+            .jacobi_symbol(&Integer::from(4u32))
+            .is_err(),);
     }
 
     #[test]

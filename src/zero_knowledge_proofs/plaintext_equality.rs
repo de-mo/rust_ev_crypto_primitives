@@ -15,8 +15,8 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
-    elgamal::EncryptionParameters, HashError, HashableMessage, Integer, OperationsTrait,
-    RecursiveHashTrait,
+    elgamal::EncryptionParameters, HashError, HashableMessage, Integer, IntegerError,
+    OperationsTrait, RecursiveHashTrait,
 };
 use thiserror::Error;
 
@@ -25,6 +25,8 @@ use thiserror::Error;
 pub enum PlaintextProofError {
     #[error(transparent)]
     HashError(#[from] HashError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 fn compute_phi_plaintext_equality(
@@ -32,13 +34,13 @@ fn compute_phi_plaintext_equality(
     (x, x_prime): (&Integer, &Integer),
     h: &Integer,
     h_prime: &Integer,
-) -> [Integer; 3] {
-    [
-        ep.g().mod_exponentiate(x, ep.p()),
-        ep.g().mod_exponentiate(x_prime, ep.p()),
-        h.mod_exponentiate(x, ep.p())
-            .mod_divide(&h_prime.mod_exponentiate(x_prime, ep.p()), ep.p()),
-    ]
+) -> Result<[Integer; 3], PlaintextProofError> {
+    Ok([
+        ep.g().mod_exponentiate(x, ep.p())?,
+        ep.g().mod_exponentiate(x_prime, ep.p())?,
+        h.mod_exponentiate(x, ep.p())?
+            .mod_divide(&h_prime.mod_exponentiate(x_prime, ep.p())?, ep.p())?,
+    ])
 }
 
 pub fn verify_plaintext_equality(
@@ -50,18 +52,25 @@ pub fn verify_plaintext_equality(
     (e, (z_0, z_1)): (&Integer, (&Integer, &Integer)),
     i_aux: &[String],
 ) -> Result<bool, PlaintextProofError> {
-    let xs = compute_phi_plaintext_equality(ep, (z_0, z_1), h, h_prime);
+    let xs = compute_phi_plaintext_equality(ep, (z_0, z_1), h, h_prime)?;
     let fs = vec![ep.p(), ep.q(), ep.g(), h, h_prime];
     let ys = [
         c_0.clone(),
         c_prime_0.clone(),
-        c_1.mod_divide(c_prime_1, ep.p()),
+        c_1.mod_divide(c_prime_1, ep.p())
+            .map_err(PlaintextProofError::IntegerError)?,
     ];
-    let c_prime: Vec<Integer> = xs
+    let c_prime = xs
         .iter()
         .zip(ys.iter())
-        .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
-        .collect();
+        .map(|(x, y)| {
+            y.mod_exponentiate(e, ep.p())
+                .and_then(|v| v.mod_inverse(ep.p()))
+                .map(|v| x.mod_multiply(&v, ep.p()))
+                .map_err(PlaintextProofError::IntegerError)
+        })
+        //x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut h_aux = vec![
         HashableMessage::from("PlaintextEqualityProof"),
         HashableMessage::from(c_1),

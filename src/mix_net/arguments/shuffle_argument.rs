@@ -19,7 +19,7 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::{
-    elgamal::Ciphertext,
+    elgamal::{Ciphertext, ElgamalError},
     mix_net::{
         arguments::product_argument::{
             verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
@@ -28,7 +28,8 @@ use crate::{
         matrix::{Matrix, MatrixError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 use super::{
@@ -95,6 +96,10 @@ pub enum ShuffleArgumentError {
     ProductArgumentError(#[from] ProductArgumentError),
     #[error("MultiExponentiationArgumentError: {0}")]
     MultiExponentiationArgumentError(#[from] MultiExponentiationArgumentError),
+    #[error("ElgamalError: {0}")]
+    ElgamalError(#[from] ElgamalError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 pub fn verify_shuffle_argument(
@@ -126,16 +131,28 @@ pub fn verify_shuffle_argument(
     )
     .map_err(ShuffleArgumentError::CommitmentError)?;
 
-    let cs_upper_d: Vec<Integer> = argument
+    let cs_upper_d = argument
         .cs_upper_a
         .iter()
         .zip(argument.cs_upper_b.iter())
-        .map(|(c_a_i, c_b_i)| c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p))
-        .collect();
+        .map(|(c_a_i, c_b_i)| {
+            c_a_i
+                .mod_exponentiate(&y, p)
+                .map(|v| v.mod_multiply(c_b_i, p))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShuffleArgumentError::IntegerError)?;
+    /*argument
+    .cs_upper_a
+    .iter()
+    .zip(argument.cs_upper_b.iter())
+    .map(|(c_a_i, c_b_i)| c_a_i.mod_exponentiate(&y, p).mod_multiply(c_b_i, p))
+    .collect();*/
 
     let xs = (0..upper_n)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(MultiExponentiationArgumentError::IntegerError)?;
 
     let b = xs
         .iter()
@@ -164,7 +181,8 @@ pub fn verify_shuffle_argument(
     .map_err(ShuffleArgumentError::ProductArgumentError)?;
 
     let upper_c =
-        Ciphertext::get_ciphertext_vector_exponentiation(statement.upper_cs, &xs, context.ep);
+        Ciphertext::get_ciphertext_vector_exponentiation(statement.upper_cs, &xs, context.ep)
+            .map_err(ShuffleArgumentError::ElgamalError)?;
     let cipher_matrix = Matrix::to_matrix(statement.upper_c_primes, (m, n))
         .map_err(ShuffleArgumentError::MatrixError)?;
     let m_statement =

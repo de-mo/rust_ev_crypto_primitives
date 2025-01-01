@@ -269,7 +269,7 @@ impl TryFrom<&Integer> for ByteArray {
 
     fn try_from(value: &Integer) -> Result<Self, Self::Error> {
         if value < Integer::zero() {
-            return Err(IntegerError::IsNegative);
+            return Err(IntegerError::IsNegative("value".to_string()));
         }
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();

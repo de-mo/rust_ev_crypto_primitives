@@ -15,10 +15,10 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
-    elgamal::EncryptionParameterDomainError,
-    elgamal::EncryptionParameters,
+    elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
-    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait, VerifyDomainTrait,
+    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
+    VerifyDomainTrait,
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -35,6 +35,8 @@ pub enum ExponentiationProofError {
     CheckListSameSize(String, String),
     #[error(transparent)]
     HashError(#[from] HashError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
@@ -42,8 +44,13 @@ fn compute_phi_exponentiation(
     ep: &EncryptionParameters,
     x: &Integer,
     gs: &[&Integer],
-) -> Vec<Integer> {
-    gs.iter().map(|g| g.mod_exponentiate(x, ep.p())).collect()
+) -> Result<Vec<Integer>, ExponentiationProofError> {
+    gs.iter()
+        .map(|g| {
+            g.mod_exponentiate(x, ep.p())
+                .map_err(ExponentiationProofError::IntegerError)
+        })
+        .collect::<Result<Vec<_>, _>>()
 }
 
 /// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
@@ -81,7 +88,7 @@ pub fn verify_exponentiation(
         }
     }
 
-    let xs = compute_phi_exponentiation(ep, z, gs);
+    let xs = compute_phi_exponentiation(ep, z, gs)?;
     let f_list = vec![
         HashableMessage::from(ep.p()),
         HashableMessage::from(ep.q()),
@@ -92,9 +99,15 @@ pub fn verify_exponentiation(
         ),
     ];
     let f = HashableMessage::from(&f_list);
-    let c_prime_s: Vec<Integer> = zip(&xs, ys)
-        .map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
-        .collect();
+    let c_prime_s = zip(&xs, ys)
+        .map(|(x, y)| {
+            y.mod_exponentiate(e, ep.p())
+                .and_then(|v| v.mod_inverse(ep.p()))
+                .map(|v| x.mod_multiply(&v, ep.p()))
+                .map_err(ExponentiationProofError::IntegerError)
+        })
+        //.map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut h_aux_l: Vec<HashableMessage> = vec![];
     h_aux_l.push(HashableMessage::from("ExponentiationProof"));
     if !i_aux.is_empty() {

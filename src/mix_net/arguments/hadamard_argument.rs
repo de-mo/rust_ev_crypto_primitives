@@ -16,7 +16,7 @@
 
 //! Module implementing the verification for the Hadamrd Argument (§9.3.4)
 
-use std::{fmt::Display, iter::once};
+use std::{fmt::Display, iter::once, ops::ControlFlow};
 
 use thiserror::Error;
 
@@ -25,7 +25,8 @@ use crate::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 use super::{
@@ -83,6 +84,8 @@ pub enum HadamardArgumentError {
     CommitmentError(#[from] CommitmentError),
     #[error("ZeroArgumentError: {0}")]
     ZeroArgumentError(#[from] ZeroArgumentError),
+    #[error(transparent)]
+    IntegerError(#[from] IntegerError),
 }
 
 pub fn verify_hadamard_argument(
@@ -101,7 +104,8 @@ pub fn verify_hadamard_argument(
 
     let x_powers = (0..m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(HadamardArgumentError::IntegerError)?;
 
     let cs_upper_d = argument
         .cs_upper_b
@@ -109,14 +113,21 @@ pub fn verify_hadamard_argument(
         .take(m - 1)
         .zip(x_powers.iter().skip(1))
         .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
-        .collect::<Vec<_>>();
-    let c_upper_d = argument
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(HadamardArgumentError::IntegerError)?;
+    let c_upper_d = match argument
         .cs_upper_b
         .iter()
         .zip(x_powers.iter())
         .skip(1)
         .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
-        .fold(Integer::one().clone(), |acc, v| acc.mod_multiply(&v, p));
+        .try_fold(Integer::one().clone(), |acc, v_res| match v_res {
+            Ok(v) => ControlFlow::Continue(acc.mod_multiply(&v, p)),
+            Err(e) => ControlFlow::Break(e),
+        }) {
+        ControlFlow::Continue(v) => Ok(v),
+        ControlFlow::Break(e) => Err(HadamardArgumentError::IntegerError(e)),
+    }?;
 
     let minus_1_vec = vec![Integer::from(q - Integer::one()); n];
     let c_minus_1 = get_commitment(

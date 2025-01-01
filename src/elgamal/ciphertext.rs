@@ -16,7 +16,7 @@
 
 //! Implementation of the ciphertext operations
 
-use std::iter::once;
+use std::{iter::once, ops::ControlFlow};
 
 use super::{ElgamalError, EncryptionParameters};
 use crate::{ConstantsTrait, HashableMessage, Integer, OperationsTrait};
@@ -56,25 +56,42 @@ impl Ciphertext {
         if l == 0 && l > k {
             return Err(ElgamalError::LNotCorrect);
         }
-        let gamma = ep.g().mod_exponentiate(r, p);
-        let phis: Vec<Integer> = ms
+        let gamma = ep
+            .g()
+            .mod_exponentiate(r, p)
+            .map_err(ElgamalError::IntegerError)?;
+        let phis = ms
             .iter()
             .zip(pks.iter())
-            .map(|(m, pk)| pk.mod_exponentiate(r, p).mod_multiply(m, p))
-            .collect();
+            .map(|(m, pk)| {
+                pk.mod_exponentiate(r, p)
+                    .map(|v| v.mod_multiply(m, p))
+                    .map_err(ElgamalError::IntegerError)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { gamma, phis })
     }
 
     /// Algorithm 8.6 GetCiphertextExponentiation
-    pub fn get_ciphertext_exponentiation(&self, a: &Integer, ep: &EncryptionParameters) -> Self {
+    pub fn get_ciphertext_exponentiation(
+        &self,
+        a: &Integer,
+        ep: &EncryptionParameters,
+    ) -> Result<Self, ElgamalError> {
         let p = ep.p();
-        let gamma = self.gamma.mod_exponentiate(a, p);
-        let phis: Vec<Integer> = self
+        let gamma = self
+            .gamma
+            .mod_exponentiate(a, p)
+            .map_err(ElgamalError::IntegerError)?;
+        let phis = self
             .phis
             .iter()
-            .map(|phi| phi.mod_exponentiate(a, p))
-            .collect();
-        Self { gamma, phis }
+            .map(|phi| {
+                phi.mod_exponentiate(a, p)
+                    .map_err(ElgamalError::IntegerError)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { gamma, phis })
     }
 
     /// Algorithm 8.8 GetCiphertextProduct
@@ -95,12 +112,19 @@ impl Ciphertext {
         cs: &[Ciphertext],
         a: &[Integer],
         ep: &EncryptionParameters,
-    ) -> Self {
+    ) -> Result<Self, ElgamalError> {
         let ones_cipher = Self::from(vec![Integer::one().clone(); cs[0].l() + 1].as_slice());
-        cs.iter()
+        match cs
+            .iter()
             .zip(a.iter())
             .map(|(c, a)| c.get_ciphertext_exponentiation(a, ep))
-            .fold(ones_cipher, |acc, c| acc.get_ciphertext_product(&c, ep))
+            .try_fold(ones_cipher, |acc, c_res| match c_res {
+                Ok(c) => ControlFlow::Continue(acc.get_ciphertext_product(&c, ep)),
+                Err(e) => ControlFlow::Break(e),
+            }) {
+            ControlFlow::Continue(v) => Ok(v),
+            ControlFlow::Break(e) => Err(e),
+        }
     }
 }
 
