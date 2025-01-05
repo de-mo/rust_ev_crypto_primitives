@@ -60,9 +60,8 @@ pub fn verify_schnorr(
         if !domain_errs.is_empty() {
             return Err(SchnorrProofError::CheckElgamal(domain_errs));
         }
-        if let Some(e) = y.check_quadratic_residue(ep.p()) {
-            return Err(SchnorrProofError::CheckNumberTheory(e));
-        }
+        y.result_is_quadratic_residue_unchecked(ep.p())
+            .map_err(SchnorrProofError::CheckNumberTheory)?;
     }
     let x = compute_phi_schnorr(ep, z)?;
     let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
