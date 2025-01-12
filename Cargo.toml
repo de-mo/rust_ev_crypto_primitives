@@ -12,7 +12,7 @@ categories = ["cryptography", "mathematics"]
 keywords = ["math", "e-voting", "crypto"]
 
 [dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
+openssl = "0.10"
 thiserror = "2"
 data-encoding = "2.5"
 num-traits = "0.2"
