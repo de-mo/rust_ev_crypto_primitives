@@ -174,7 +174,7 @@ impl EncryptionParameters {
 
     /// Check p as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_p(&self) -> Vec<ElgamalError> {
         match self.p.result_is_prime() {
             Ok(_) => vec![],
@@ -184,7 +184,7 @@ impl EncryptionParameters {
 
     /// Check q as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_q(&self) -> Vec<ElgamalError> {
         let mut res = vec![];
         if self.p != Integer::from(&self.q * 2u8) + 1u8 {
@@ -202,7 +202,7 @@ impl EncryptionParameters {
 
     /// Check g as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_g(&self) -> Vec<ElgamalError> {
         if &self.g == Integer::one() {
             return vec![ElgamalError::CheckNotOne];

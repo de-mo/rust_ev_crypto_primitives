@@ -56,7 +56,7 @@ fn compute_phi_exponentiation(
 /// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
 ///
 /// # Error
-/// Return [ExponentiationError] if preconditions are not satisfied
+/// Return an error if preconditions are not satisfied
 pub fn verify_exponentiation(
     ep: &EncryptionParameters,
     gs: &[&Integer],

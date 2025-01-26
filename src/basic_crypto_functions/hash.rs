@@ -29,7 +29,7 @@ use openssl::{
 /// Wrapper for SHA3-256
 ///
 /// # Error
-/// [OpensslError] if something is going wrong
+/// [BasisCryptoError] if something is going wrong
 pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
     let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
         msg: "Error creating MdCtx".to_string(),
@@ -57,7 +57,7 @@ pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 /// Wrapper for SHA256
 ///
 /// # Error
-/// [OpensslError] if something is going wrong
+/// [BasisCryptoError] if something is going wrong
 pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
     sha256_stream(&mut byte_array.to_bytes())
 }
@@ -65,7 +65,7 @@ pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 /// Wrapper for SHA256 for a stream reader
 ///
 /// # Error
-/// [OpensslError] if something is going wrong
+/// [BasisCryptoError] if something is going wrong
 pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoError> {
     let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
         msg: "Error creating MdCtx".to_string(),
@@ -106,7 +106,7 @@ pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoE
 /// Wrapper for SHAKE128
 ///
 /// # Error
-/// [OpensslError] if something is going wrong
+/// [BasisCryptoError] if something is going wrong
 pub fn shake128(byte_array: &ByteArray, length: usize) -> Result<ByteArray, BasisCryptoError> {
     let mut digest = vec![0; length];
     hash_xof(
@@ -124,7 +124,7 @@ pub fn shake128(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
 /// Wrapper for SHAKE256
 ///
 /// # Error
-/// [OpensslError] if something is going wrong
+/// [BasisCryptoError] if something is going wrong
 pub fn shake256(byte_array: &ByteArray, length: usize) -> Result<ByteArray, BasisCryptoError> {
     let mut digest = vec![0; length];
     hash_xof(

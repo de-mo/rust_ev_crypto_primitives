@@ -48,7 +48,7 @@ fn compute_phi_schnorr(
 /// Verify Schnorr Proof according to specifications of Swiss Post (Algorithm 10.3)
 ///
 /// # Error
-/// Return [SchnorrProofError] if preconditions are not satisfied
+/// Return an error if preconditions are not satisfied
 pub fn verify_schnorr(
     ep: &EncryptionParameters,
     (e, z): (&Integer, &Integer),

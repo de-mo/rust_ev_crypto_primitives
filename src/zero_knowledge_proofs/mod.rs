@@ -18,7 +18,7 @@
 //! - [verify_schnorr]
 //! - [verify_exponentiation]
 //! - [verify_decryption]
-//! - [verifiy_shuffle]
+//! - [verify_plaintext_equality]
 
 mod decryption;
 mod exponentiation;
@@ -35,7 +35,10 @@ pub use schnorr_proofs::verify_schnorr;
 // enum representing the errors during the algorithms for zero knowledge proof
 #[derive(Error, Debug)]
 pub enum ZeroKnowledgeProofError {
-    #[error(transparent)] SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
-    #[error(transparent)] ExponentiationError(#[from] exponentiation::ExponentiationProofError),
-    #[error(transparent)] DecryptionProofError(#[from] decryption::DecryptionProofError),
+    #[error(transparent)]
+    SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
+    #[error(transparent)]
+    ExponentiationError(#[from] exponentiation::ExponentiationProofError),
+    #[error(transparent)]
+    DecryptionProofError(#[from] decryption::DecryptionProofError),
 }

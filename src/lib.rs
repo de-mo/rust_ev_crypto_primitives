@@ -96,7 +96,7 @@ pub trait VerifyDomainTrait<E>: Sized {
 
     /// Verify the domain
     ///
-    /// Return a vector of [Self::Error]. Empty if no error found
+    /// Return a vector of `E`. Empty if no error found
     fn verifiy_domain(&self) -> Vec<E> {
         let verifications = Self::new_domain_verifications();
         verifications.iter().flat_map(|f| f(self)).collect()
