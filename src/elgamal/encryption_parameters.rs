@@ -130,7 +130,7 @@ impl EncryptionParameters {
         }
         let q_final = q + &delta;
         let p = Integer::from(&q_final * Integer::two()) + Integer::one();
-        let g: u8 = match Integer::two().is_quadratic_residue(&p) {
+        let g: u8 = match Integer::two().is_quadratic_residue_unchecked(&p) {
             true => 2,
             false => 3,
         };
@@ -153,7 +153,7 @@ impl EncryptionParameters {
             && current < SMALL_PRIMES_LIMIT
         {
             let is_prime = current.is_small_prime().unwrap();
-            if is_prime && Integer::from(current).is_quadratic_residue(self.p()) {
+            if is_prime && Integer::from(current).is_quadratic_residue_unchecked(self.p()) {
                 res.push(current);
             }
             current += 2;
@@ -174,23 +174,27 @@ impl EncryptionParameters {
 
     /// Check p as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_p(&self) -> Vec<ElgamalError> {
-        if let Some(e) = self.p.check_prime().map(ElgamalError::CheckNumberTheory) {
-            return vec![e];
+        match self.p.result_is_prime() {
+            Ok(_) => vec![],
+            Err(e) => vec![ElgamalError::CheckNumberTheory(e)],
         }
-        vec![]
     }
 
     /// Check q as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_q(&self) -> Vec<ElgamalError> {
         let mut res = vec![];
         if self.p != Integer::from(&self.q * 2u8) + 1u8 {
             res.push(ElgamalError::CheckRelationPQ);
         }
-        if let Some(e) = self.q.check_prime().map(ElgamalError::CheckNumberTheory) {
+        if let Err(e) = self
+            .q
+            .result_is_prime()
+            .map_err(ElgamalError::CheckNumberTheory)
+        {
             res.push(e);
         }
         res
@@ -198,15 +202,15 @@ impl EncryptionParameters {
 
     /// Check g as part of encryption parameter
     ///
-    /// Return a [Vec<ElgamalError>] if the check is not positive. Else None
+    /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_g(&self) -> Vec<ElgamalError> {
         if &self.g == Integer::one() {
             return vec![ElgamalError::CheckNotOne];
         }
-        if let Some(e) = self
+        if let Err(e) = self
             .g
-            .check_quadratic_residue(&self.p)
-            .map(ElgamalError::CheckNumberTheory)
+            .result_is_quadratic_residue_unchecked(&self.p)
+            .map_err(ElgamalError::CheckNumberTheory)
         {
             return vec![e];
         }

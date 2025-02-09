@@ -56,7 +56,7 @@ fn compute_phi_exponentiation(
 /// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
 ///
 /// # Error
-/// Return [ExponentiationError] if preconditions are not satisfied
+/// Return an error if preconditions are not satisfied
 pub fn verify_exponentiation(
     ep: &EncryptionParameters,
     gs: &[&Integer],
@@ -77,14 +77,12 @@ pub fn verify_exponentiation(
             ));
         }
         for g in gs.iter() {
-            if let Some(e) = g.check_quadratic_residue(ep.p()) {
-                return Err(ExponentiationProofError::CheckNumberTheory(e));
-            }
+            g.result_is_quadratic_residue_unchecked(ep.p())
+                .map_err(ExponentiationProofError::CheckNumberTheory)?;
         }
         for y in ys.iter() {
-            if let Some(e) = y.check_quadratic_residue(ep.p()) {
-                return Err(ExponentiationProofError::CheckNumberTheory(e));
-            }
+            y.result_is_quadratic_residue_unchecked(ep.p())
+                .map_err(ExponentiationProofError::CheckNumberTheory)?;
         }
     }
 

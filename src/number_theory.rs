@@ -39,52 +39,57 @@ pub trait NumberTheoryMethodTrait: ToString {
     /// Return an error if the given number n is not odd.
     fn jacobi_symbol(&self, n: &Self) -> Result<i32, NumberTheoryError>;
 
+    /// Calculate the jacobi symbol (self/n) without validation of the input elements
+    ///
+    /// The caller has to be sure, that n is odd
+    fn jacobi_symbol_unchecked(&self, n: &Self) -> i32;
+
     /// Determine if n is a power of b, e.g. n = b^x for any x
     fn is_mod_power_of(&self, b: &Self, modulus: &Self) -> bool;
 
     /// Determine of the number n is a quadratic residue of p
-    fn is_quadratic_residue(&self, p: &Self) -> bool {
-        self.jacobi_symbol(p).unwrap() == 1
+    ///
+    /// Return an error if the calucation is not possible
+    fn is_quadratic_residue(&self, p: &Self) -> Result<bool, NumberTheoryError> {
+        Ok(self.jacobi_symbol(p)? == 1)
     }
+
+    /// Determine of the number n is a quadratic residue of p
+    ///
+    /// The caller has to be sure, that p is prime
+    fn is_quadratic_residue_unchecked(&self, p: &Self) -> bool;
 
     /// Determine if a number is prime according to Miller-Rabin Test
     fn miller_rabin(&self, iterations: usize) -> bool;
 
-    /// Check if quadratic residue
-    ///
-    /// Return a [NumberTheoryError] if the check is not positive. Else None
-    fn check_quadratic_residue(&self, p: &Self) -> Option<NumberTheoryError> {
-        if !self.is_quadratic_residue(p) {
-            return Some(NumberTheoryError::CheckQuadraticResidue(
+    /// Return a [NumberTheoryError] if the number is not prime. Else nothing
+    fn result_is_prime(&self) -> Result<(), NumberTheoryError> {
+        if !self.miller_rabin(1) {
+            return Err(NumberTheoryError::NotPrime(self.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Return a [NumberTheoryError] if the number is not a quadratic residue of n. Else nothing
+    fn result_is_quadratic_residue_unchecked(&self, p: &Self) -> Result<(), NumberTheoryError> {
+        if !self.is_quadratic_residue_unchecked(p) {
+            return Err(NumberTheoryError::NotQuadraticResidue(
                 self.to_string(),
                 p.to_string(),
             ));
         }
-        None
+        Ok(())
     }
 
-    /// Check if the number is prime
-    ///
-    /// Return a [NumberTheoryError] if the check is not positive. Else None
-    fn check_prime(&self) -> Option<NumberTheoryError> {
-        if !self.miller_rabin(1) {
-            return Some(NumberTheoryError::CheckPrime(self.to_string()));
-        }
-        None
-    }
-
-    /// Check if the number n is a power of another number b
-    ///
-    /// Return a [NumberTheoryError] if the check is not positive. Else None
-    #[allow(dead_code)]
-    fn check_is_power_of(&self, b: &Self, modulus: &Self) -> Option<NumberTheoryError> {
-        if !self.is_mod_power_of(b, modulus) {
-            return Some(NumberTheoryError::CheckIsPowerOf(
+    /// Return a [NumberTheoryError] if the number is not a quadratic residue of n. Else nothing
+    fn result_is_quadratic_residue(&self, p: &Self) -> Result<(), NumberTheoryError> {
+        if !self.is_quadratic_residue(p)? {
+            return Err(NumberTheoryError::NotQuadraticResidue(
                 self.to_string(),
-                b.to_string(),
+                p.to_string(),
             ));
         }
-        None
+        Ok(())
     }
 }
 
@@ -157,6 +162,14 @@ impl NumberTheoryMethodTrait for Integer {
     fn miller_rabin(&self, iterations: usize) -> bool {
         rug_miller_rabin::is_prime(self, iterations)
     }
+
+    fn jacobi_symbol_unchecked(&self, n: &Self) -> i32 {
+        self.jacobi(n)
+    }
+
+    fn is_quadratic_residue_unchecked(&self, p: &Self) -> bool {
+        self.legendre(p) == 1
+    }
 }
 
 // Enum representing the errors in number theory
@@ -167,11 +180,11 @@ pub enum NumberTheoryError {
     #[error("Denominator {0} is not odd, but it must be.")]
     DenominatorNotOdd(Integer),
     #[error("{0} is not quadratic residue of {1}")]
-    CheckQuadraticResidue(String, String),
+    NotQuadraticResidue(String, String),
     #[error("Number {0} is not prime")]
-    CheckPrime(String),
+    NotPrime(String),
     #[error("Number {0} is not a power of {1}")]
-    CheckIsPowerOf(String, String),
+    NotPowerOf(String, String),
     #[error("Number {0} must be odd")]
     IsEven(String),
 }
@@ -241,23 +254,23 @@ mod test {
 
     #[test]
     fn test_is_quadratic_residue() {
-        assert!(!Integer::from(17u8).is_quadratic_residue(&Integer::from(3u8)));
-        assert!(Integer::from(17u8).is_quadratic_residue(&Integer::from(13u8)));
+        assert!(!Integer::from(17u8)
+            .is_quadratic_residue(&Integer::from(3u8))
+            .unwrap());
+        assert!(!Integer::from(17u8).is_quadratic_residue_unchecked(&Integer::from(3u8)));
+        assert!(Integer::from(17u8)
+            .is_quadratic_residue(&Integer::from(13u8))
+            .unwrap());
+        assert!(Integer::from(17u8).is_quadratic_residue_unchecked(&Integer::from(13u8)));
         let p = Integer::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
         ).unwrap();
-        assert!(Integer::from(5u8).is_quadratic_residue(&p));
-        assert!(Integer::from(17u8).is_quadratic_residue(&p));
-        assert!(Integer::from(19u8).is_quadratic_residue(&p));
-    }
-
-    #[test]
-    fn test_check_quadratic_residue() {
-        let p = Integer::from(11u8);
-        let g_ok = Integer::from(3u8);
-        let g_err = Integer::from(2u8);
-        assert!(g_ok.check_quadratic_residue(&p).is_none());
-        assert!(g_err.check_quadratic_residue(&p).is_some());
+        assert!(Integer::from(5u8).is_quadratic_residue(&p).unwrap());
+        assert!(Integer::from(5u8).is_quadratic_residue_unchecked(&p));
+        assert!(Integer::from(17u8).is_quadratic_residue(&p).unwrap());
+        assert!(Integer::from(17u8).is_quadratic_residue_unchecked(&p));
+        assert!(Integer::from(19u8).is_quadratic_residue(&p).unwrap());
+        assert!(Integer::from(19u8).is_quadratic_residue_unchecked(&p));
     }
 
     #[test]
@@ -269,16 +282,6 @@ mod test {
         assert!(p.miller_rabin(64));
         let p = Integer::from(6u8);
         assert!(!p.miller_rabin(1))
-    }
-
-    #[test]
-    fn test_check_prime() {
-        let p = Integer::from_hexa_string(
-            "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"
-        ).unwrap();
-        assert!(p.check_prime().is_none());
-        let p = Integer::from(6u8);
-        assert!(p.check_prime().is_some())
     }
 
     #[test]
