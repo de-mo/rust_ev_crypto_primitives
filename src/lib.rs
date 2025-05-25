@@ -60,7 +60,10 @@ pub use integer::{
     prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerError,
     OperationsTrait,
 };
-pub use number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait};
+pub use number_theory::{
+    IsPrimeTrait, JacobiError, JacobiTrait, NotOddError, NotPositiveError, NotPrimeError,
+    QuadraticResidueTrait, SmallPrimeError, SmallPrimeTrait,
+};
 pub use rug::Integer;
 
 /// The length of the group parameter `p` according to the security level in the specifications

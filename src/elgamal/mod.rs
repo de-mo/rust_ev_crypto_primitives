@@ -23,7 +23,7 @@ mod encryption_parameters;
 
 use crate::{
     basic_crypto_functions::BasisCryptoError, zero_knowledge_proofs::ZeroKnowledgeProofError,
-    Integer, IntegerError, NumberTheoryError,
+    Integer, IntegerError,
 };
 pub use ciphertext::Ciphertext;
 pub use combined_public_keys::combine_public_keys;
@@ -38,14 +38,12 @@ pub enum ElgamalError {
     OpenSSLError(#[from] BasisCryptoError),
     #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
     TooFewSmallPrimeNumbers { expected: usize, found: usize },
-    #[error("Number {0} with value {1} is not prime")]
-    NotPrime(String, Integer),
+    #[error("Number {name} with value {val} is not prime")]
+    NotPrime { name: &'static str, val: Integer },
     #[error("The relation p=2q+1 is not satisfied")]
     CheckRelationPQ,
     #[error("The value should not be one")]
     CheckNotOne,
-    #[error(transparent)]
-    CheckNumberTheory(#[from] NumberTheoryError),
     #[error("l must be between 1 and k")]
     LNotCorrect,
     #[error("The length of the ciphertext vectors must be the same")]

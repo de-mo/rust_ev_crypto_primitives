@@ -16,7 +16,7 @@
 
 use crate::{
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
-    number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
+    number_theory::{QuadraticResidueError, QuadraticResidueTrait},
     HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
     VerifyDomainTrait,
 };
@@ -27,8 +27,12 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum ExponentiationProofError {
-    #[error(transparent)]
-    CheckNumberTheory(#[from] NumberTheoryError),
+    #[error("{name} is not qudartic residue at position {pos}")]
+    NotQuadraticResidueList {
+        name: &'static str,
+        pos: usize,
+        source: QuadraticResidueError,
+    },
     #[error("Error checking the elgamal parameters")]
     CheckElgamal(Vec<EncryptionParameterDomainError>),
     #[error("The list {0} must have the same length as the list {1}")]
@@ -76,13 +80,21 @@ pub fn verify_exponentiation(
                 "ys".to_string(),
             ));
         }
-        for g in gs.iter() {
+        for (pos, g) in gs.iter().enumerate() {
             g.result_is_quadratic_residue_unchecked(ep.p())
-                .map_err(ExponentiationProofError::CheckNumberTheory)?;
+                .map_err(|e| ExponentiationProofError::NotQuadraticResidueList {
+                    pos,
+                    name: "g",
+                    source: e,
+                })?;
         }
-        for y in ys.iter() {
+        for (pos, y) in ys.iter().enumerate() {
             y.result_is_quadratic_residue_unchecked(ep.p())
-                .map_err(ExponentiationProofError::CheckNumberTheory)?;
+                .map_err(|e| ExponentiationProofError::NotQuadraticResidueList {
+                    pos,
+                    name: "y",
+                    source: e,
+                })?;
         }
     }
 

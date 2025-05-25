@@ -20,7 +20,7 @@ use thiserror::Error;
 
 use crate::{
     basic_crypto_functions::shake256,
-    number_theory::{NumberTheoryMethodTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
+    number_theory::{IsPrimeTrait, QuadraticResidueTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
     ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
     VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
@@ -178,7 +178,10 @@ impl EncryptionParameters {
     pub fn validate_p(&self) -> Vec<ElgamalError> {
         match self.p.result_is_prime() {
             Ok(_) => vec![],
-            Err(e) => vec![ElgamalError::CheckNumberTheory(e)],
+            Err(_) => vec![ElgamalError::NotPrime {
+                name: "p",
+                val: self.p.clone(),
+            }],
         }
     }
 
@@ -193,7 +196,10 @@ impl EncryptionParameters {
         if let Err(e) = self
             .q
             .result_is_prime()
-            .map_err(ElgamalError::CheckNumberTheory)
+            .map_err(|_| ElgamalError::NotPrime {
+                name: "q",
+                val: self.q.clone(),
+            })
         {
             res.push(e);
         }
@@ -210,7 +216,10 @@ impl EncryptionParameters {
         if let Err(e) = self
             .g
             .result_is_quadratic_residue_unchecked(&self.p)
-            .map_err(ElgamalError::CheckNumberTheory)
+            .map_err(|_| ElgamalError::NotPrime {
+                name: "g",
+                val: self.g.clone(),
+            })
         {
             return vec![e];
         }

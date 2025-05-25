@@ -16,7 +16,7 @@
 
 use crate::{
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
-    number_theory::{NumberTheoryError, NumberTheoryMethodTrait},
+    number_theory::{QuadraticResidueError, QuadraticResidueTrait},
     HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
     VerifyDomainTrait,
 };
@@ -25,8 +25,8 @@ use thiserror::Error;
 // Enum representing the errors in zero knowledge proofs
 #[derive(Error, Debug)]
 pub enum SchnorrProofError {
-    #[error(transparent)]
-    CheckNumberTheory(#[from] NumberTheoryError),
+    #[error("y is not quadratic residue of p (in verify_schnorr)")]
+    NotQudraticResidue(#[from] QuadraticResidueError),
     #[error("Error checking the elgamal parameters")]
     CheckElgamal(Vec<EncryptionParameterDomainError>),
     #[error(transparent)]
@@ -61,7 +61,7 @@ pub fn verify_schnorr(
             return Err(SchnorrProofError::CheckElgamal(domain_errs));
         }
         y.result_is_quadratic_residue_unchecked(ep.p())
-            .map_err(SchnorrProofError::CheckNumberTheory)?;
+            .map_err(SchnorrProofError::NotQudraticResidue)?;
     }
     let x = compute_phi_schnorr(ep, z)?;
     let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
