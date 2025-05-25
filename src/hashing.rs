@@ -19,7 +19,8 @@
 
 use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
-    ByteArray, CutToBitLengthIndexError, Integer, IntegerError, GROUP_PARAMETER_Q_LENGTH,
+    byte_array::FromIntegerError,
+    ByteArray, CutToBitLengthIndexError, Integer, IntegerOperationError, GROUP_PARAMETER_Q_LENGTH,
     SECURITY_STRENGTH,
 };
 use std::{borrow::Cow, fmt::Debug};
@@ -116,7 +117,9 @@ pub enum HashError {
     #[error(transparent)]
     CutToBitLengthIndexError(#[from] CutToBitLengthIndexError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    FromIntegerError(#[from] FromIntegerError),
     #[error("The value is hashed with {0}, which is wrong")]
     WrongHashed(String),
 }
@@ -127,7 +130,7 @@ impl HashableMessage<'_> {
         match self {
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
-                .map_err(HashError::IntegerError)?
+                .map_err(HashError::FromIntegerError)?
                 .new_prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
             HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),
@@ -150,7 +153,7 @@ impl HashableMessage<'_> {
         match self {
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
-                .map_err(HashError::IntegerError)?
+                .map_err(HashError::FromIntegerError)?
                 .new_prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
             HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),

@@ -20,6 +20,7 @@ use thiserror::Error;
 
 use crate::{
     elgamal::{Ciphertext, ElgamalError},
+    integer::ModExponentiateError,
     mix_net::{
         arguments::product_argument::{
             verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
@@ -28,7 +29,7 @@ use crate::{
         matrix::{Matrix, MatrixError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
 };
 
@@ -99,7 +100,9 @@ pub enum ShuffleArgumentError {
     #[error("ElgamalError: {0}")]
     ElgamalError(#[from] ElgamalError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 pub fn verify_shuffle_argument(
@@ -141,7 +144,7 @@ pub fn verify_shuffle_argument(
                 .map(|v| v.mod_multiply(c_b_i, p))
         })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(ShuffleArgumentError::IntegerError)?;
+        .map_err(ShuffleArgumentError::ModExponentiateError)?;
     /*argument
     .cs_upper_a
     .iter()
@@ -152,7 +155,7 @@ pub fn verify_shuffle_argument(
     let xs = (0..upper_n)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(MultiExponentiationArgumentError::IntegerError)?;
+        .map_err(MultiExponentiationArgumentError::ModExponentiateError)?;
 
     let b = xs
         .iter()

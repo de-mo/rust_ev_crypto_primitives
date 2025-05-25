@@ -16,7 +16,7 @@
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use crate::{ByteLengthTrait, ConstantsTrait, Integer, IntegerError};
+use crate::{shared_error::IsNegativeError, ByteLengthTrait, ConstantsTrait, Integer};
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
@@ -48,6 +48,13 @@ pub struct DecodeErrorInBaseForVec {
 pub struct CutToBitLengthIndexError {
     index: usize,
     ba: ByteArray,
+}
+
+/// Error getting [ByteArray] from [Integer]
+#[derive(Error, Debug)]
+pub enum FromIntegerError {
+    #[error("Error try_from Integer")]
+    IsNegagative { source: IsNegativeError },
 }
 
 /// ByteArray represent a byte of arrays
@@ -281,11 +288,15 @@ impl Display for ByteArray {
 }
 
 impl TryFrom<&Integer> for ByteArray {
-    type Error = IntegerError;
+    type Error = FromIntegerError;
 
     fn try_from(value: &Integer) -> Result<Self, Self::Error> {
         if value < Integer::zero() {
-            return Err(IntegerError::IsNegative("value".to_string()));
+            return Err(FromIntegerError::IsNegagative {
+                source: IsNegativeError {
+                    val: value.to_string(),
+                },
+            });
         }
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();

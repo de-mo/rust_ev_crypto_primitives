@@ -17,8 +17,8 @@
 use thiserror::Error;
 
 use crate::{
-    elgamal::EncryptionParameters, ConstantsTrait, HashError, HashableMessage, Integer,
-    IntegerError, OperationsTrait, RecursiveHashTrait,
+    elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, HashError,
+    HashableMessage, Integer, IntegerOperationError, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::matrix::{Matrix, MatrixError};
@@ -39,7 +39,9 @@ pub enum CommitmentError {
     #[error(transparent)]
     MatrixError(#[from] MatrixError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
     #[error("Matrix is mallformed in: {0}")]
     MalformedMatrix(String),
     #[error("Size {0} of random vector must be {1}")]
@@ -115,7 +117,7 @@ pub fn get_commitment(
     println!("prod of get_commitment = {}", &prod);
     let c =
         ck.h.mod_exponentiate(r, ep.p())
-            .map_err(CommitmentError::IntegerError)?
+            .map_err(CommitmentError::ModExponentiateError)?
             .mod_multiply(&prod, ep.p());
     Ok(c)
 }

@@ -41,7 +41,8 @@ use thiserror::Error;
 
 use super::commitments::CommitmentKey;
 use crate::{
-    elgamal::EncryptionParameters, ConstantsTrait, Integer, IntegerError, OperationsTrait,
+    elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, Integer,
+    IntegerOperationError, OperationsTrait,
 };
 
 /// context for all arguments verification functions
@@ -57,7 +58,9 @@ pub enum StarMapError {
     #[error("vectors a and b have not the same size")]
     VectorNotSameLen,
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 pub fn star_map(
@@ -76,7 +79,7 @@ pub fn star_map(
         .map(|(j, (a_j, b_j))| {
             y.mod_exponentiate(&Integer::from(j + 1), q)
                 .map(|v| a_j.mod_multiply(b_j, q).mod_multiply(&v, q))
-                .map_err(StarMapError::IntegerError)
+                .map_err(StarMapError::ModExponentiateError)
             //a_j.mod_multiply(b_j, q)
             //    .mod_multiply(&y.mod_exponentiate(&Integer::from(j + 1), q), q)
         })

@@ -22,11 +22,12 @@ use thiserror::Error;
 
 use super::{star_map, ArgumentContext, StarMapError};
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
 };
 
@@ -83,7 +84,9 @@ pub enum ZeroArgumentError {
     #[error("StarMapError: {0}")]
     StarMapError(#[from] StarMapError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 /// Algorithm 9.23
@@ -101,14 +104,14 @@ pub fn verify_zero_argument(
     let x_powers: Vec<Integer> = (0..2 * m + 1)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(ZeroArgumentError::IntegerError)?;
+        .map_err(ZeroArgumentError::ModExponentiateError)?;
 
     let verif_upper_c_d = &argument.cs_d[m + 1] == Integer::one();
 
     let mut prod_c_a_bases_iter = once(argument.c_upper_a_0).chain(statement.cs_upper_a.iter());
     let prod_c_a =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_a_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerError)?;
+            .map_err(ZeroArgumentError::IntegerOperationError)?;
     let comm_a = get_commitment(context.ep, argument.as_prime, argument.r_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_a = prod_c_a == comm_a;
@@ -117,13 +120,13 @@ pub fn verify_zero_argument(
         once(argument.c_upper_b_m).chain(statement.cs_upper_b.iter().rev());
     let prod_c_b =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_b_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerError)?;
+            .map_err(ZeroArgumentError::IntegerOperationError)?;
     let comm_b = get_commitment(context.ep, argument.bs_prime, argument.s_prime, context.ck)
         .map_err(ZeroArgumentError::CommitmentError)?;
     let verif_upper_b = prod_c_b == comm_b;
 
     let prod_c_d = Integer::mod_multi_exponentiate(argument.cs_d, &x_powers, p)
-        .map_err(ZeroArgumentError::IntegerError)?;
+        .map_err(ZeroArgumentError::IntegerOperationError)?;
     let prod = star_map(q, statement.y, argument.as_prime, argument.bs_prime)
         .map_err(ZeroArgumentError::StarMapError)?;
     let comm_d = get_commitment(context.ep, &[prod], argument.t_prime, context.ck)

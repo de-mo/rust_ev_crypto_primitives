@@ -21,11 +21,12 @@ use std::{fmt::Display, iter::once, ops::ControlFlow};
 use thiserror::Error;
 
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
 };
 
@@ -85,7 +86,9 @@ pub enum HadamardArgumentError {
     #[error("ZeroArgumentError: {0}")]
     ZeroArgumentError(#[from] ZeroArgumentError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 pub fn verify_hadamard_argument(
@@ -105,7 +108,7 @@ pub fn verify_hadamard_argument(
     let x_powers = (0..m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(HadamardArgumentError::IntegerError)?;
+        .map_err(HadamardArgumentError::ModExponentiateError)?;
 
     let cs_upper_d = argument
         .cs_upper_b
@@ -114,7 +117,7 @@ pub fn verify_hadamard_argument(
         .zip(x_powers.iter().skip(1))
         .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(HadamardArgumentError::IntegerError)?;
+        .map_err(HadamardArgumentError::ModExponentiateError)?;
     let c_upper_d = match argument
         .cs_upper_b
         .iter()
@@ -126,7 +129,7 @@ pub fn verify_hadamard_argument(
             Err(e) => ControlFlow::Break(e),
         }) {
         ControlFlow::Continue(v) => Ok(v),
-        ControlFlow::Break(e) => Err(HadamardArgumentError::IntegerError(e)),
+        ControlFlow::Break(e) => Err(HadamardArgumentError::ModExponentiateError(e)),
     }?;
 
     let minus_1_vec = vec![Integer::from(q - Integer::one()); n];

@@ -16,9 +16,10 @@
 
 use crate::{
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
+    integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
-    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
-    VerifyDomainTrait,
+    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait, VerifyDomainTrait,
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -40,7 +41,9 @@ pub enum ExponentiationProofError {
     #[error(transparent)]
     HashError(#[from] HashError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
@@ -52,7 +55,7 @@ fn compute_phi_exponentiation(
     gs.iter()
         .map(|g| {
             g.mod_exponentiate(x, ep.p())
-                .map_err(ExponentiationProofError::IntegerError)
+                .map_err(ExponentiationProofError::ModExponentiateError)
         })
         .collect::<Result<Vec<_>, _>>()
 }
@@ -112,9 +115,12 @@ pub fn verify_exponentiation(
     let c_prime_s = zip(&xs, ys)
         .map(|(x, y)| {
             y.mod_exponentiate(e, ep.p())
-                .and_then(|v| v.mod_inverse(ep.p()))
+                .map_err(ExponentiationProofError::ModExponentiateError)
+                .and_then(|v| {
+                    v.mod_inverse(ep.p())
+                        .map_err(ExponentiationProofError::IntegerOperationError)
+                })
                 .map(|v| x.mod_multiply(&v, ep.p()))
-                .map_err(ExponentiationProofError::IntegerError)
         })
         //.map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
         .collect::<Result<Vec<_>, _>>()?;

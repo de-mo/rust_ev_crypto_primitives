@@ -16,9 +16,10 @@
 
 use crate::{
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
+    integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
-    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
-    VerifyDomainTrait,
+    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait, VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -32,7 +33,9 @@ pub enum SchnorrProofError {
     #[error(transparent)]
     HashError(#[from] HashError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 /// Compute Phi Schnorr according to specifications of Swiss Post (Algorithm 10.1)
@@ -42,7 +45,7 @@ fn compute_phi_schnorr(
 ) -> Result<Integer, SchnorrProofError> {
     ep.g()
         .mod_exponentiate(x, ep.p())
-        .map_err(SchnorrProofError::IntegerError)
+        .map_err(SchnorrProofError::ModExponentiateError)
 }
 
 /// Verify Schnorr Proof according to specifications of Swiss Post (Algorithm 10.3)

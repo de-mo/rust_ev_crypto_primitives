@@ -16,25 +16,13 @@
 
 //! Module that implement some functions of the number theory that are necessary for the primitives
 //!
-use crate::Integer;
+use crate::{Integer, NotOddError, NotPositiveError};
 use thiserror::Error;
-
-#[derive(Error, Debug)]
-#[error("The value is not positive")]
-/// Error if the value is not positive
-pub struct NotPositiveError {}
 
 #[derive(Error, Debug)]
 #[error("The value {val} is to big. Must be less than 2^31")]
 /// Error if the value is out of range according to the definition of Swiss Post
 pub struct OutOfRangeError {
-    val: String,
-}
-
-#[derive(Error, Debug)]
-#[error("The value {val} is not odd")]
-/// Error if the value is not odd
-pub struct NotOddError {
     val: String,
 }
 

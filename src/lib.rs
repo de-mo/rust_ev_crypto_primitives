@@ -50,6 +50,7 @@ mod integer;
 pub mod mix_net;
 mod number_theory;
 pub mod random;
+mod shared_error;
 pub mod signature;
 pub mod string;
 pub mod zero_knowledge_proofs;
@@ -60,14 +61,15 @@ pub use byte_array::{
 };
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
-    prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerError,
+    prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerOperationError,
     OperationsTrait,
 };
 pub use number_theory::{
-    IsPrimeTrait, JacobiError, JacobiTrait, NotOddError, NotPositiveError, NotPrimeError,
-    QuadraticResidueTrait, SmallPrimeError, SmallPrimeTrait,
+    IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
+    SmallPrimeTrait,
 };
 pub use rug::Integer;
+pub use shared_error::{NotOddError, NotPositiveError};
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;

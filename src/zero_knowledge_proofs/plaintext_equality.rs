@@ -15,8 +15,8 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
-    elgamal::EncryptionParameters, HashError, HashableMessage, Integer, IntegerError,
-    OperationsTrait, RecursiveHashTrait,
+    elgamal::EncryptionParameters, integer::ModExponentiateError, HashError, HashableMessage,
+    Integer, IntegerOperationError, OperationsTrait, RecursiveHashTrait,
 };
 use thiserror::Error;
 
@@ -24,9 +24,11 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum PlaintextProofError {
     #[error(transparent)]
-    HashError(#[from] HashError),
+    Hash(#[from] HashError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperation(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiate(#[from] ModExponentiateError),
 }
 
 fn compute_phi_plaintext_equality(
@@ -58,16 +60,19 @@ pub fn verify_plaintext_equality(
         c_0.clone(),
         c_prime_0.clone(),
         c_1.mod_divide(c_prime_1, ep.p())
-            .map_err(PlaintextProofError::IntegerError)?,
+            .map_err(PlaintextProofError::IntegerOperation)?,
     ];
     let c_prime = xs
         .iter()
         .zip(ys.iter())
         .map(|(x, y)| {
             y.mod_exponentiate(e, ep.p())
-                .and_then(|v| v.mod_inverse(ep.p()))
+                .map_err(PlaintextProofError::ModExponentiate)
+                .and_then(|v| {
+                    v.mod_inverse(ep.p())
+                        .map_err(PlaintextProofError::IntegerOperation)
+                })
                 .map(|v| x.mod_multiply(&v, ep.p()))
-                .map_err(PlaintextProofError::IntegerError)
         })
         //x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
         .collect::<Result<Vec<_>, _>>()?;
@@ -86,7 +91,7 @@ pub fn verify_plaintext_equality(
         HashableMessage::from(&h_aux),
     ])
     .recursive_hash()
-    .map_err(PlaintextProofError::HashError)?
+    .map_err(PlaintextProofError::Hash)?
     .into_integer();
     Ok(&e_prime == e)
 }

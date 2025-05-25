@@ -22,12 +22,13 @@ use thiserror::Error;
 
 use crate::{
     elgamal::{Ciphertext, ElgamalError},
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         matrix::Matrix,
         MixNetResultTrait,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
 };
 
@@ -93,7 +94,9 @@ pub enum MultiExponentiationArgumentError {
     #[error("ElgamalError: {0}")]
     ElgamalError(#[from] ElgamalError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 /// Algorithm 9.16
@@ -113,7 +116,7 @@ pub fn verify_multi_exponentiation_argument(
     let x_powers = (0..2 * m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(MultiExponentiationArgumentError::IntegerError)?;
+        .map_err(MultiExponentiationArgumentError::ModExponentiateError)?;
 
     let verif_upper_c_b_m = &argument.cs_upper_b[m] == Integer::one();
     let verif_upper_e_m = &argument.upper_es[m] == statement.upper_c;
@@ -124,7 +127,7 @@ pub fn verify_multi_exponentiation_argument(
             &mut x_powers.iter().skip(1),
             p,
         )
-        .map_err(MultiExponentiationArgumentError::IntegerError)?,
+        .map_err(MultiExponentiationArgumentError::IntegerOperationError)?,
         p,
     );
     /*statement
@@ -144,7 +147,7 @@ pub fn verify_multi_exponentiation_argument(
         &mut x_powers.iter(),
         p,
     )
-    .map_err(MultiExponentiationArgumentError::IntegerError)?;
+    .map_err(MultiExponentiationArgumentError::IntegerOperationError)?;
     /*argument
     .cs_upper_b
     .iter()
@@ -175,7 +178,7 @@ pub fn verify_multi_exponentiation_argument(
         context.ep,
         vec![
             g.mod_exponentiate(argument.b, p)
-                .map_err(MultiExponentiationArgumentError::IntegerError)?;
+                .map_err(MultiExponentiationArgumentError::ModExponentiateError)?;
             l
         ]
         .as_slice(),

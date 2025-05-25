@@ -59,14 +59,14 @@ impl Ciphertext {
         let gamma = ep
             .g()
             .mod_exponentiate(r, p)
-            .map_err(ElgamalError::IntegerError)?;
+            .map_err(ElgamalError::ModExponentiateError)?;
         let phis = ms
             .iter()
             .zip(pks.iter())
             .map(|(m, pk)| {
                 pk.mod_exponentiate(r, p)
                     .map(|v| v.mod_multiply(m, p))
-                    .map_err(ElgamalError::IntegerError)
+                    .map_err(ElgamalError::ModExponentiateError)
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { gamma, phis })
@@ -82,13 +82,13 @@ impl Ciphertext {
         let gamma = self
             .gamma
             .mod_exponentiate(a, p)
-            .map_err(ElgamalError::IntegerError)?;
+            .map_err(ElgamalError::ModExponentiateError)?;
         let phis = self
             .phis
             .iter()
             .map(|phi| {
                 phi.mod_exponentiate(a, p)
-                    .map_err(ElgamalError::IntegerError)
+                    .map_err(ElgamalError::ModExponentiateError)
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { gamma, phis })

@@ -21,11 +21,13 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
         MixNetResultTrait,
     },
-    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
+    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 use super::ArgumentContext;
@@ -76,7 +78,9 @@ pub enum SingleValueProductArgumentError {
     #[error("CommitmentError: {0}")]
     CommitmentError(#[from] CommitmentError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 impl<'a> SingleValueProductStatement<'a> {

@@ -22,8 +22,8 @@ mod dercryption;
 mod encryption_parameters;
 
 use crate::{
-    basic_crypto_functions::BasisCryptoError, zero_knowledge_proofs::ZeroKnowledgeProofError,
-    Integer, IntegerError,
+    basic_crypto_functions::BasisCryptoError, integer::ModExponentiateError,
+    zero_knowledge_proofs::ZeroKnowledgeProofError, Integer, IntegerOperationError,
 };
 pub use ciphertext::Ciphertext;
 pub use combined_public_keys::combine_public_keys;
@@ -63,5 +63,7 @@ pub enum ElgamalError {
     #[error("Error processing combined public keys {0}")]
     CombinedPublicKeysProcess(String),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }

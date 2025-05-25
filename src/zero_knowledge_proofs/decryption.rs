@@ -18,7 +18,9 @@ use thiserror::Error;
 
 use crate::{
     elgamal::{Ciphertext, EncryptionParameters},
-    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
+    integer::ModExponentiateError,
+    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait,
 };
 
 use super::ZeroKnowledgeProofError;
@@ -41,7 +43,9 @@ pub enum DecryptionProofError {
     #[error(transparent)]
     HashError(#[from] HashError),
     #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    IntegerOperationError(#[from] IntegerOperationError),
+    #[error(transparent)]
+    ModExponentiateError(#[from] ModExponentiateError),
 }
 
 fn compute_phi_decryption(
@@ -54,11 +58,11 @@ fn compute_phi_decryption(
         .map(|x| {
             ep.g()
                 .mod_exponentiate(x, ep.p())
-                .map_err(DecryptionProofError::IntegerError)
+                .map_err(DecryptionProofError::ModExponentiateError)
         })
         .chain(pre_images.iter().map(|x| {
             base.mod_exponentiate(x, ep.p())
-                .map_err(DecryptionProofError::IntegerError)
+                .map_err(DecryptionProofError::ModExponentiateError)
         }))
         .collect()
 }
@@ -106,7 +110,7 @@ fn verify_decryption_impl(
         .map(Ok)
         .chain(upper_c.phis.iter().zip(ms.iter()).map(|(phi, m)| {
             phi.mod_divide(m, ep.p())
-                .map_err(DecryptionProofError::IntegerError)
+                .map_err(DecryptionProofError::IntegerOperationError)
         }))
         .collect::<Result<Vec<_>, _>>()?;
     let c_primes = xs
@@ -114,9 +118,12 @@ fn verify_decryption_impl(
         .zip(ys.iter())
         .map(|(x, y)| {
             y.mod_exponentiate(e, ep.p())
-                .and_then(|v| v.mod_inverse(ep.p()))
+                .map_err(DecryptionProofError::ModExponentiateError)
+                .and_then(|v| {
+                    v.mod_inverse(ep.p())
+                        .map_err(DecryptionProofError::IntegerOperationError)
+                })
                 .map(|v| x.mod_multiply(&v, ep.p()))
-                .map_err(DecryptionProofError::IntegerError)
         })
         //.map(|(x, y)| x.mod_multiply(&y.mod_exponentiate(e, ep.p()).mod_inverse(ep.p()), ep.p()))
         .collect::<Result<Vec<_>, _>>()?;
