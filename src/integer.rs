@@ -459,15 +459,15 @@ impl Hexa for Integer {
 }
 
 impl DecodeTrait for Integer {
-    fn base16_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    fn base16_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
         ByteArray::base16_decode(s).map(|b| b.into_integer())
     }
 
-    fn base32_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    fn base32_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
         ByteArray::base32_decode(s).map(|b| b.into_integer())
     }
 
-    fn base64_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    fn base64_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
         ByteArray::base64_decode(s).map(|b| b.into_integer())
     }
 }

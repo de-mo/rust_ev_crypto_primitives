@@ -19,7 +19,8 @@
 
 use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
-    ByteArray, ByteArrayError, Integer, IntegerError, GROUP_PARAMETER_Q_LENGTH, SECURITY_STRENGTH,
+    ByteArray, CutToBitLengthIndexError, Integer, IntegerError, GROUP_PARAMETER_Q_LENGTH,
+    SECURITY_STRENGTH,
 };
 use std::{borrow::Cow, fmt::Debug};
 use thiserror::Error;
@@ -113,7 +114,7 @@ pub enum HashError {
     #[error(transparent)]
     HashError(#[from] BasisCryptoError),
     #[error(transparent)]
-    ByteArrayError(#[from] ByteArrayError),
+    CutToBitLengthIndexError(#[from] CutToBitLengthIndexError),
     #[error(transparent)]
     IntegerError(#[from] IntegerError),
     #[error("The value is hashed with {0}, which is wrong")]
@@ -195,7 +196,7 @@ impl RecursiveHashTrait for HashableMessage<'_> {
             false => shake256(&b, upper_l)
                 .map_err(HashError::HashError)?
                 .cut_bit_length(length)
-                .map_err(HashError::ByteArrayError)?,
+                .map_err(HashError::CutToBitLengthIndexError)?,
         })
     }
 
