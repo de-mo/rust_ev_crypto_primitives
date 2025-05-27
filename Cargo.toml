@@ -16,7 +16,7 @@ openssl = "0.10"
 thiserror = "2"
 data-encoding = "2.5"
 num-traits = "0.2"
-argon2 = "0.5"
+argon2 = { version = "0.5", features = ["std"] }
 rug = { version = "1" }
 rug-miller-rabin = { version = "0.1" }
 lazy_static = "1"

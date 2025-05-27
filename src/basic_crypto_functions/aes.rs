@@ -14,9 +14,27 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-use super::BasisCryptoError;
+use super::{BasisCryptoError, BasisCryptoErrorRepr};
 use crate::ByteArray;
-use openssl::symm::{Cipher, Crypter, Mode};
+use openssl::{
+    error::ErrorStack,
+    symm::{Cipher, Crypter, Mode},
+};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub(super) enum InternalStepError {
+    #[error("Error creating crypter")]
+    CreateCypher { source: ErrorStack },
+    #[error("Error updating aad crypter")]
+    UpdateAadCrypter { source: ErrorStack },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum AESError {
+    #[error("Error new")]
+    New { source: InternalStepError },
+}
 
 /// Structure to decrypt part to part a cipher encrypted with AES GCM n Padding
 pub struct Decrypter {
@@ -35,7 +53,11 @@ impl Decrypter {
             block_size: Self::cipher().block_size(),
             crypter: None,
         };
-        res.crypter = Some(res.generate_crypter()?);
+        res.crypter = Some(
+            res.generate_crypter()
+                .map_err(|e| AESError::New { source: e })
+                .map_err(BasisCryptoErrorRepr::from)?,
+        );
         Ok(res)
     }
 
@@ -48,10 +70,9 @@ impl Decrypter {
         let count = self
             .crypter_mut()
             .update(input.to_bytes(), &mut plaintext)
-            .map_err(|e| BasisCryptoError::AesGcmError {
-                msg: "Updating crypter".to_string(),
-                source: e,
-            })?;
+            .map_err(|e| InternalStepError::CreateCypher { source: e })
+            .map_err(|e| AESError::New { source: e })
+            .map_err(BasisCryptoErrorRepr::from)?;
         plaintext.truncate(count);
         Ok(ByteArray::from_bytes(&plaintext))
     }
@@ -64,24 +85,18 @@ impl Decrypter {
         self.crypter.as_mut().unwrap()
     }
 
-    fn generate_crypter(&self) -> Result<Crypter, BasisCryptoError> {
+    fn generate_crypter(&self) -> Result<Crypter, InternalStepError> {
         let mut crypter = Crypter::new(
             Self::cipher(),
             Mode::Decrypt,
             self.encryption_key.as_slice(),
             Some(&self.nonce),
         )
-        .map_err(|e| BasisCryptoError::AesGcmError {
-            msg: "Creating crytper".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::CreateCypher { source: e })?;
         crypter.pad(false);
         crypter
             .aad_update(vec![].as_slice())
-            .map_err(|e| BasisCryptoError::AesGcmError {
-                msg: "Updating aad".to_string(),
-                source: e,
-            })?;
+            .map_err(|e| InternalStepError::UpdateAadCrypter { source: e })?;
         Ok(crypter)
     }
 }

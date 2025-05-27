@@ -16,10 +16,11 @@
 
 //! Wrapper for Certificate functions
 
-use super::BasisCryptoError;
+use super::{BasisCryptoError, BasisCryptoErrorRepr};
 use crate::byte_array::ByteArray;
 use openssl::{
     asn1::Asn1Time,
+    error::ErrorStack,
     hash::MessageDigest,
     pkcs12::{ParsedPkcs12_2, Pkcs12},
     pkey::{PKey, Private, Public},
@@ -30,6 +31,89 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub(super) enum CertificateError {
+    #[error("Creating Keystore from pkcs12 {path}")]
+    FromPkcs12 {
+        path: PathBuf,
+        source: FromPkcs12Error,
+    },
+    #[error("Get Public certificate from p12")]
+    GetPublicCertFromFromPkcs12(#[from] GetPublicCertFromFromPkcs12Error),
+    #[error("Get Public certificate from dir")]
+    GetPublicCertFromFromDir(#[from] GetPublicCertFromFromDirError),
+    #[error("Creating Keystore from dir: {path} is not a directory")]
+    NotDir { path: PathBuf },
+    #[error("Get Private certificate in p12")]
+    GetPrivateCertificate(#[from] GetPrivateCertificateError),
+    #[error("Signing certificate error")]
+    SigningCertificate(#[from] SigningCertificateError),
+}
+
+#[derive(Error, Debug)]
+pub(super) enum FromPkcs12Error {
+    #[error("Cannot read file {path}")]
+    IO {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("Cannot decode p12 file {path}")]
+    FromDer { path: PathBuf, source: ErrorStack },
+    #[error("Cannot parse p12 file {path}")]
+    Parse2 { path: PathBuf, source: ErrorStack },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum GetPublicCertFromFromPkcs12Error {
+    #[error("The CA list ist missing in {path}")]
+    MissingCAList { path: PathBuf },
+    #[error("The CA {name} is missing in the list of ca of {path}")]
+    MissingCA { name: String, path: PathBuf },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum GetPublicCertFromFromDirError {
+    #[error("Cannot read file {path}")]
+    IO {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    #[error("Cannot decode pem file {path}")]
+    FromPem { path: PathBuf, source: ErrorStack },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum GetPrivateCertificateError {
+    #[error("{fct} is only working for file pkc12 and not for directory format")]
+    OnlyPkc12 { fct: &'static str },
+    #[error("The secret key is missing in {path}")]
+    KeyStoreMissingSecretKey { path: PathBuf },
+    #[error("The certificate for the secret key is missing in {path}")]
+    KeyStoreMissingCertSecretKey { path: PathBuf },
+    #[error("Error getting the name of the secret key in {path}")]
+    SecretKeyError { path: PathBuf, source: ErrorStack },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum SigningCertificateError {
+    #[error("Error getting public key for authority {authority}")]
+    CertificateErrorPK {
+        authority: String,
+        source: ErrorStack,
+    },
+    #[error("Error validating time for certificate of {authority}")]
+    CertificateErrorTime {
+        authority: String,
+        source: ErrorStack,
+    },
+    #[error("Error caluclating digest for certificate of {authority}")]
+    CertificateDigest {
+        authority: String,
+        source: ErrorStack,
+    },
+}
 
 /// Keystore to collect the public keys
 ///
@@ -72,12 +156,22 @@ impl Keystore {
     /// # Error
     /// if somwthing is going wrong
     pub fn from_pkcs12(path: &Path, password: &str) -> Result<Keystore, BasisCryptoError> {
-        let bytes = fs::read(path).map_err(|e| BasisCryptoError::IO {
-            msg: format!("Error reading keystore file {:?}", path),
+        Self::from_pkcs12_repr(path, password)
+            .map_err(|e| CertificateError::FromPkcs12 {
+                path: path.to_path_buf(),
+                source: e,
+            })
+            .map_err(BasisCryptoErrorRepr::from)
+            .map_err(BasisCryptoError::from)
+    }
+
+    fn from_pkcs12_repr(path: &Path, password: &str) -> Result<Keystore, FromPkcs12Error> {
+        let bytes = fs::read(path).map_err(|e| FromPkcs12Error::IO {
+            path: path.to_path_buf(),
             source: e,
         })?;
-        let p12: Pkcs12 = Pkcs12::from_der(&bytes).map_err(|e| BasisCryptoError::Keystore {
-            msg: format!("Error reading keystore file {:?}", path),
+        let p12: Pkcs12 = Pkcs12::from_der(&bytes).map_err(|e| FromPkcs12Error::FromDer {
+            path: path.to_path_buf(),
             source: e,
         })?;
         p12.parse2(password)
@@ -86,8 +180,8 @@ impl Keystore {
                 path: path.to_path_buf(),
                 extension: CertificateExtension::default(),
             })
-            .map_err(|e| BasisCryptoError::Keystore {
-                msg: format!("Error parsing keystore file {:?}", path),
+            .map_err(|e| FromPkcs12Error::Parse2 {
+                path: path.to_path_buf(),
                 source: e,
             })
     }
@@ -98,9 +192,11 @@ impl Keystore {
     /// if somwthing is going wrong
     pub fn from_directory(path: &Path) -> Result<Keystore, BasisCryptoError> {
         if !path.is_dir() {
-            return Err(BasisCryptoError::Dir {
-                path: path.to_str().unwrap().to_string(),
-            });
+            return Err(BasisCryptoError::from(BasisCryptoErrorRepr::from(
+                CertificateError::NotDir {
+                    path: path.to_path_buf(),
+                },
+            )));
         }
         Ok(Self {
             pcks12: None,
@@ -129,28 +225,31 @@ impl Keystore {
         authority: &str,
     ) -> Result<SigningCertificate, BasisCryptoError> {
         match self.is_pcks12() {
-            true => self.get_certificate_from_pcks12(authority),
-            false => self.get_certificate_from_dir(authority),
+            true => self
+                .get_certificate_from_pcks12(authority)
+                .map_err(CertificateError::from),
+            false => self
+                .get_certificate_from_dir(authority)
+                .map_err(CertificateError::from),
         }
+        .map_err(BasisCryptoErrorRepr::from)
+        .map_err(BasisCryptoError::from)
     }
 
     fn get_certificate_from_pcks12(
         &self,
         authority: &str,
-    ) -> Result<SigningCertificate, BasisCryptoError> {
+    ) -> Result<SigningCertificate, GetPublicCertFromFromPkcs12Error> {
         let pcks12 = self.pcks12.as_ref().unwrap();
         let cas = match pcks12.ca.as_ref() {
             Some(s) => s,
             None => {
-                return Err(BasisCryptoError::KeyStoreMissingCAList(
-                    self.path.to_path_buf(),
-                ));
+                return Err(GetPublicCertFromFromPkcs12Error::MissingCAList {
+                    path: self.path.to_path_buf(),
+                });
             }
         };
-        // println!("length: {:?}", cas.len());
         for x in cas.iter() {
-            // println!("subject_name: {:?}", x.subject_name());
-            // println!("issuer_name: {:?}", x.issuer_name());
             for e in x.issuer_name().entries() {
                 if e.object().to_string() == *"commonName"
                     && e.data().as_slice() == authority.as_bytes()
@@ -163,7 +262,7 @@ impl Keystore {
                 }
             }
         }
-        Err(BasisCryptoError::KeyStoreMissingCA {
+        Err(GetPublicCertFromFromPkcs12Error::MissingCA {
             path: self.path.to_path_buf(),
             name: authority.to_string(),
         })
@@ -172,14 +271,14 @@ impl Keystore {
     fn get_certificate_from_dir(
         &self,
         authority: &str,
-    ) -> Result<SigningCertificate, BasisCryptoError> {
+    ) -> Result<SigningCertificate, GetPublicCertFromFromDirError> {
         let p = self.path.join(format!("{}{}", authority, self.extension));
-        let buf = fs::read(&p).map_err(|e| BasisCryptoError::IO {
-            msg: format!("Error reading file {}", p.as_os_str().to_str().unwrap()),
+        let buf = fs::read(&p).map_err(|e| GetPublicCertFromFromDirError::IO {
             source: e,
+            path: p.clone(),
         })?;
-        let cert = X509::from_pem(&buf).map_err(|e| BasisCryptoError::CertificateErrorPK {
-            name: authority.to_string(),
+        let cert = X509::from_pem(&buf).map_err(|e| GetPublicCertFromFromDirError::FromPem {
+            path: p.clone(),
             source: e,
         })?;
         Ok(SigningCertificate {
@@ -194,34 +293,41 @@ impl Keystore {
     /// # Error
     /// if something is going wrong
     pub fn get_secret_certificate(&self) -> Result<SigningCertificate, BasisCryptoError> {
+        self.get_secret_certificate_repr()
+            .map_err(CertificateError::from)
+            .map_err(BasisCryptoErrorRepr::from)
+            .map_err(BasisCryptoError::from)
+    }
+
+    fn get_secret_certificate_repr(
+        &self,
+    ) -> Result<SigningCertificate, GetPrivateCertificateError> {
         if !self.is_pcks12() {
-            return Err(
-                BasisCryptoError::KeystoreWrongFormat(
-                    "get_secret_certificate is only working for file pkc12 and not for directory format".to_string()
-                )
-            );
+            return Err(GetPrivateCertificateError::OnlyPkc12 {
+                fct: "get_secret_certificate",
+            });
         }
         let pcks12 = self.pcks12.as_ref().unwrap();
-        let sk = pcks12
-            .pkey
-            .as_ref()
-            .ok_or(BasisCryptoError::KeyStoreMissingSecretKey(
-                self.path.to_path_buf(),
-            ))?;
-        let cert = pcks12
-            .cert
-            .as_ref()
-            .ok_or(BasisCryptoError::KeyStoreMissingCertSecretKey(
-                self.path.to_path_buf(),
-            ))?;
+        let sk: &PKey<Private> =
+            pcks12
+                .pkey
+                .as_ref()
+                .ok_or(GetPrivateCertificateError::KeyStoreMissingSecretKey {
+                    path: self.path.to_path_buf(),
+                })?;
+        let cert = pcks12.cert.as_ref().ok_or(
+            GetPrivateCertificateError::KeyStoreMissingCertSecretKey {
+                path: self.path.to_path_buf(),
+            },
+        )?;
         let mut authority = String::new();
         for e in cert.issuer_name().entries() {
             if e.object().to_string() == *"commonName" {
                 authority = e
                     .data()
                     .as_utf8()
-                    .map_err(|e| BasisCryptoError::SecretKeyError {
-                        msg: "Cannot read the authority name".to_string(),
+                    .map_err(|e| GetPrivateCertificateError::SecretKeyError {
+                        path: self.path.to_path_buf(),
                         source: e,
                     })?
                     .to_string();
@@ -245,10 +351,13 @@ impl SigningCertificate {
         self.x509
             .public_key()
             .map(PublicKey)
-            .map_err(|e| BasisCryptoError::CertificateErrorPK {
-                name: self.authority.to_string(),
+            .map_err(|e| SigningCertificateError::CertificateErrorPK {
+                authority: self.authority.to_string(),
                 source: e,
             })
+            .map_err(CertificateError::from)
+            .map_err(BasisCryptoErrorRepr::from)
+            .map_err(BasisCryptoError::from)
     }
 
     /// Get the secret key from the certificate
@@ -268,11 +377,14 @@ impl SigningCertificate {
     pub fn is_valid_time(&self) -> Result<bool, BasisCryptoError> {
         let not_before = self.x509.not_before();
         let not_after = self.x509.not_after();
-        let now =
-            Asn1Time::days_from_now(0).map_err(|e| BasisCryptoError::CertificateErrorTime {
-                name: self.authority.to_string(),
+        let now = Asn1Time::days_from_now(0)
+            .map_err(|e| SigningCertificateError::CertificateErrorTime {
+                authority: self.authority.to_string(),
                 source: e,
-            })?;
+            })
+            .map_err(CertificateError::from)
+            .map_err(BasisCryptoErrorRepr::from)
+            .map_err(BasisCryptoError::from)?;
         Ok(not_before < now && now <= not_after)
     }
 
@@ -289,10 +401,13 @@ impl SigningCertificate {
             &self
                 .x509
                 .digest(MessageDigest::sha256())
-                .map_err(|e| BasisCryptoError::CertificateDigest {
-                    msg: "Error by digest".to_string(),
+                .map_err(|e| SigningCertificateError::CertificateDigest {
+                    authority: self.authority.to_string(),
                     source: e,
-                })?
+                })
+                .map_err(CertificateError::from)
+                .map_err(BasisCryptoErrorRepr::from)
+                .map_err(BasisCryptoError::from)?
                 .to_vec(),
         ))
     }

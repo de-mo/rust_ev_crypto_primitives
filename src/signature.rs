@@ -24,6 +24,27 @@ use crate::{
 };
 use thiserror::Error;
 
+// Enum representing the errors validating the signature
+#[derive(Error, Debug)]
+pub enum SignatureError {
+    #[error(transparent)]
+    Keystore(DirectTrustError),
+    #[error("Error of certificate {name} during {action}: {error}")]
+    Certificate {
+        name: String,
+        error: BasisCryptoError,
+        action: String,
+    },
+    #[error("Secret key is missing")]
+    MissingSecretKey,
+    #[error("Time is not valide for certificate: {0}")]
+    Time(String),
+    #[error(transparent)]
+    Hash(HashError),
+    #[error("Certificate Authority {0} is unknown")]
+    CertificateAuthority(String),
+}
+
 /// Verification of the signature according to the specification of Swiss Post (Algorithm 7.3)
 ///
 /// # Error
@@ -137,27 +158,6 @@ pub fn sign(
         action: "Signing".to_string(),
     })?;
     Ok(res)
-}
-
-// Enum representing the errors validating the signature
-#[derive(Error, Debug)]
-pub enum SignatureError {
-    #[error(transparent)]
-    Keystore(DirectTrustError),
-    #[error("Error of certificate {name} during {action}: {error}")]
-    Certificate {
-        name: String,
-        error: BasisCryptoError,
-        action: String,
-    },
-    #[error("Secret key is missing")]
-    MissingSecretKey,
-    #[error("Time is not valide for certificate: {0}")]
-    Time(String),
-    #[error(transparent)]
-    Hash(HashError),
-    #[error("Certificate Authority {0} is unknown")]
-    CertificateAuthority(String),
 }
 
 #[cfg(test)]

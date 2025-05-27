@@ -18,39 +18,62 @@
 
 use std::io::BufRead;
 
-use super::BasisCryptoError;
+use super::{BasisCryptoError, BasisCryptoErrorRepr};
 use crate::byte_array::ByteArray;
 use openssl::{
+    error::ErrorStack,
     hash::{hash_xof, MessageDigest},
     md::Md,
     md_ctx::MdCtx,
 };
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub(super) enum InternalStepError {
+    #[error("Error creating MdCtx")]
+    NewMdCtx { source: ErrorStack },
+    #[error("Error initializeing the Digest")]
+    InitDigest { source: ErrorStack },
+    #[error("Error updating the Digest")]
+    UpdateDigest { source: ErrorStack },
+    #[error("Error finalizing the Digest")]
+    FinalDigest { source: ErrorStack },
+    #[error("Error reading the stream buffer")]
+    StreamIOError { source: std::io::Error },
+    #[error("Error in hash_xof")]
+    HashXOF { source: ErrorStack },
+}
+
+#[derive(Error, Debug)]
+pub(super) enum HashError {
+    #[error("Error in sha3_256")]
+    SHA3256 { source: InternalStepError },
+    #[error("Error in sha_256")]
+    SHA256 { source: InternalStepError },
+    #[error("Error in shake128")]
+    SHAKE128 { source: InternalStepError },
+}
 
 /// Wrapper for SHA3-256
 ///
 /// # Error
 /// [BasisCryptoError] if something is going wrong
 pub fn sha3_256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
-    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
-        msg: "Error creating MdCtx".to_string(),
-        source: e,
-    })?;
+    sha3_256_repr(byte_array)
+        .map_err(|e| HashError::SHA3256 { source: e })
+        .map_err(BasisCryptoErrorRepr::from)
+        .map_err(BasisCryptoError::from)
+}
+
+fn sha3_256_repr(byte_array: &ByteArray) -> Result<ByteArray, InternalStepError> {
+    let mut ctx = MdCtx::new().map_err(|e| InternalStepError::NewMdCtx { source: e })?;
     ctx.digest_init(Md::sha3_256())
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_init".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::InitDigest { source: e })?;
     ctx.digest_update(byte_array.to_bytes())
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_update".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::UpdateDigest { source: e })?;
     let mut digest = [0; 32];
     ctx.digest_final(&mut digest)
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_final".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::FinalDigest { source: e })?;
     Ok(ByteArray::from_bytes(&digest))
 }
 
@@ -67,39 +90,31 @@ pub fn sha256(byte_array: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
 /// # Error
 /// [BasisCryptoError] if something is going wrong
 pub fn sha256_stream(reader: &mut dyn BufRead) -> Result<ByteArray, BasisCryptoError> {
-    let mut ctx = MdCtx::new().map_err(|e| BasisCryptoError::HashError {
-        msg: "Error creating MdCtx".to_string(),
-        source: e,
-    })?;
+    sha256_stream_repr(reader)
+        .map_err(|e| HashError::SHA256 { source: e })
+        .map_err(BasisCryptoErrorRepr::from)
+        .map_err(BasisCryptoError::from)
+}
+
+fn sha256_stream_repr(reader: &mut dyn BufRead) -> Result<ByteArray, InternalStepError> {
+    let mut ctx = MdCtx::new().map_err(|e| InternalStepError::NewMdCtx { source: e })?;
     ctx.digest_init(Md::sha256())
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_init".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::InitDigest { source: e })?;
     loop {
         let mut buf = vec![0; 2048];
         let n = reader
             .read(&mut buf)
-            .map_err(|e| BasisCryptoError::BufferHashError {
-                msg: "Error reading the buffer".to_string(),
-                source: e,
-            })?;
+            .map_err(|e| InternalStepError::StreamIOError { source: e })?;
         if n == 0 {
             break;
         }
         buf.truncate(n);
         ctx.digest_update(&buf)
-            .map_err(|e| BasisCryptoError::HashError {
-                msg: "Error digest_update".to_string(),
-                source: e,
-            })?;
+            .map_err(|e| InternalStepError::UpdateDigest { source: e })?;
     }
     let mut digest = [0; 32];
     ctx.digest_final(&mut digest)
-        .map_err(|e| BasisCryptoError::HashError {
-            msg: "Error digest_final".to_string(),
-            source: e,
-        })?;
+        .map_err(|e| InternalStepError::FinalDigest { source: e })?;
     Ok(ByteArray::from_bytes(&digest))
 }
 
@@ -114,10 +129,10 @@ pub fn shake128(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
         byte_array.to_bytes(),
         digest.as_mut_slice(),
     )
-    .map_err(|e| BasisCryptoError::HashError {
-        msg: "Error hash_xof".to_string(),
-        source: e,
-    })?;
+    .map_err(|e| InternalStepError::HashXOF { source: e })
+    .map_err(|e| HashError::SHAKE128 { source: e })
+    .map_err(BasisCryptoErrorRepr::from)
+    .map_err(BasisCryptoError::from)?;
     Ok(ByteArray::from_bytes(&digest))
 }
 
@@ -132,10 +147,10 @@ pub fn shake256(byte_array: &ByteArray, length: usize) -> Result<ByteArray, Basi
         byte_array.to_bytes(),
         digest.as_mut_slice(),
     )
-    .map_err(|e| BasisCryptoError::HashError {
-        msg: "Error hash_xof".to_string(),
-        source: e,
-    })?;
+    .map_err(|e| InternalStepError::HashXOF { source: e })
+    .map_err(|e| HashError::SHAKE128 { source: e })
+    .map_err(BasisCryptoErrorRepr::from)
+    .map_err(BasisCryptoError::from)?;
     Ok(ByteArray::from_bytes(&digest))
 }
 
