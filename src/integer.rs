@@ -37,9 +37,13 @@ use rug_gmpmee::{
     GmpMEEError,
 };
 
-/// Error im Mod Exponentiate
 #[derive(Error, Debug)]
-pub enum ModExponentiateError {
+#[error(transparent)]
+/// Error im Mod Exponentiate
+pub struct ModExponentiateError(#[from] ModExponentiateErrorRepr);
+
+#[derive(Error, Debug)]
+enum ModExponentiateErrorRepr {
     #[error("mod_exponentiate error for {name}")]
     IsNegative {
         name: &'static str,
@@ -56,10 +60,14 @@ pub enum ModExponentiateError {
     OptimizationError { source: OptimizationError },
 }
 
-#[cfg(feature = "gmpmee")]
-/// enum representing the errors with optimizations
 #[derive(Error, Debug)]
-pub enum OptimizationError {
+#[error(transparent)]
+/// enum representing the errors with optimizations
+pub struct OptimizationError(#[from] OptimizationErrorRepr);
+
+#[cfg(feature = "gmpmee")]
+#[derive(Error, Debug)]
+enum OptimizationErrorRepr {
     #[error("Error in prepare_fixed_base_exponentiate initializing the cache")]
     FPownPrepareFixBased { source: GmpMEEError },
     #[error("The cache for optimized_fpowm is not initialized")]
@@ -71,16 +79,19 @@ pub enum OptimizationError {
 }
 
 #[cfg(not(feature = "gmpmee"))]
-/// enum representing the errors with optimizations
 #[derive(Error, Debug)]
-pub enum OptimizationError {
+enum OptimizationErrorRepr {
     #[error(transparent)]
     Notimplemented(#[from] NotImplemented),
 }
 
-/// enum representing the errors with conversion from hexa
 #[derive(Error, Debug)]
-pub enum HexaParseError {
+#[error(transparent)]
+/// Error in parse hexa
+pub struct HexaParseError(#[from] HexaParseErrorRepr);
+
+#[derive(Error, Debug)]
+pub enum HexaParseErrorRepr {
     #[error("String {0} must start with \"0x\" of \"0X\"")]
     WrongStartChar(String),
     #[error("Error parsing {s}")]
@@ -90,28 +101,32 @@ pub enum HexaParseError {
     },
 }
 
-/// enum representing the errors with operations of big integer
 #[derive(Error, Debug)]
-pub enum IntegerOperationError {
+#[error(transparent)]
+/// Error in operations with big integer
+pub struct IntegerOperationError(#[from] IntegerOperationErrorRepr);
+
+#[derive(Error, Debug)]
+enum IntegerOperationErrorRepr {
     #[error("Error in mod_square")]
-    ModSquare {
+    Square {
         val: Integer,
         modulus: Integer,
         source: ModExponentiateError,
     },
     #[error("Error in mod_square")]
-    ModInverse {
+    Inverse {
         val: Integer,
         modulus: Integer,
         source: ModExponentiateError,
     },
     #[error("Error in mod_multi_exponentiate")]
-    ModMultiExpExponentiate {
+    MultiExpExponentiate {
         modulus: Integer,
         source: ModExponentiateError,
     },
     #[error("Error in mod_multi_exponentiate")]
-    ModMultiExpOptimization {
+    MultiExpOptimization {
         modulus: Integer,
         source: OptimizationError,
     },
@@ -242,9 +257,11 @@ pub trait OperationsOptimizationTrait: Sized {
     ///
     /// Return [IntegerError::Notimplemented] per default
     fn optimized_fpowm(&self, _exponent: &Integer) -> Result<Integer, OptimizationError> {
-        Err(OptimizationError::from(NotImplemented {
-            function: "optimized_fpowm",
-        }))
+        Err(OptimizationError::from(OptimizationErrorRepr::from(
+            NotImplemented {
+                function: "optimized_fpowm",
+            },
+        )))
     }
 
     /// Optimized spown
@@ -256,9 +273,11 @@ pub trait OperationsOptimizationTrait: Sized {
         _exponents: &[Integer],
         _modulus: &Integer,
     ) -> Result<Integer, OptimizationError> {
-        Err(OptimizationError::from(NotImplemented {
-            function: "optimized_spowm",
-        }))
+        Err(OptimizationError::from(OptimizationErrorRepr::from(
+            NotImplemented {
+                function: "optimized_spowm",
+            },
+        )))
     }
 }
 
@@ -405,37 +424,45 @@ impl OperationsTrait for Integer {
 
     fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError> {
         if self.is_negative() {
-            return Err(ModExponentiateError::IsNegative {
-                name: "self (base)",
-                source: IsNegativeError {
-                    val: self.to_string(),
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::IsNegative {
+                    name: "self (base)",
+                    source: IsNegativeError {
+                        val: self.to_string(),
+                    },
                 },
-            });
+            ));
         }
         if modulus.is_negative() {
-            return Err(ModExponentiateError::IsNegative {
-                name: "modulus",
-                source: IsNegativeError {
-                    val: modulus.to_string(),
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::IsNegative {
+                    name: "modulus",
+                    source: IsNegativeError {
+                        val: modulus.to_string(),
+                    },
                 },
-            });
+            ));
         }
         if modulus.is_even() {
-            return Err(ModExponentiateError::NotOdd {
-                name: "modulus",
-                source: NotOddError {
-                    val: modulus.to_string(),
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::NotOdd {
+                    name: "modulus",
+                    source: NotOddError {
+                        val: modulus.to_string(),
+                    },
                 },
-            });
+            ));
         }
         match OP_OPTIMIZATION.is_fpowm_optimized_for(self, modulus) {
             true => OP_OPTIMIZATION
                 .optimized_fpowm(exp)
-                .map_err(|e| ModExponentiateError::OptimizationError { source: e }),
+                .map_err(|e| ModExponentiateErrorRepr::OptimizationError { source: e })
+                .map_err(ModExponentiateError::from),
             false => self
                 .pow_mod_ref(exp, modulus)
                 .map(Integer::from)
-                .ok_or(ModExponentiateError::PowModRefIsNone),
+                .ok_or(ModExponentiateErrorRepr::PowModRefIsNone)
+                .map_err(ModExponentiateError::from),
         }
     }
 
@@ -454,23 +481,24 @@ impl OperationsTrait for Integer {
     }
 
     fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
-        self.mod_exponentiate(Integer::two(), modulus).map_err(|e| {
-            IntegerOperationError::ModSquare {
+        self.mod_exponentiate(Integer::two(), modulus)
+            .map_err(|e| IntegerOperationErrorRepr::Square {
                 val: self.clone(),
                 modulus: modulus.clone(),
                 source: e,
-            }
-        })
+            })
+            .map_err(IntegerOperationError::from)
     }
 
     fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
         let from = Integer::from(modulus - Self::two());
         self.mod_exponentiate(&from, modulus)
-            .map_err(|e| IntegerOperationError::ModInverse {
+            .map_err(|e| IntegerOperationErrorRepr::Inverse {
                 val: self.clone(),
                 modulus: modulus.clone(),
                 source: e,
             })
+            .map_err(IntegerOperationError::from)
     }
 
     fn nb_bits(&self) -> usize {
@@ -510,10 +538,11 @@ impl OperationsTrait for Integer {
                     bases_iter.cloned().zip(exponents_iter.cloned()).unzip();
                 OP_OPTIMIZATION
                     .optimized_spowm(&bases, &exponents, modulus)
-                    .map_err(|e| IntegerOperationError::ModMultiExpOptimization {
+                    .map_err(|e| IntegerOperationErrorRepr::MultiExpOptimization {
                         modulus: modulus.clone(),
                         source: e,
                     })
+                    .map_err(IntegerOperationError::from)
             }
             false => match bases_iter
                 .zip(exponents_iter)
@@ -523,12 +552,12 @@ impl OperationsTrait for Integer {
                     Err(e) => std::ops::ControlFlow::Break(e),
                 }) {
                 std::ops::ControlFlow::Continue(v) => Ok(v),
-                std::ops::ControlFlow::Break(e) => {
-                    Err(IntegerOperationError::ModMultiExpExponentiate {
+                std::ops::ControlFlow::Break(e) => Err(IntegerOperationError::from(
+                    IntegerOperationErrorRepr::MultiExpExponentiate {
                         modulus: modulus.clone(),
                         source: e,
-                    })
-                }
+                    },
+                )),
             },
         }
     }
@@ -537,14 +566,17 @@ impl OperationsTrait for Integer {
 impl Hexa for Integer {
     fn from_hexa_string(s: &str) -> Result<Self, HexaParseError> {
         if !s.starts_with("0x") && !s.starts_with("0X") {
-            return Err(HexaParseError::WrongStartChar(s.to_string()));
+            return Err(HexaParseError::from(HexaParseErrorRepr::WrongStartChar(
+                s.to_string(),
+            )));
         }
         Integer::parse_radix(&s[2..], 16)
             .map(Integer::from)
-            .map_err(|e| HexaParseError::ParseError {
+            .map_err(|e| HexaParseErrorRepr::ParseError {
                 s: s.to_string(),
                 source: e,
             })
+            .map_err(HexaParseError::from)
     }
 
     fn to_hexa(&self) -> String {
