@@ -23,29 +23,42 @@ use crate::{
 };
 use thiserror::Error;
 
-// Enum representing the errors in zero knowledge proofs
 #[derive(Error, Debug)]
-pub enum SchnorrProofError {
-    #[error("y is not quadratic residue of p (in verify_schnorr)")]
-    NotQudraticResidue(#[from] QuadraticResidueError),
+#[error(transparent)]
+/// Error during Schnorr proofs
+pub struct SchnorrProofError(#[from] SchnorrProofErrorRepr);
+
+#[derive(Error, Debug)]
+enum PhiSchnorrError {
+    #[error("Error calculating g^x mod p")]
+    GExpXModP { source: ModExponentiateError },
+}
+
+#[derive(Error, Debug)]
+enum SchnorrProofErrorRepr {
     #[error("Error checking the elgamal parameters")]
     CheckElgamal(Vec<EncryptionParameterDomainError>),
-    #[error(transparent)]
-    HashError(#[from] HashError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error Compute Phi Schnorr")]
+    PhiSchnorrError {
+        #[from]
+        source: PhiSchnorrError,
+    },
+
+    #[error("y is not quadratic residue of p (in verify_schnorr)")]
+    NotQudraticResidue(#[from] QuadraticResidueError),
+    #[error("Error calculating y^e mod p")]
+    YExpEModP { source: ModExponentiateError },
+    #[error("Error in v^(-1) mod p claculting cs'")]
+    InverseVModP { source: IntegerOperationError },
+    #[error("Error hashing e'")]
+    EPrimeHash { source: HashError },
 }
 
 /// Compute Phi Schnorr according to specifications of Swiss Post (Algorithm 10.1)
-fn compute_phi_schnorr(
-    ep: &EncryptionParameters,
-    x: &Integer,
-) -> Result<Integer, SchnorrProofError> {
+fn compute_phi_schnorr(ep: &EncryptionParameters, x: &Integer) -> Result<Integer, PhiSchnorrError> {
     ep.g()
         .mod_exponentiate(x, ep.p())
-        .map_err(SchnorrProofError::ModExponentiateError)
+        .map_err(|e| PhiSchnorrError::GExpXModP { source: e })
 }
 
 /// Verify Schnorr Proof according to specifications of Swiss Post (Algorithm 10.3)
@@ -58,19 +71,34 @@ pub fn verify_schnorr(
     y: &Integer,
     i_aux: &Vec<String>,
 ) -> Result<bool, SchnorrProofError> {
+    verify_schnorr_impl(ep, (e, z), y, i_aux).map_err(SchnorrProofError::from)
+}
+
+fn verify_schnorr_impl(
+    ep: &EncryptionParameters,
+    (e, z): (&Integer, &Integer),
+    y: &Integer,
+    i_aux: &Vec<String>,
+) -> Result<bool, SchnorrProofErrorRepr> {
     if cfg!(feature = "checks") {
         let domain_errs = ep.verifiy_domain();
         if !domain_errs.is_empty() {
-            return Err(SchnorrProofError::CheckElgamal(domain_errs));
+            return Err(SchnorrProofErrorRepr::CheckElgamal(domain_errs));
         }
         y.result_is_quadratic_residue_unchecked(ep.p())
-            .map_err(SchnorrProofError::NotQudraticResidue)?;
+            .map_err(SchnorrProofErrorRepr::NotQudraticResidue)?;
     }
-    let x = compute_phi_schnorr(ep, z)?;
+    let x = compute_phi_schnorr(ep, z).map_err(SchnorrProofErrorRepr::from)?;
     let f = HashableMessage::from(vec![ep.p(), ep.q(), ep.g()]);
     // e in Z_q => modulo q
     // x, y in G_q => modulo p
-    let c_prime = x.mod_multiply(&y.mod_exponentiate(e, ep.p())?.mod_inverse(ep.p())?, ep.p());
+    let c_prime = x.mod_multiply(
+        &y.mod_exponentiate(e, ep.p())
+            .map_err(|e| SchnorrProofErrorRepr::YExpEModP { source: e })?
+            .mod_inverse(ep.p())
+            .map_err(|e| SchnorrProofErrorRepr::InverseVModP { source: e })?,
+        ep.p(),
+    );
     let mut l: Vec<HashableMessage> = vec![];
     l.push(HashableMessage::from("SchnorrProof"));
     if !i_aux.is_empty() {
@@ -85,7 +113,7 @@ pub fn verify_schnorr(
     ];
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
-        .map_err(SchnorrProofError::HashError)?
+        .map_err(|e| SchnorrProofErrorRepr::EPrimeHash { source: e })?
         .into_integer();
     Ok(&e_prime == e)
 }

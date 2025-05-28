@@ -17,10 +17,7 @@
 //! Implementation of decryption algorithms
 
 use super::{Ciphertext, ElgamalError, EncryptionParameters};
-use crate::{
-    zero_knowledge_proofs::{verify_decryption, ZeroKnowledgeProofError},
-    Integer,
-};
+use crate::{zero_knowledge_proofs::verify_decryption, Integer};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, Copy)]
@@ -76,8 +73,8 @@ pub fn verify_decryptions(
                     verif_decryption,
                 })
             })
-            .collect::<Result<Vec<_>, ZeroKnowledgeProofError>>()
-            .map_err(ElgamalError::ZeroKnowledgeProofError)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ElgamalError::DecryptionError)?
             .as_slice(),
     ))
 }

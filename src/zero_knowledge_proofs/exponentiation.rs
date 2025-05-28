@@ -24,26 +24,41 @@ use crate::{
 use std::iter::zip;
 use thiserror::Error;
 
-// Enum representing the errors in zero knowledge proofs
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error during exponentiation proofs
+pub struct ExponentiationProofError(#[from] ExponentiationProofErrorRepr);
+
+#[derive(Error, Debug)]
+pub enum PhiExpError {
+    #[error("Error calculating g^x mod p")]
+    GExpXModP { source: ModExponentiateError },
+}
+
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum ExponentiationProofError {
+enum ExponentiationProofErrorRepr {
+    #[error("Error checking the elgamal parameters")]
+    CheckElgamal(Vec<EncryptionParameterDomainError>),
+    #[error("The list {0} must have the same length as the list {1}")]
+    CheckListSameSize(String, String),
     #[error("{name} is not qudartic residue at position {pos}")]
     NotQuadraticResidueList {
         name: &'static str,
         pos: usize,
         source: QuadraticResidueError,
     },
-    #[error("Error checking the elgamal parameters")]
-    CheckElgamal(Vec<EncryptionParameterDomainError>),
-    #[error("The list {0} must have the same length as the list {1}")]
-    CheckListSameSize(String, String),
-    #[error(transparent)]
-    HashError(#[from] HashError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error Compute Phi Exponentiation")]
+    PhiExpError {
+        #[from]
+        source: PhiExpError,
+    },
+    #[error("Error hashing e'")]
+    EPrimeHash { source: HashError },
+    #[error("Error in y^e mod p claculting cs'")]
+    YExpEModP { source: ModExponentiateError },
+    #[error("Error in v^(-1) mod p claculting cs'")]
+    InverseVModP { source: IntegerOperationError },
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
@@ -51,11 +66,11 @@ fn compute_phi_exponentiation(
     ep: &EncryptionParameters,
     x: &Integer,
     gs: &[&Integer],
-) -> Result<Vec<Integer>, ExponentiationProofError> {
+) -> Result<Vec<Integer>, PhiExpError> {
     gs.iter()
         .map(|g| {
             g.mod_exponentiate(x, ep.p())
-                .map_err(ExponentiationProofError::ModExponentiateError)
+                .map_err(|e| PhiExpError::GExpXModP { source: e })
         })
         .collect::<Result<Vec<_>, _>>()
 }
@@ -71,21 +86,31 @@ pub fn verify_exponentiation(
     (e, z): (&Integer, &Integer),
     i_aux: &Vec<String>,
 ) -> Result<bool, ExponentiationProofError> {
+    verify_exponentiation_impl(ep, gs, ys, (e, z), i_aux).map_err(ExponentiationProofError::from)
+}
+
+fn verify_exponentiation_impl(
+    ep: &EncryptionParameters,
+    gs: &[&Integer],
+    ys: &[&Integer],
+    (e, z): (&Integer, &Integer),
+    i_aux: &Vec<String>,
+) -> Result<bool, ExponentiationProofErrorRepr> {
     // Check of input parameters
     if cfg!(feature = "checks") {
         let domain_errs = ep.verifiy_domain();
         if !domain_errs.is_empty() {
-            return Err(ExponentiationProofError::CheckElgamal(domain_errs));
+            return Err(ExponentiationProofErrorRepr::CheckElgamal(domain_errs));
         }
         if gs.len() != ys.len() {
-            return Err(ExponentiationProofError::CheckListSameSize(
+            return Err(ExponentiationProofErrorRepr::CheckListSameSize(
                 "gs".to_string(),
                 "ys".to_string(),
             ));
         }
         for (pos, g) in gs.iter().enumerate() {
             g.result_is_quadratic_residue_unchecked(ep.p())
-                .map_err(|e| ExponentiationProofError::NotQuadraticResidueList {
+                .map_err(|e| ExponentiationProofErrorRepr::NotQuadraticResidueList {
                     pos,
                     name: "g",
                     source: e,
@@ -93,7 +118,7 @@ pub fn verify_exponentiation(
         }
         for (pos, y) in ys.iter().enumerate() {
             y.result_is_quadratic_residue_unchecked(ep.p())
-                .map_err(|e| ExponentiationProofError::NotQuadraticResidueList {
+                .map_err(|e| ExponentiationProofErrorRepr::NotQuadraticResidueList {
                     pos,
                     name: "y",
                     source: e,
@@ -115,10 +140,10 @@ pub fn verify_exponentiation(
     let c_prime_s = zip(&xs, ys)
         .map(|(x, y)| {
             y.mod_exponentiate(e, ep.p())
-                .map_err(ExponentiationProofError::ModExponentiateError)
+                .map_err(|e| ExponentiationProofErrorRepr::YExpEModP { source: e })
                 .and_then(|v| {
                     v.mod_inverse(ep.p())
-                        .map_err(ExponentiationProofError::IntegerOperationError)
+                        .map_err(|e| ExponentiationProofErrorRepr::InverseVModP { source: e })
                 })
                 .map(|v| x.mod_multiply(&v, ep.p()))
         })
@@ -142,7 +167,7 @@ pub fn verify_exponentiation(
     ];
     let e_prime = HashableMessage::from(&l_final)
         .recursive_hash()
-        .map_err(ExponentiationProofError::HashError)?
+        .map_err(|e| ExponentiationProofErrorRepr::EPrimeHash { source: e })?
         .into_integer();
     Ok(&e_prime == e)
 }

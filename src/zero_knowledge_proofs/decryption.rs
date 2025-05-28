@@ -23,11 +23,28 @@ use crate::{
     RecursiveHashTrait,
 };
 
-use super::ZeroKnowledgeProofError;
-
-// Enum representing the errors in zero knowledge proofs
 #[derive(Error, Debug)]
-pub enum DecryptionProofError {
+#[error(transparent)]
+/// Error during decrpytion proofs
+pub struct DecryptionProofError(#[from] DecryptionProofErrorRepr);
+
+#[derive(Error, Debug)]
+enum ComputePhiDecryptionError {
+    #[error("Error calculating g^x mod p")]
+    GExpXModP { source: ModExponentiateError },
+    #[error("Error calculating base^x mod p")]
+    BaseExpXModP { source: ModExponentiateError },
+}
+
+#[derive(Error, Debug)]
+enum DecryptionProofErrorRepr {
+    #[error("Error Compute Phi Decryption")]
+    ComputePhiDecryption {
+        #[from]
+        source: ComputePhiDecryptionError,
+    },
+    #[error("l must be positive")]
+    LPositive(usize),
     #[error(
         "Validate l: The length {0} of the message m must be the same the for the array phi {1}"
     )]
@@ -38,31 +55,31 @@ pub enum DecryptionProofError {
     LNotCorrectForZ(usize, usize),
     #[error("l={0} must be smaller or equal to k={1}")]
     LSmallerOrEqualK(usize, usize),
-    #[error("l must be positive")]
-    LPositive(usize),
-    #[error(transparent)]
-    HashError(#[from] HashError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error in phi/m mod p calculting ys")]
+    PhiDivMModP { source: IntegerOperationError },
+    #[error("Error in y^e mod p claculting cs'")]
+    YExpEModP { source: ModExponentiateError },
+    #[error("Error in v^(-1) mod p claculting cs'")]
+    InverseVModP { source: IntegerOperationError },
+    #[error("Error hashing e'")]
+    EPrimeHash { source: HashError },
 }
 
 fn compute_phi_decryption(
     ep: &EncryptionParameters,
     pre_images: &[Integer],
     base: &Integer,
-) -> Result<Vec<Integer>, DecryptionProofError> {
+) -> Result<Vec<Integer>, ComputePhiDecryptionError> {
     pre_images
         .iter()
         .map(|x| {
             ep.g()
                 .mod_exponentiate(x, ep.p())
-                .map_err(DecryptionProofError::ModExponentiateError)
+                .map_err(|e| ComputePhiDecryptionError::GExpXModP { source: e })
         })
         .chain(pre_images.iter().map(|x| {
             base.mod_exponentiate(x, ep.p())
-                .map_err(DecryptionProofError::ModExponentiateError)
+                .map_err(|e| ComputePhiDecryptionError::BaseExpXModP { source: e })
         }))
         .collect()
 }
@@ -74,9 +91,8 @@ pub fn verify_decryption(
     ms: &[Integer],
     i_aux: &[String],
     (e, zs): (&Integer, &[Integer]),
-) -> Result<bool, ZeroKnowledgeProofError> {
-    verify_decryption_impl(ep, upper_c, pks, ms, i_aux, (e, zs))
-        .map_err(ZeroKnowledgeProofError::DecryptionProofError)
+) -> Result<bool, DecryptionProofError> {
+    verify_decryption_impl(ep, upper_c, pks, ms, i_aux, (e, zs)).map_err(DecryptionProofError::from)
 }
 
 fn verify_decryption_impl(
@@ -86,20 +102,20 @@ fn verify_decryption_impl(
     ms: &[Integer],
     i_aux: &[String],
     (e, zs): (&Integer, &[Integer]),
-) -> Result<bool, DecryptionProofError> {
+) -> Result<bool, DecryptionProofErrorRepr> {
     let l = upper_c.phis.len();
     let k = pks.len();
     if l == 0 {
-        return Err(DecryptionProofError::LPositive(l));
+        return Err(DecryptionProofErrorRepr::LPositive(l));
     }
     if l != ms.len() {
-        return Err(DecryptionProofError::LNotCorrectForM(ms.len(), l));
+        return Err(DecryptionProofErrorRepr::LNotCorrectForM(ms.len(), l));
     }
     if l != zs.len() {
-        return Err(DecryptionProofError::LNotCorrectForZ(zs.len(), l));
+        return Err(DecryptionProofErrorRepr::LNotCorrectForZ(zs.len(), l));
     }
     if l > k {
-        return Err(DecryptionProofError::LSmallerOrEqualK(l, k));
+        return Err(DecryptionProofErrorRepr::LSmallerOrEqualK(l, k));
     }
     let xs = compute_phi_decryption(ep, zs, &upper_c.gamma)?;
     let fs = vec![ep.p(), ep.q(), ep.g(), &upper_c.gamma];
@@ -110,7 +126,7 @@ fn verify_decryption_impl(
         .map(Ok)
         .chain(upper_c.phis.iter().zip(ms.iter()).map(|(phi, m)| {
             phi.mod_divide(m, ep.p())
-                .map_err(DecryptionProofError::IntegerOperationError)
+                .map_err(|e| DecryptionProofErrorRepr::PhiDivMModP { source: e })
         }))
         .collect::<Result<Vec<_>, _>>()?;
     let c_primes = xs
@@ -118,10 +134,10 @@ fn verify_decryption_impl(
         .zip(ys.iter())
         .map(|(x, y)| {
             y.mod_exponentiate(e, ep.p())
-                .map_err(DecryptionProofError::ModExponentiateError)
+                .map_err(|e| DecryptionProofErrorRepr::YExpEModP { source: e })
                 .and_then(|v| {
                     v.mod_inverse(ep.p())
-                        .map_err(DecryptionProofError::IntegerOperationError)
+                        .map_err(|e| DecryptionProofErrorRepr::InverseVModP { source: e })
                 })
                 .map(|v| x.mod_multiply(&v, ep.p()))
         })
@@ -142,7 +158,7 @@ fn verify_decryption_impl(
         HashableMessage::from(h_aux),
     ])
     .recursive_hash()
-    .map_err(DecryptionProofError::HashError)?
+    .map_err(|e| DecryptionProofErrorRepr::EPrimeHash { source: e })?
     .into_integer();
     Ok(&e_prime == e)
 }

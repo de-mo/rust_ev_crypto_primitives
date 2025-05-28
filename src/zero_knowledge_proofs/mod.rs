@@ -25,20 +25,7 @@ mod exponentiation;
 mod plaintext_equality;
 mod schnorr_proofs;
 
-use thiserror::Error;
-
-pub use decryption::verify_decryption;
-pub use exponentiation::verify_exponentiation;
-pub use plaintext_equality::verify_plaintext_equality;
+pub use decryption::{verify_decryption, DecryptionProofError};
+pub use exponentiation::{verify_exponentiation, ExponentiationProofError};
+pub use plaintext_equality::{verify_plaintext_equality, PlaintextProofError};
 pub use schnorr_proofs::verify_schnorr;
-
-// enum representing the errors during the algorithms for zero knowledge proof
-#[derive(Error, Debug)]
-pub enum ZeroKnowledgeProofError {
-    #[error(transparent)]
-    SchnorrProofError(#[from] schnorr_proofs::SchnorrProofError),
-    #[error(transparent)]
-    ExponentiationError(#[from] exponentiation::ExponentiationProofError),
-    #[error(transparent)]
-    DecryptionProofError(#[from] decryption::DecryptionProofError),
-}

@@ -23,7 +23,7 @@ mod encryption_parameters;
 
 use crate::{
     basic_crypto_functions::BasisCryptoError, integer::ModExponentiateError,
-    zero_knowledge_proofs::ZeroKnowledgeProofError, Integer, IntegerOperationError,
+    zero_knowledge_proofs::DecryptionProofError, Integer, IntegerOperationError,
 };
 pub use ciphertext::Ciphertext;
 pub use combined_public_keys::combine_public_keys;
@@ -57,7 +57,7 @@ pub enum ElgamalError {
     #[error("l not consistent over the proofs")]
     LNotConsistentForTheProofs,
     #[error(transparent)]
-    ZeroKnowledgeProofError(#[from] ZeroKnowledgeProofError),
+    DecryptionError(#[from] DecryptionProofError),
     #[error("Error in inputs of combined public keys {0}")]
     CombinedPublicKeysInput(String),
     #[error("Error processing combined public keys {0}")]
