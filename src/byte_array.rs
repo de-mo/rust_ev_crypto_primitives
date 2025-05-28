@@ -22,21 +22,27 @@ use num_traits::Pow;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct ByteArrayError(#[from] ByteArrayErrorRepr);
+
+#[derive(Error, Debug)]
+enum ByteArrayErrorRepr {
+    #[error(transparent)]
+    DecodeErrorInBase(#[from] DecodeErrorInBase),
+    #[error(transparent)]
+    CutToBitLengthIndexError(#[from] CutToBitLengthIndexError),
+    #[error(transparent)]
+    FromIntegerError(#[from] FromIntegerError),
+}
+
 /// Error decoding a string to in a given base
 #[derive(Error, Debug)]
 #[error("Error decoding {orig} in base {base}")]
-pub struct DecodeErrorInBase {
+struct DecodeErrorInBase {
     orig: String,
     base: u8,
     source: DecodeError,
-}
-
-/// Error decoding a vector of strings to in a given base
-#[derive(Error, Debug)]
-#[error("Error decoding {orig} in vector")]
-pub struct DecodeErrorInBaseForVec {
-    orig: String,
-    source: DecodeErrorInBase,
 }
 
 /// Error cutting a [ByteArray] to bit lenngth
@@ -45,14 +51,14 @@ pub struct DecodeErrorInBaseForVec {
     "Error in cut_bit_length for {ba}: the index {index} must be between 1 and 8*{}",
     ba.len()
 )]
-pub struct CutToBitLengthIndexError {
+struct CutToBitLengthIndexError {
     index: usize,
     ba: ByteArray,
 }
 
 /// Error getting [ByteArray] from [Integer]
 #[derive(Error, Debug)]
-pub enum FromIntegerError {
+enum FromIntegerError {
     #[error("Error try_from Integer")]
     IsNegagative { source: IsNegativeError },
 }
@@ -72,7 +78,7 @@ pub struct ByteArray {
 /// assert_eq!(ba, "QQ==");
 /// ```
 pub trait EncodeTrait {
-    type Error;
+    type Error: std::error::Error;
 
     /// Code to base16 according specifications
     fn base16_encode(&self) -> Result<String, Self::Error>;
@@ -94,32 +100,30 @@ pub trait EncodeTrait {
 /// assert_eq!(ba_res.unwrap().to_bytes(), b"\x60");
 /// ```
 pub trait DecodeTrait: Sized {
+    type Error: std::error::Error + Sized;
+
     /// Code from string in base16 according specifications. The letters are in upper.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base16_decode(s: &str) -> Result<Self, DecodeErrorInBase>;
+    fn base16_decode(s: &str) -> Result<Self, Self::Error>;
 
     /// Code from string in base32 according specifications.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base32_decode(s: &str) -> Result<Self, DecodeErrorInBase>;
+    fn base32_decode(s: &str) -> Result<Self, Self::Error>;
 
     /// Code from string in base32 according specifications.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base64_decode(s: &str) -> Result<Self, DecodeErrorInBase>;
+    fn base64_decode(s: &str) -> Result<Self, Self::Error>;
 
-    fn base_64_decode_vector(vs: &[String]) -> Result<Vec<Self>, DecodeErrorInBaseForVec> {
+    fn base_64_decode_vector(vs: &[String]) -> Result<Vec<Self>, Self::Error> {
         vs.iter()
             .map(|s| Self::base64_decode(s))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| DecodeErrorInBaseForVec {
-                orig: e.orig.clone(),
-                source: e,
-            })
     }
 }
 
@@ -186,12 +190,14 @@ impl ByteArray {
     ///
     /// # Error
     /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
-    pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, CutToBitLengthIndexError> {
+    pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, ByteArrayError> {
         if n < 1 || n > 8 * self.len() {
-            return Err(CutToBitLengthIndexError {
-                index: n,
-                ba: self.clone(),
-            });
+            return Err(ByteArrayError::from(ByteArrayErrorRepr::from(
+                CutToBitLengthIndexError {
+                    index: n,
+                    ba: self.clone(),
+                },
+            )));
         }
         let bs = self.to_bytes();
         //println!("bs: {:?}", bs);
@@ -219,7 +225,7 @@ impl ByteArray {
 }
 
 impl EncodeTrait for ByteArray {
-    type Error = ();
+    type Error = ByteArrayError;
 
     fn base16_encode(&self) -> Result<String, Self::Error> {
         Ok(HEXUPPER.encode(&self.inner))
@@ -235,7 +241,9 @@ impl EncodeTrait for ByteArray {
 }
 
 impl DecodeTrait for ByteArray {
-    fn base16_decode(s: &str) -> Result<Self, DecodeErrorInBase> {
+    type Error = ByteArrayError;
+
+    fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         HEXUPPER
             .decode(s.as_bytes())
             .map_err(|e| DecodeErrorInBase {
@@ -243,10 +251,12 @@ impl DecodeTrait for ByteArray {
                 base: 16,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 
-    fn base32_decode(s: &str) -> Result<Self, DecodeErrorInBase> {
+    fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         BASE32
             .decode(s.as_bytes())
             .map_err(|e| DecodeErrorInBase {
@@ -254,10 +264,12 @@ impl DecodeTrait for ByteArray {
                 base: 32,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 
-    fn base64_decode(s: &str) -> Result<Self, DecodeErrorInBase> {
+    fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         BASE64
             .decode(s.as_bytes())
             .map_err(|e| DecodeErrorInBase {
@@ -265,6 +277,8 @@ impl DecodeTrait for ByteArray {
                 base: 64,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 }
@@ -288,15 +302,17 @@ impl Display for ByteArray {
 }
 
 impl TryFrom<&Integer> for ByteArray {
-    type Error = FromIntegerError;
+    type Error = ByteArrayError;
 
     fn try_from(value: &Integer) -> Result<Self, Self::Error> {
         if value < Integer::zero() {
-            return Err(FromIntegerError::IsNegagative {
-                source: IsNegativeError {
-                    val: value.to_string(),
+            return Err(ByteArrayError::from(ByteArrayErrorRepr::from(
+                FromIntegerError::IsNegagative {
+                    source: IsNegativeError {
+                        val: value.to_string(),
+                    },
                 },
-            });
+            )));
         }
         let byte_length = std::cmp::max(value.byte_length(), 1);
         let mut x = value.clone();

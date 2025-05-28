@@ -20,7 +20,7 @@
 //! used in the client modules
 //!
 
-use crate::byte_array::FromIntegerError;
+use crate::byte_array::ByteArrayError;
 use crate::shared_error::{IsNegativeError, NotImplemented};
 use crate::{ByteArray, DecodeTrait, EncodeTrait, NotOddError};
 use rug::integer::ParseIntegerError;
@@ -123,7 +123,7 @@ pub enum IntegerOperationError {
 pub struct EncodeIntegerError {
     orig: Integer,
     base: &'static str,
-    source: FromIntegerError,
+    source: ByteArrayError,
 }
 
 /// Trait to implement constant numbers
@@ -553,15 +553,16 @@ impl Hexa for Integer {
 }
 
 impl DecodeTrait for Integer {
-    fn base16_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
+    type Error = ByteArrayError;
+    fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base16_decode(s).map(|b| b.into_integer())
     }
 
-    fn base32_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
+    fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base32_decode(s).map(|b| b.into_integer())
     }
 
-    fn base64_decode(s: &str) -> Result<Self, crate::byte_array::DecodeErrorInBase> {
+    fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base64_decode(s).map(|b| b.into_integer())
     }
 }

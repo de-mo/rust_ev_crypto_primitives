@@ -55,10 +55,7 @@ pub mod signature;
 pub mod string;
 pub mod zero_knowledge_proofs;
 
-pub use byte_array::{
-    ByteArray, CutToBitLengthIndexError, DecodeErrorInBase, DecodeErrorInBaseForVec, DecodeTrait,
-    EncodeTrait,
-};
+pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
     prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerOperationError,

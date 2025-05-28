@@ -19,8 +19,7 @@
 
 use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
-    byte_array::FromIntegerError,
-    ByteArray, CutToBitLengthIndexError, Integer, IntegerOperationError, GROUP_PARAMETER_Q_LENGTH,
+    ByteArray, ByteArrayError, Integer, IntegerOperationError, GROUP_PARAMETER_Q_LENGTH,
     SECURITY_STRENGTH,
 };
 use std::{borrow::Cow, fmt::Debug};
@@ -115,11 +114,9 @@ pub enum HashError {
     #[error(transparent)]
     HashError(#[from] BasisCryptoError),
     #[error(transparent)]
-    CutToBitLengthIndexError(#[from] CutToBitLengthIndexError),
+    ByteArrayError(#[from] ByteArrayError),
     #[error(transparent)]
     IntegerError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    FromIntegerError(#[from] FromIntegerError),
     #[error("The value is hashed with {0}, which is wrong")]
     WrongHashed(String),
 }
@@ -130,7 +127,7 @@ impl HashableMessage<'_> {
         match self {
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
-                .map_err(HashError::FromIntegerError)?
+                .map_err(HashError::ByteArrayError)?
                 .new_prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
             HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),
@@ -153,7 +150,7 @@ impl HashableMessage<'_> {
         match self {
             HashableMessage::ByteArray(b) => Ok(b.new_prepend_byte(0u8)),
             HashableMessage::Integer(i) => Ok(ByteArray::try_from(i.as_ref())
-                .map_err(HashError::FromIntegerError)?
+                .map_err(HashError::ByteArrayError)?
                 .new_prepend_byte(1u8)),
             HashableMessage::USize(i) => Ok(ByteArray::from(i.as_ref()).new_prepend_byte(1u8)),
             HashableMessage::String(s) => Ok(ByteArray::from(s.as_ref()).new_prepend_byte(2u8)),
@@ -199,7 +196,7 @@ impl RecursiveHashTrait for HashableMessage<'_> {
             false => shake256(&b, upper_l)
                 .map_err(HashError::HashError)?
                 .cut_bit_length(length)
-                .map_err(HashError::CutToBitLengthIndexError)?,
+                .map_err(HashError::ByteArrayError)?,
         })
     }
 
