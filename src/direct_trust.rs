@@ -25,14 +25,13 @@ use std::{
 };
 use thiserror::Error;
 
-// Enum representing the direct trust errors
 #[derive(Error, Debug)]
 #[error(transparent)]
+/// Error in direct_trust
 pub struct DirectTrustError(#[from] DirectTrustErrorRepr);
 
-// Enum representing the direct trust errors
 #[derive(Error, Debug)]
-pub enum DirectTrustErrorRepr {
+enum DirectTrustErrorRepr {
     #[error("Error reading password file {path}")]
     ReadPassword { path: PathBuf, source: io::Error },
     #[error("Error creating the keystore from the file {path}")]
@@ -45,8 +44,11 @@ pub enum DirectTrustErrorRepr {
         path: PathBuf,
         source: BasisCryptoError,
     },
-    #[error("Error getting the public certificate from the keystore")]
-    PublicCertificate { source: BasisCryptoError },
+    #[error("Error getting the public certificate {authority} from the keystore")]
+    PublicCertificate {
+        authority: String,
+        source: BasisCryptoError,
+    },
     #[error("Error getting the private certificate from the keystore")]
     PrivateCertificate { source: BasisCryptoError },
 }
@@ -101,7 +103,10 @@ impl Keystore {
         let cert = self
             .keystore
             .get_public_certificate(&String::from(authority))
-            .map_err(|e| DirectTrustErrorRepr::PublicCertificate { source: e })?;
+            .map_err(|e| DirectTrustErrorRepr::PublicCertificate {
+                authority: authority.to_string(),
+                source: e,
+            })?;
         Ok(DirectTrustCertificate { cert })
     }
 
