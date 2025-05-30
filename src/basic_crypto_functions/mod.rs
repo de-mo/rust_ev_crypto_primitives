@@ -54,48 +54,4 @@ enum BasisCryptoErrorRepr {
     CertificateError(#[from] CertificateError),
     #[error(transparent)]
     SignatureError(#[from] SignatureError),
-    /*
-    #[error("Path is not a directory {path}")]
-    Dir { path: String },
-    #[error("IO error caused by {source}: {msg}")]
-    IO { msg: String, source: io::Error },
-    #[error("Keystore error {msg} caused by {source}")]
-    Keystore { msg: String, source: ErrorStack },
-    #[error("Keystore has a wrong format: {0}")]
-    KeystoreWrongFormat(String),
-    #[error("Keystore {0} has no secret key")]
-    KeyStoreMissingSecretKey(PathBuf),
-    #[error("Keystore {0} has no certificate for the secret key")]
-    KeyStoreMissingCertSecretKey(PathBuf),
-    #[error("Keystore {0} has no list of CA")]
-    KeyStoreMissingCAList(PathBuf),
-    #[error("The ca with name {name} is not present in the Keystore {path}")]
-    KeyStoreMissingCA { path: PathBuf, name: String },
-    #[error("Error reading public key in the certificate {name} caused by {source}")]
-    CertificateErrorPK { name: String, source: ErrorStack },
-    #[error("Error of time during time check of the certificate {name} caused by {source}")]
-    CertificateErrorTime { name: String, source: ErrorStack },
-    #[error("Digest (Fingerprint) error caused by {source}: {msg}")]
-    CertificateDigest { msg: String, source: ErrorStack },
-    #[error("PublicKey error caused by {source}: {msg}")]
-    PublicKeyError { msg: String, source: ErrorStack },
-    #[error("Secretkey error caused by {source}: {msg}")]
-    SecretKeyError { msg: String, source: ErrorStack },
-    #[error("{msg} caused by {source}")]
-    SignatureVerify { msg: String, source: ErrorStack },
-    #[error("{msg} caused by {source}")]
-    Sign { msg: String, source: ErrorStack },
-    #[error("Hash error caused by {source}: {msg}")]
-    HashError { msg: String, source: ErrorStack },
-    #[error("Buffer Hash error caused by {source}: {msg}")]
-    BufferHashError { msg: String, source: std::io::Error },
-    #[error("Argon2 error caused by {argon2_error_source}: {msg}")]
-    Argon2Error {
-        msg: String,
-        argon2_error_source: Argon2Error,
-    },
-    #[error("Random error caused by {source}: {msg}")]
-    RandomError { msg: String, source: ErrorStack },
-    #[error("Secretkey error caused by {source}: {msg}")]
-    AesGcmError { msg: String, source: ErrorStack }, */
 }
