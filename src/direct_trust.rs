@@ -19,8 +19,37 @@
 use super::basic_crypto_functions::{
     BasisCryptoError, CertificateExtension, Keystore as SslKeystore, SigningCertificate,
 };
-use std::{fs, io, path::Path};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
+
+// Enum representing the direct trust errors
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct DirectTrustError(#[from] DirectTrustErrorRepr);
+
+// Enum representing the direct trust errors
+#[derive(Error, Debug)]
+pub enum DirectTrustErrorRepr {
+    #[error("Error reading password file {path}")]
+    ReadPassword { path: PathBuf, source: io::Error },
+    #[error("Error creating the keystore from the file {path}")]
+    KeystoreFromFile {
+        path: PathBuf,
+        source: BasisCryptoError,
+    },
+    #[error("Error creating the keystore from the directory {path}")]
+    KeystoreFromDir {
+        path: PathBuf,
+        source: BasisCryptoError,
+    },
+    #[error("Error getting the public certificate from the keystore")]
+    PublicCertificate { source: BasisCryptoError },
+    #[error("Error getting the private certificate from the keystore")]
+    PrivateCertificate { source: BasisCryptoError },
+}
 
 /// Struct representing a direct trust
 pub struct Keystore {
@@ -33,16 +62,19 @@ impl Keystore {
         keystore_path: &Path,
         password_file_path: &Path,
     ) -> Result<Self, DirectTrustError> {
-        let pwd = fs::read_to_string(password_file_path).map_err(|e| DirectTrustError::IO {
-            msg: format!(
-                "Error reading password file {}",
-                &password_file_path.display()
-            ),
-            source: e,
+        let pwd = fs::read_to_string(password_file_path).map_err(|e| {
+            DirectTrustErrorRepr::ReadPassword {
+                path: password_file_path.to_path_buf(),
+                source: e,
+            }
         })?;
         Ok(Keystore {
-            keystore: SslKeystore::from_pkcs12(keystore_path, &pwd)
-                .map_err(DirectTrustError::Keystore)?,
+            keystore: SslKeystore::from_pkcs12(keystore_path, &pwd).map_err(|e| {
+                DirectTrustErrorRepr::KeystoreFromFile {
+                    path: keystore_path.to_path_buf(),
+                    source: e,
+                }
+            })?,
         })
     }
 
@@ -51,8 +83,12 @@ impl Keystore {
         keystore_path: &Path,
         extension: &CertificateExtension,
     ) -> Result<Self, DirectTrustError> {
-        let mut ks =
-            SslKeystore::from_directory(keystore_path).map_err(DirectTrustError::Keystore)?;
+        let mut ks = SslKeystore::from_directory(keystore_path).map_err(|e| {
+            DirectTrustErrorRepr::KeystoreFromDir {
+                path: keystore_path.to_path_buf(),
+                source: e,
+            }
+        })?;
         ks.set_certificate_extension(extension);
         Ok(Self { keystore: ks })
     }
@@ -65,7 +101,7 @@ impl Keystore {
         let cert = self
             .keystore
             .get_public_certificate(&String::from(authority))
-            .map_err(DirectTrustError::Certificate)?;
+            .map_err(|e| DirectTrustErrorRepr::PublicCertificate { source: e })?;
         Ok(DirectTrustCertificate { cert })
     }
 
@@ -76,7 +112,7 @@ impl Keystore {
         let cert = self
             .keystore
             .get_secret_certificate()
-            .map_err(DirectTrustError::Certificate)?;
+            .map_err(|e| DirectTrustErrorRepr::PrivateCertificate { source: e })?;
         Ok(DirectTrustCertificate { cert })
     }
 }
@@ -97,17 +133,6 @@ impl DirectTrustCertificate {
     pub fn signing_certificate(&self) -> &SigningCertificate {
         &self.cert
     }
-}
-
-// Enum representing the direct trust errors
-#[derive(Error, Debug)]
-pub enum DirectTrustError {
-    #[error("IO error caused by {source}: {msg}")]
-    IO { msg: String, source: io::Error },
-    #[error(transparent)]
-    Keystore(BasisCryptoError),
-    #[error(transparent)]
-    Certificate(BasisCryptoError),
 }
 
 #[cfg(test)]
