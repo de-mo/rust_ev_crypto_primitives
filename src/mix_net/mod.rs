@@ -31,7 +31,7 @@ use arguments::{
 };
 use shuffle::ShuffleError;
 pub use shuffle::{verify_shuffle, VerifyShuffleResult};
-pub use thiserror::Error;
+use thiserror::Error;
 
 pub trait MixNetResultTrait: std::fmt::Display {
     fn is_ok(&self) -> bool;
