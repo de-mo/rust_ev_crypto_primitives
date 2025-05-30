@@ -16,16 +16,28 @@
 
 //! Implementation of the structure for the Encryption parameters
 
-use thiserror::Error;
-
+use super::{ElgamalError, ElgamalErrorRepr};
 use crate::{
-    basic_crypto_functions::shake256,
+    basic_crypto_functions::{shake256, BasisCryptoError},
     number_theory::{IsPrimeTrait, QuadraticResidueTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
     ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
     VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
+use thiserror::Error;
 
-use super::ElgamalError;
+#[derive(Error, Debug)]
+pub(super) enum EncryptionParameterError {
+    #[error("Error calculating q_b^ in get_encryption_parameters")]
+    QBHat { source: BasisCryptoError },
+    #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
+    TooFewSmallPrimeNumbers { expected: usize, found: usize },
+    #[error("Number {name} with value {val} is not prime")]
+    NotPrime { name: &'static str, val: Integer },
+    #[error("The relation p=2q+1 is not satisfied")]
+    CheckRelationPQ,
+    #[error("The value should not be one")]
+    CheckNotOne,
+}
 
 /// Encryption parameters for the ecryption system according to the specification of Swiss Post
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,15 +47,19 @@ pub struct EncryptionParameters {
     g: Integer,
 }
 
+#[derive(Error, Debug)]
+#[error("Error checking the domain of the encryption parameters")]
+pub struct EncryptionParameterDomainError(#[from] EncryptionParameterDomainErrorRepr);
+
 // Enum reprsenting the elgamal errors
 #[derive(Error, Debug, Clone)]
-pub enum EncryptionParameterDomainError {
+enum EncryptionParameterDomainErrorRepr {
     #[error("p does not satisfy the requirements: {0}")]
-    PNotSatisfiedDomain(String),
+    P(String),
     #[error("q does not satisfy the requirements: {0}")]
-    QNotSatisfiedDomain(String),
+    Q(String),
     #[error("g does not satisfy the requirements: {0}")]
-    GNotSatisfiedDomain(String),
+    G(String),
 }
 
 impl EncryptionParameters {
@@ -86,7 +102,9 @@ impl EncryptionParameters {
     // GetEncryptionParameters according to the specification of Swiss Post (Algorithm 8.1)
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
         let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
-            .map_err(ElgamalError::OpenSSLError)?;
+            .map_err(|e| EncryptionParameterError::QBHat { source: e })
+            .map_err(ElgamalErrorRepr::from)
+            .map_err(ElgamalError::from)?;
         let q_b = q_b_hat.new_prepend_byte(2u8);
         let q_prime: Integer = q_b.into_integer() >> 3;
         let q = &q_prime - Integer::from(&q_prime % 6u8) + Integer::five();
@@ -159,10 +177,12 @@ impl EncryptionParameters {
             current += 2;
         }
         if res.len() != desired_number {
-            return Err(ElgamalError::TooFewSmallPrimeNumbers {
-                expected: desired_number,
-                found: res.len(),
-            });
+            return Err(ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::TooFewSmallPrimeNumbers {
+                    expected: desired_number,
+                    found: res.len(),
+                },
+            )));
         }
         Ok(res)
     }
@@ -178,10 +198,12 @@ impl EncryptionParameters {
     pub fn validate_p(&self) -> Vec<ElgamalError> {
         match self.p.result_is_prime() {
             Ok(_) => vec![],
-            Err(_) => vec![ElgamalError::NotPrime {
-                name: "p",
-                val: self.p.clone(),
-            }],
+            Err(_) => vec![ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::NotPrime {
+                    name: "p",
+                    val: self.p.clone(),
+                },
+            ))],
         }
     }
 
@@ -191,16 +213,16 @@ impl EncryptionParameters {
     pub fn validate_q(&self) -> Vec<ElgamalError> {
         let mut res = vec![];
         if self.p != Integer::from(&self.q * 2u8) + 1u8 {
-            res.push(ElgamalError::CheckRelationPQ);
+            res.push(ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::CheckRelationPQ,
+            )));
         }
-        if let Err(e) = self
-            .q
-            .result_is_prime()
-            .map_err(|_| ElgamalError::NotPrime {
+        if let Err(e) = self.q.result_is_prime().map_err(|_| {
+            ElgamalError::from(ElgamalErrorRepr::from(EncryptionParameterError::NotPrime {
                 name: "q",
                 val: self.q.clone(),
-            })
-        {
+            }))
+        }) {
             res.push(e);
         }
         res
@@ -211,14 +233,18 @@ impl EncryptionParameters {
     /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_g(&self) -> Vec<ElgamalError> {
         if &self.g == Integer::one() {
-            return vec![ElgamalError::CheckNotOne];
+            return vec![ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::CheckNotOne,
+            ))];
         }
         if let Err(e) = self
             .g
             .result_is_quadratic_residue_unchecked(&self.p)
-            .map_err(|_| ElgamalError::NotPrime {
-                name: "g",
-                val: self.g.clone(),
+            .map_err(|_| {
+                ElgamalError::from(ElgamalErrorRepr::from(EncryptionParameterError::NotPrime {
+                    name: "g",
+                    val: self.g.clone(),
+                }))
             })
         {
             return vec![e];
@@ -254,8 +280,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_p(ep) {
-                res.push(EncryptionParameterDomainError::PNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::P(e.to_string()),
                 ))
             }
             res
@@ -263,8 +289,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_q(ep) {
-                res.push(EncryptionParameterDomainError::QNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::Q(e.to_string()),
                 ))
             }
             res
@@ -272,8 +298,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_g(ep) {
-                res.push(EncryptionParameterDomainError::GNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::G(e.to_string()),
                 ))
             }
             res

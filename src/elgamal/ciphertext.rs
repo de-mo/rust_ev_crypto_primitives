@@ -16,10 +16,28 @@
 
 //! Implementation of the ciphertext operations
 
+use super::{ElgamalError, ElgamalErrorRepr, EncryptionParameters};
+use crate::{
+    integer::ModExponentiateError, ConstantsTrait, HashableMessage, Integer, OperationsTrait,
+};
 use std::{iter::once, ops::ControlFlow};
+use thiserror::Error;
 
-use super::{ElgamalError, EncryptionParameters};
-use crate::{ConstantsTrait, HashableMessage, Integer, OperationsTrait};
+#[derive(Error, Debug)]
+pub(super) enum CiphertextError {
+    #[error("get_ciphertext: l must be between 1 and k={k}, but is {l}")]
+    LNotCorrect { l: usize, k: usize },
+    #[error("get_ciphertext: error calculating gamma")]
+    Gamma { source: ModExponentiateError },
+    #[error("get_ciphertext: error calculating the array phi")]
+    Phis { source: ModExponentiateError },
+    #[error("get_ciphertext_exponentiation: error calculating gamma")]
+    GammaExp { source: ModExponentiateError },
+    #[error("get_ciphertext_exponentiation: error calculating the array phi")]
+    PhisExp { source: ModExponentiateError },
+    #[error("get_ciphertext_vector_exponentiation: error during calculation")]
+    VecExp { source: Box<ElgamalError> },
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Ciphertext {
@@ -50,23 +68,34 @@ impl Ciphertext {
         r: &Integer,
         pks: &[Integer],
     ) -> Result<Self, ElgamalError> {
+        Self::get_ciphertext_impl(ep, ms, r, pks)
+            .map_err(ElgamalErrorRepr::Ciphertext)
+            .map_err(ElgamalError::from)
+    }
+
+    fn get_ciphertext_impl(
+        ep: &EncryptionParameters,
+        ms: &[Integer],
+        r: &Integer,
+        pks: &[Integer],
+    ) -> Result<Self, CiphertextError> {
         let l = ms.len();
         let k = pks.len();
         let p = ep.p();
         if l == 0 && l > k {
-            return Err(ElgamalError::LNotCorrect);
+            return Err(CiphertextError::LNotCorrect { l, k });
         }
         let gamma = ep
             .g()
             .mod_exponentiate(r, p)
-            .map_err(ElgamalError::ModExponentiateError)?;
+            .map_err(|e| CiphertextError::Gamma { source: e })?;
         let phis = ms
             .iter()
             .zip(pks.iter())
             .map(|(m, pk)| {
                 pk.mod_exponentiate(r, p)
                     .map(|v| v.mod_multiply(m, p))
-                    .map_err(ElgamalError::ModExponentiateError)
+                    .map_err(|e| CiphertextError::Phis { source: e })
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { gamma, phis })
@@ -78,17 +107,27 @@ impl Ciphertext {
         a: &Integer,
         ep: &EncryptionParameters,
     ) -> Result<Self, ElgamalError> {
+        self.get_ciphertext_exponentiation_impl(a, ep)
+            .map_err(ElgamalErrorRepr::Ciphertext)
+            .map_err(ElgamalError::from)
+    }
+
+    fn get_ciphertext_exponentiation_impl(
+        &self,
+        a: &Integer,
+        ep: &EncryptionParameters,
+    ) -> Result<Self, CiphertextError> {
         let p = ep.p();
         let gamma = self
             .gamma
             .mod_exponentiate(a, p)
-            .map_err(ElgamalError::ModExponentiateError)?;
+            .map_err(|e| CiphertextError::GammaExp { source: e })?;
         let phis = self
             .phis
             .iter()
             .map(|phi| {
                 phi.mod_exponentiate(a, p)
-                    .map_err(ElgamalError::ModExponentiateError)
+                    .map_err(|e| CiphertextError::PhisExp { source: e })
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { gamma, phis })
@@ -123,7 +162,11 @@ impl Ciphertext {
                 Err(e) => ControlFlow::Break(e),
             }) {
             ControlFlow::Continue(v) => Ok(v),
-            ControlFlow::Break(e) => Err(e),
+            ControlFlow::Break(e) => Err(ElgamalError::from(ElgamalErrorRepr::from(
+                CiphertextError::VecExp {
+                    source: Box::new(e),
+                },
+            ))),
         }
     }
 }

@@ -16,9 +16,27 @@
 
 //! Implementation of decryption algorithms
 
-use super::{Ciphertext, ElgamalError, EncryptionParameters};
-use crate::{zero_knowledge_proofs::verify_decryption, Integer};
+use super::{Ciphertext, ElgamalError, ElgamalErrorRepr, EncryptionParameters};
+use crate::{
+    zero_knowledge_proofs::{verify_decryption, DecryptionProofError},
+    Integer,
+};
 use std::fmt::Display;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub(super) enum DecryptionError {
+    #[error("The length of the ciphertext vectors upper_n and upper_cs must be the same")]
+    CipherTextVectorsLenNotSame,
+    #[error("The length of the decryption proofs must be the same than the ciphertext vectors")]
+    DecryptionProofLenNotSame,
+    #[error("No cihpertexts")]
+    NoCiphertext,
+    #[error("l not consistent over the ciphertext for {name}")]
+    LNotConsistentOverCiphertexts { name: &'static str },
+    #[error("Error verifying the decrpytion proofs")]
+    DecryptionProofError(#[from] DecryptionProofError),
+}
 
 #[derive(Debug, Clone, Copy)]
 struct VerifyDecryptionResultOneCiphertext {
@@ -39,25 +57,38 @@ pub fn verify_decryptions(
     pi_dec: &[(&Integer, &[Integer])],
     i_aux: &[String],
 ) -> Result<VerifyDecryptionsResult, ElgamalError> {
+    verify_decryptions_impl(ep, upper_cs, pks, upper_cs_prime, pi_dec, i_aux)
+        .map_err(ElgamalErrorRepr::from)
+        .map_err(ElgamalError::from)
+}
+
+fn verify_decryptions_impl(
+    ep: &EncryptionParameters,
+    upper_cs: &[Ciphertext],
+    pks: &[Integer],
+    upper_cs_prime: &[Ciphertext],
+    pi_dec: &[(&Integer, &[Integer])],
+    i_aux: &[String],
+) -> Result<VerifyDecryptionsResult, DecryptionError> {
     let upper_n = upper_cs.len();
     if upper_n == 0 {
-        return Err(ElgamalError::NoCiphertext);
+        return Err(DecryptionError::NoCiphertext);
     }
     if upper_n != upper_cs_prime.len() {
-        return Err(ElgamalError::CipherTextVectorsLenNotSame);
+        return Err(DecryptionError::CipherTextVectorsLenNotSame);
     }
     if upper_n != pi_dec.len() {
-        return Err(ElgamalError::DecryptionProofLenNotSame);
+        return Err(DecryptionError::DecryptionProofLenNotSame);
     }
     let l = upper_cs[0].l();
     if upper_cs.iter().any(|c| c.l() != l) {
-        return Err(ElgamalError::LNotConsistentOverCiphertexts);
+        return Err(DecryptionError::LNotConsistentOverCiphertexts { name: "C" });
     }
     if upper_cs_prime.iter().any(|c| c.l() != l) {
-        return Err(ElgamalError::LNotConsistentOverCiphertexts);
+        return Err(DecryptionError::LNotConsistentOverCiphertexts { name: "C'" });
     }
     if pi_dec.iter().any(|pi| pi.1.len() != l) {
-        return Err(ElgamalError::LNotConsistentOverCiphertexts);
+        return Err(DecryptionError::LNotConsistentOverCiphertexts { name: "pi_dec" });
     }
     Ok(VerifyDecryptionsResult::from(
         upper_cs
@@ -73,8 +104,8 @@ pub fn verify_decryptions(
                     verif_decryption,
                 })
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(ElgamalError::DecryptionError)?
+            .collect::<Result<Vec<_>, DecryptionProofError>>()
+            .map_err(DecryptionError::from)?
             .as_slice(),
     ))
 }

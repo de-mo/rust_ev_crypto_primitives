@@ -21,49 +21,30 @@ mod combined_public_keys;
 mod dercryption;
 mod encryption_parameters;
 
-use crate::{
-    basic_crypto_functions::BasisCryptoError, integer::ModExponentiateError,
-    zero_knowledge_proofs::DecryptionProofError, Integer, IntegerOperationError,
-};
 pub use ciphertext::Ciphertext;
+use ciphertext::CiphertextError;
 pub use combined_public_keys::combine_public_keys;
+use combined_public_keys::CombinePublicKeysError;
+use dercryption::DecryptionError;
 pub use dercryption::{verify_decryptions, VerifyDecryptionsResult};
+use encryption_parameters::EncryptionParameterError;
 pub use encryption_parameters::{EncryptionParameterDomainError, EncryptionParameters};
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Errors in Elgamal operations
+pub struct ElgamalError(#[from] ElgamalErrorRepr);
+
 // Enum reprsenting the elgamal errors
 #[derive(Error, Debug)]
-pub enum ElgamalError {
+enum ElgamalErrorRepr {
     #[error(transparent)]
-    OpenSSLError(#[from] BasisCryptoError),
-    #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
-    TooFewSmallPrimeNumbers { expected: usize, found: usize },
-    #[error("Number {name} with value {val} is not prime")]
-    NotPrime { name: &'static str, val: Integer },
-    #[error("The relation p=2q+1 is not satisfied")]
-    CheckRelationPQ,
-    #[error("The value should not be one")]
-    CheckNotOne,
-    #[error("l must be between 1 and k")]
-    LNotCorrect,
-    #[error("The length of the ciphertext vectors must be the same")]
-    CipherTextVectorsLenNotSame,
-    #[error("The length of the decryption proofs must be the same than the ciphertext vectors")]
-    DecryptionProofLenNotSame,
-    #[error("No cihpertexts")]
-    NoCiphertext,
-    #[error("l not consistent over the ciphertext")]
-    LNotConsistentOverCiphertexts,
-    #[error("l not consistent over the proofs")]
-    LNotConsistentForTheProofs,
+    EncryptionParameter(#[from] EncryptionParameterError),
     #[error(transparent)]
-    DecryptionError(#[from] DecryptionProofError),
-    #[error("Error in inputs of combined public keys {0}")]
-    CombinedPublicKeysInput(String),
-    #[error("Error processing combined public keys {0}")]
-    CombinedPublicKeysProcess(String),
+    Ciphertext(#[from] CiphertextError),
     #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
+    Decryption(#[from] DecryptionError),
     #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    CombinePublicKey(#[from] CombinePublicKeysError),
 }
