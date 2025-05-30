@@ -21,8 +21,11 @@ mod shuffle_argument;
 mod single_value_product_argument;
 mod zero_argument;
 
-use std::ops::ControlFlow;
-
+use super::commitments::CommitmentKey;
+use crate::{
+    elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, Integer,
+    OperationsTrait,
+};
 pub use hadamard_argument::{HadamardArgument, HadamardArgumentError};
 pub use multi_exponentiation_argument::{
     MultiExponentiationArgument, MultiExponentiationArgumentError,
@@ -35,15 +38,9 @@ pub use shuffle_argument::{
 pub use single_value_product_argument::{
     SingleValueProductArgument, SingleValueProductArgumentError,
 };
-pub use zero_argument::{ZeroArgument, ZeroArgumentError};
-
+use std::ops::ControlFlow;
 use thiserror::Error;
-
-use super::commitments::CommitmentKey;
-use crate::{
-    elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, Integer,
-    IntegerOperationError, OperationsTrait,
-};
+pub use zero_argument::{ZeroArgument, ZeroArgumentError};
 
 /// context for all arguments verification functions
 #[derive(Clone, Debug)]
@@ -57,13 +54,11 @@ pub struct ArgumentContext<'a> {
 pub enum StarMapError {
     #[error("vectors a and b have not the same size")]
     VectorNotSameLen,
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error calculating y^(j+1) mod p")]
+    Exp { source: ModExponentiateError },
 }
 
-pub fn star_map(
+fn star_map(
     q: &Integer,
     y: &Integer,
     a: &[Integer],
@@ -79,7 +74,7 @@ pub fn star_map(
         .map(|(j, (a_j, b_j))| {
             y.mod_exponentiate(&Integer::from(j + 1), q)
                 .map(|v| a_j.mod_multiply(b_j, q).mod_multiply(&v, q))
-                .map_err(StarMapError::ModExponentiateError)
+                .map_err(|e| StarMapError::Exp { source: e })
             //a_j.mod_multiply(b_j, q)
             //    .mod_multiply(&y.mod_exponentiate(&Integer::from(j + 1), q), q)
         })

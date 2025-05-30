@@ -24,10 +24,9 @@ use crate::{
     integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
-        MixNetResultTrait,
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
     },
-    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait,
+    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::ArgumentContext;
@@ -73,14 +72,16 @@ pub enum SingleValueProductArgumentError {
     ExponentVectorNotSameLen,
     #[error("Exponent vectors a_tilde and b_tilde to small")]
     TooSmallExponentVector,
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error calculating the product C_a")]
+    ProdCA { source: ModExponentiateError },
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("error calculation Commitment A")]
+    CommitmentA { source: CommitmentError },
+    #[error("Error calculating the product of Delta")]
+    ProdDelta { source: ModExponentiateError },
+    #[error("error calculation Commitment Delta")]
+    CommitmentDelta { source: CommitmentError },
 }
 
 impl<'a> SingleValueProductStatement<'a> {
@@ -93,10 +94,34 @@ impl<'a> SingleValueProductStatement<'a> {
 }
 
 impl<'a> SingleValueProductArgument<'a> {
-    /// New argument cloning the data
+    /// New argument
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        c_d: &'a Integer,
+        c_lower_delta: &'a Integer,
+        c_upper_delta: &'a Integer,
+        a_tilde: &'a [Integer],
+        b_tilde: &'a [Integer],
+        r_tilde: &'a Integer,
+        s_tilde: &'a Integer,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(
+            c_d,
+            c_lower_delta,
+            c_upper_delta,
+            a_tilde,
+            b_tilde,
+            r_tilde,
+            s_tilde,
+        )
+        .map_err(MixnetErrorRepr::from)
+        .map_err(|e| MixnetError {
+            source: Box::new(e),
+        })
+    }
+
+    fn new_impl(
         c_d: &'a Integer,
         c_lower_delta: &'a Integer,
         c_upper_delta: &'a Integer,
@@ -149,19 +174,22 @@ pub fn verify_single_value_product_argument(
     let q = context.ep.q();
     let n = argument.a_tilde.len();
 
-    let x = get_x(context, statement, argument)?;
+    let x = get_x(context, statement, argument)
+        .map_err(|e| SingleValueProductArgumentError::X { source: e })?;
 
     let prod_upper_c_a = statement
         .c_a
-        .mod_exponentiate(&x, p)?
+        .mod_exponentiate(&x, p)
+        .map_err(|e| SingleValueProductArgumentError::ProdCA { source: e })?
         .mod_multiply(argument.c_d, p);
     let comm_upper_a = get_commitment(context.ep, argument.a_tilde, argument.r_tilde, context.ck)
-        .map_err(SingleValueProductArgumentError::CommitmentError)?;
+        .map_err(|e| SingleValueProductArgumentError::CommitmentA { source: e })?;
     let verif_upper_a = prod_upper_c_a == comm_upper_a;
 
     let prod_delta = argument
         .c_upper_delta
-        .mod_exponentiate(&x, p)?
+        .mod_exponentiate(&x, p)
+        .map_err(|e| SingleValueProductArgumentError::ProdDelta { source: e })?
         .mod_multiply(argument.c_lower_delta, p);
     let e: Vec<Integer> = argument
         .a_tilde
@@ -179,11 +207,8 @@ pub fn verify_single_value_product_argument(
                 .mod_sub(&b_i.mod_multiply(a_i_plus_1, q), q)
         })
         .collect();
-    println!("e: {:?}", &e);
     let comm_delta = get_commitment(context.ep, &e, argument.s_tilde, context.ck)
-        .map_err(SingleValueProductArgumentError::CommitmentError)?;
-    println!("prod_delta: {}", prod_delta);
-    println!("comm_delta: {}", comm_delta);
+        .map_err(|e| SingleValueProductArgumentError::CommitmentDelta { source: e })?;
     let verif_delta = prod_delta == comm_delta;
 
     let verif_upper_b = argument.b_tilde[0] == argument.a_tilde[0]
@@ -200,7 +225,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &SingleValueProductStatement,
     argument: &SingleValueProductArgument,
-) -> Result<Integer, SingleValueProductArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -212,8 +237,7 @@ fn get_x(
         HashableMessage::from(statement.b),
         HashableMessage::from(statement.c_a),
     ])
-    .recursive_hash()
-    .map_err(SingleValueProductArgumentError::HashError)?
+    .recursive_hash()?
     .into_integer())
 }
 

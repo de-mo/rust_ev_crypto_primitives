@@ -14,14 +14,12 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
-use thiserror::Error;
-
+use super::matrix::{Matrix, MatrixError};
 use crate::{
     elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, HashError,
     HashableMessage, Integer, IntegerOperationError, OperationsTrait, RecursiveHashTrait,
 };
-
-use super::matrix::{Matrix, MatrixError};
+use thiserror::Error;
 
 /// Structure for the verifiable commitment key according specification of swiss post
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,22 +30,28 @@ pub struct CommitmentKey {
 
 #[derive(Error, Debug)]
 pub enum CommitmentError {
-    #[error("nu too big. Must less or equal q-3.")]
+    #[error("get_verifiable_commitment_key: nu too big. Must less or equal q-3.")]
     NuTooBig,
-    #[error(transparent)]
-    HashError(#[from] HashError),
-    #[error(transparent)]
-    MatrixError(#[from] MatrixError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
-    #[error("Matrix is mallformed in: {0}")]
-    MalformedMatrix(String),
-    #[error("Size {0} of random vector must be {1}")]
-    RandomSizeWrong(usize, usize),
+    #[error("get_verifiable_commitment_key: Error calculating u")]
+    U { source: HashError },
+    #[error("get_verifiable_commitment_key: Error calculating w")]
+    W { source: IntegerOperationError },
     #[error("Size of commitment key to small")]
     SmallCommitmentKey,
+    #[error("get_commitment: Error calculating product")]
+    CommitmentProd { source: IntegerOperationError },
+    #[error("get_commitment: Error calculating ck.h^r mod p")]
+    GetCommitmentHExpRModP { source: ModExponentiateError },
+    #[error("get_commitment_matrix: Matrix is mallformed in")]
+    MalformedMatrix,
+    #[error("get_commitment_matrix: Size {0} of random vector must be {1}")]
+    RandomSizeWrong(usize, usize),
+    #[error("get_commitment_matrix: error calculating the commitments")]
+    MatrixCommitment { source: Box<CommitmentError> },
+    #[error("get_commitment_vector: error with the matrix")]
+    VecMatrixError { source: MatrixError },
+    #[error("get_commitment_vector: error calculating the commitments")]
+    VecCommitment { source: Box<CommitmentError> },
 }
 
 impl CommitmentKey {
@@ -69,9 +73,11 @@ impl CommitmentKey {
                 HashableMessage::from(&count),
             ])
             .recursive_hash_to_zq(ep.q())
-            .map_err(CommitmentError::HashError)?
+            .map_err(|e| CommitmentError::U { source: e })?
                 + Integer::one();
-            let w = u.mod_square(ep.p())?;
+            let w = u
+                .mod_square(ep.p())
+                .map_err(|e| CommitmentError::W { source: e })?;
             if &w != Integer::one() && &w != ep.g() && !v.contains(&w) {
                 v.push(w);
                 count += 1;
@@ -113,11 +119,11 @@ pub fn get_commitment(
     if ck.gs.len() < a.len() {
         return Err(CommitmentError::SmallCommitmentKey);
     }
-    let prod = Integer::mod_multi_exponentiate(&ck.gs, a, ep.p())?;
-    println!("prod of get_commitment = {}", &prod);
+    let prod = Integer::mod_multi_exponentiate(&ck.gs, a, ep.p())
+        .map_err(|e| CommitmentError::CommitmentProd { source: e })?;
     let c =
         ck.h.mod_exponentiate(r, ep.p())
-            .map_err(CommitmentError::ModExponentiateError)?
+            .map_err(|e| CommitmentError::GetCommitmentHExpRModP { source: e })?
             .mod_multiply(&prod, ep.p());
     Ok(c)
 }
@@ -129,9 +135,7 @@ pub fn get_commitment_matrix(
     ck: &CommitmentKey,
 ) -> Result<Vec<Integer>, CommitmentError> {
     if a.is_malformed() {
-        return Err(CommitmentError::MalformedMatrix(
-            "get_commitment_matrix".to_string(),
-        ));
+        return Err(CommitmentError::MalformedMatrix);
     }
     if a.nb_columns() != rs.len() {
         return Err(CommitmentError::RandomSizeWrong(rs.len(), a.nb_columns()));
@@ -140,6 +144,9 @@ pub fn get_commitment_matrix(
         .zip(rs.iter())
         .map(|(a_i, r_i)| get_commitment(ep, &a_i, r_i, ck))
         .collect::<Result<Vec<Integer>, CommitmentError>>()
+        .map_err(|e| CommitmentError::MatrixCommitment {
+            source: Box::new(e),
+        })
 }
 
 #[allow(dead_code)]
@@ -149,8 +156,11 @@ pub fn get_commitment_vector(
     ts: &[Integer],
     ck: &CommitmentKey,
 ) -> Result<Vec<Integer>, CommitmentError> {
-    let a = Matrix::to_matrix(ds, (1, ds.len())).map_err(CommitmentError::MatrixError)?;
-    get_commitment_matrix(ep, &a, ts, ck)
+    let a = Matrix::to_matrix(ds, (1, ds.len()))
+        .map_err(|e| CommitmentError::VecMatrixError { source: e })?;
+    get_commitment_matrix(ep, &a, ts, ck).map_err(|e| CommitmentError::VecCommitment {
+        source: Box::new(e),
+    })
 }
 
 #[cfg(test)]

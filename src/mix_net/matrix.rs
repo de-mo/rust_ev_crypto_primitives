@@ -190,16 +190,6 @@ impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
     }
 }
 
-/*
-impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
-    type Item = T;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}*/
-
 struct ColIter<'a, T>
 where
     T: Clone + Default + std::fmt::Debug,

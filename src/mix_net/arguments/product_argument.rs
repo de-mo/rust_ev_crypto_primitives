@@ -31,8 +31,8 @@ use super::{
     ArgumentContext,
 };
 use crate::{
-    mix_net::{commitments::CommitmentError, MixNetResultTrait},
-    HashError, Integer,
+    mix_net::{MixNetResultTrait, MixnetError, MixnetErrorRepr},
+    Integer,
 };
 
 /// Statement in input of the verify algorithm
@@ -77,19 +77,24 @@ pub enum ProductArgumentError {
     MNotPositive,
     #[error("n must be between 2 and nu")]
     NNotCorrect,
-    //#[error("Exponent vectors a' and b' have not the same size")]
-    //ExponentVectorNotSameLen,
-    //#[error(
-    //    "Commitment vector c_d has not the size 2*m + 1 where m={0}"
-    //)] CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("SingleValueProductArgumentError: {0}")]
-    SingleValueProductArgument(#[from] SingleValueProductArgumentError),
-    #[error("HadamardArgumentError: {0}")]
-    HadamardArgumentError(#[from] HadamardArgumentError),
+    #[error("Error creating Hadamard statement")]
+    HadamardStatement { source: HadamardArgumentError },
+    #[error("Error creating inputs for Hadamard arguemnt")]
+    HadamardArgumentInput { source: HadamardArgumentError },
+    #[error("Error verifying Hadamard arguemnt")]
+    HadamardArgumentVerification { source: HadamardArgumentError },
+    #[error("Error creating single value statement")]
+    SVPStatement {
+        source: SingleValueProductArgumentError,
+    },
+    #[error("Error creating inputs for single value arguemnt")]
+    SVPArgumentInput {
+        source: SingleValueProductArgumentError,
+    },
+    #[error("Error verifying single value arguemnt")]
+    SVPArgumentVerification {
+        source: SingleValueProductArgumentError,
+    },
 }
 
 pub fn verify_product_argument(
@@ -102,9 +107,9 @@ pub fn verify_product_argument(
     if statement.m() > 1 {
         let c_b = &argument.c_b.as_ref().unwrap();
         let h_statement = HadamardStatement::new(statement.cs_upper_a, c_b)
-            .map_err(ProductArgumentError::HadamardArgumentError)?;
+            .map_err(|e| ProductArgumentError::HadamardStatement { source: e })?;
         let s_statement = SingleValueProductStatement::new(c_b, statement.b)
-            .map_err(ProductArgumentError::SingleValueProductArgument)?;
+            .map_err(|e| ProductArgumentError::SVPStatement { source: e })?;
         Ok(ProductArgumentResult {
             hadamard_arg: Some(
                 verify_hadamard_argument(
@@ -113,9 +118,9 @@ pub fn verify_product_argument(
                         &h_statement,
                         argument.hadamard_arg.as_ref().unwrap(),
                     )
-                    .map_err(ProductArgumentError::HadamardArgumentError)?,
+                    .map_err(|e| ProductArgumentError::HadamardArgumentInput { source: e })?,
                 )
-                .map_err(ProductArgumentError::HadamardArgumentError)?,
+                .map_err(|e| ProductArgumentError::HadamardArgumentVerification { source: e })?,
             ),
             single_value_product_arg: verify_single_value_product_argument(
                 context,
@@ -123,13 +128,13 @@ pub fn verify_product_argument(
                     &s_statement,
                     &argument.single_value_product_arg,
                 )
-                .map_err(ProductArgumentError::SingleValueProductArgument)?,
+                .map_err(|e| ProductArgumentError::SVPArgumentInput { source: e })?,
             )
-            .map_err(ProductArgumentError::SingleValueProductArgument)?,
+            .map_err(|e| ProductArgumentError::SVPArgumentVerification { source: e })?,
         })
     } else {
         let s_statement = SingleValueProductStatement::new(&statement.cs_upper_a[0], statement.b)
-            .map_err(ProductArgumentError::SingleValueProductArgument)?;
+            .map_err(|e| ProductArgumentError::SVPStatement { source: e })?;
         Ok(ProductArgumentResult {
             hadamard_arg: None,
             single_value_product_arg: verify_single_value_product_argument(
@@ -138,9 +143,9 @@ pub fn verify_product_argument(
                     &s_statement,
                     &argument.single_value_product_arg,
                 )
-                .map_err(ProductArgumentError::SingleValueProductArgument)?,
+                .map_err(|e| ProductArgumentError::SVPArgumentInput { source: e })?,
             )
-            .map_err(ProductArgumentError::SingleValueProductArgument)?,
+            .map_err(|e| ProductArgumentError::SVPArgumentVerification { source: e })?,
         })
     }
 }
@@ -189,6 +194,18 @@ impl<'a> ProductArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        c_b: Option<&'a Integer>,
+        hadamard_arg: Option<HadamardArgument<'a>>,
+        single_value_product_arg: SingleValueProductArgument<'a>,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(c_b, hadamard_arg, single_value_product_arg)
+            .map_err(MixnetErrorRepr::from)
+            .map_err(|e| MixnetError {
+                source: Box::new(e),
+            })
+    }
+
+    fn new_impl(
         c_b: Option<&'a Integer>,
         hadamard_arg: Option<HadamardArgument<'a>>,
         single_value_product_arg: SingleValueProductArgument<'a>,

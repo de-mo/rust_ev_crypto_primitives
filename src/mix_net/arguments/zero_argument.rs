@@ -25,7 +25,7 @@ use crate::{
     integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
-        MixNetResultTrait,
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
     },
     ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
@@ -75,18 +75,24 @@ pub enum ZeroArgumentError {
     CommitmentVectorNotSameLen,
     #[error("Exponent vectors a' and b' have not the same size")]
     ExponentVectorNotSameLen,
-    #[error("Commitment vector c_d has not the size 2*m + 1 where m={0}")]
-    CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("StarMapError: {0}")]
-    StarMapError(#[from] StarMapError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("Error calculating the pwoers of x")]
+    XPowers { source: ModExponentiateError },
+    #[error("Error calculating the product of c_A")]
+    ProdCA { source: IntegerOperationError },
+    #[error("error calculation Commitment A")]
+    CommitmentA { source: CommitmentError },
+    #[error("Error calculating the product of c_B")]
+    ProdCB { source: IntegerOperationError },
+    #[error("error calculation Commitment B")]
+    CommitmentB { source: CommitmentError },
+    #[error("error calculation Commitment D")]
+    CommitmentD { source: CommitmentError },
+    #[error("Error calculating the product of c_D")]
+    ProdCD { source: IntegerOperationError },
+    #[error("error starmap for the calculation of the production of commitment c_D")]
+    StarmapCD { source: StarMapError },
 }
 
 /// Algorithm 9.23
@@ -100,37 +106,37 @@ pub fn verify_zero_argument(
     let q = context.ep.q();
     let m = statement.m();
 
-    let x = get_x(context, statement, argument)?;
+    let x = get_x(context, statement, argument).map_err(|e| ZeroArgumentError::X { source: e })?;
     let x_powers: Vec<Integer> = (0..2 * m + 1)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(ZeroArgumentError::ModExponentiateError)?;
+        .map_err(|e| ZeroArgumentError::XPowers { source: e })?;
 
     let verif_upper_c_d = &argument.cs_d[m + 1] == Integer::one();
 
     let mut prod_c_a_bases_iter = once(argument.c_upper_a_0).chain(statement.cs_upper_a.iter());
     let prod_c_a =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_a_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerOperationError)?;
+            .map_err(|e| ZeroArgumentError::ProdCA { source: e })?;
     let comm_a = get_commitment(context.ep, argument.as_prime, argument.r_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentA { source: e })?;
     let verif_upper_a = prod_c_a == comm_a;
 
     let mut prod_c_b_bases_iter =
         once(argument.c_upper_b_m).chain(statement.cs_upper_b.iter().rev());
     let prod_c_b =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_b_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerOperationError)?;
+            .map_err(|e| ZeroArgumentError::ProdCB { source: e })?;
     let comm_b = get_commitment(context.ep, argument.bs_prime, argument.s_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentB { source: e })?;
     let verif_upper_b = prod_c_b == comm_b;
 
     let prod_c_d = Integer::mod_multi_exponentiate(argument.cs_d, &x_powers, p)
-        .map_err(ZeroArgumentError::IntegerOperationError)?;
+        .map_err(|e| ZeroArgumentError::ProdCD { source: e })?;
     let prod = star_map(q, statement.y, argument.as_prime, argument.bs_prime)
-        .map_err(ZeroArgumentError::StarMapError)?;
+        .map_err(|e| ZeroArgumentError::StarmapCD { source: e })?;
     let comm_d = get_commitment(context.ep, &[prod], argument.t_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentD { source: e })?;
     let verif_upper_d = prod_c_d == comm_d;
 
     Ok(ZeroArgumentResult {
@@ -145,7 +151,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &ZeroStatement,
     argument: &ZeroArgument,
-) -> Result<Integer, ZeroArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -157,8 +163,7 @@ fn get_x(
         HashableMessage::from(statement.cs_upper_b),
         HashableMessage::from(statement.cs_upper_a),
     ])
-    .recursive_hash()
-    .map_err(ZeroArgumentError::HashError)?
+    .recursive_hash()?
     .into_integer())
 }
 
@@ -207,7 +212,7 @@ impl<'a> ZeroStatement<'a> {
 
 #[allow(clippy::too_many_arguments)]
 impl<'a> ZeroArgument<'a> {
-    /// New statement cloning the data
+    /// New Zero Argument
     ///
     /// Return error if the domain is wrong
     pub fn new(
@@ -219,9 +224,13 @@ impl<'a> ZeroArgument<'a> {
         r_prime: &'a Integer,
         s_prime: &'a Integer,
         t_prime: &'a Integer,
-    ) -> Result<Self, ZeroArgumentError> {
+    ) -> Result<Self, MixnetError> {
         if as_prime.len() != bs_prime.len() {
-            return Err(ZeroArgumentError::ExponentVectorNotSameLen);
+            return Err(MixnetError {
+                source: Box::new(MixnetErrorRepr::from(
+                    ZeroArgumentError::ExponentVectorNotSameLen,
+                )),
+            });
         }
         Ok(Self {
             c_upper_a_0,

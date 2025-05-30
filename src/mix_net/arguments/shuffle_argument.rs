@@ -14,25 +14,6 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
-use std::fmt::Display;
-
-use thiserror::Error;
-
-use crate::{
-    elgamal::{Ciphertext, ElgamalError},
-    integer::ModExponentiateError,
-    mix_net::{
-        arguments::product_argument::{
-            verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
-        },
-        commitments::{get_commitment_matrix, CommitmentError},
-        matrix::{Matrix, MatrixError},
-        MixNetResultTrait,
-    },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait,
-};
-
 use super::{
     multi_exponentiation_argument::{
         verify_multi_exponentiation_argument, MultiExponentiationArgument,
@@ -42,6 +23,21 @@ use super::{
     product_argument::{ProductArgument, ProductArgumentError, ProductArgumentResult},
     ArgumentContext,
 };
+use crate::{
+    elgamal::{Ciphertext, ElgamalError},
+    integer::ModExponentiateError,
+    mix_net::{
+        arguments::product_argument::{
+            verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
+        },
+        commitments::{get_commitment_matrix, CommitmentError},
+        matrix::{Matrix, MatrixError},
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
+    },
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
+};
+use std::fmt::Display;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub struct ShuffleStatement<'a> {
@@ -87,22 +83,44 @@ pub enum ShuffleArgumentError {
     NNotProductOfNAndM,
     #[error("l must be bigger than 0 and less or equal k")]
     LNotInRange,
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("MatrixError: {0}")]
-    MatrixError(#[from] MatrixError),
-    #[error("ProductArgumentError: {0}")]
-    ProductArgumentError(#[from] ProductArgumentError),
-    #[error("MultiExponentiationArgumentError: {0}")]
-    MultiExponentiationArgumentError(#[from] MultiExponentiationArgumentError),
-    #[error("ElgamalError: {0}")]
-    ElgamalError(#[from] ElgamalError),
-    #[error(transparent)]
-    IntegerOperationError(#[from] IntegerOperationError),
-    #[error(transparent)]
-    ModExponentiateError(#[from] ModExponentiateError),
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("Error for y")]
+    Y { source: HashError },
+    #[error("Error for z")]
+    Z { source: HashError },
+    #[error("Error creating matrix upper_z_neg")]
+    UZNeg { source: MatrixError },
+    #[error("Error transposing matrix upper_z_neg")]
+    UZNegTranspose { source: MatrixError },
+    #[error("Error calculating c_(-z)")]
+    CSMinusZ { source: CommitmentError },
+    #[error("Error calculating c_D")]
+    CUppderD { source: ModExponentiateError },
+    #[error("Error calculating vector x")]
+    XS { source: ModExponentiateError },
+    #[error("Error calculating ciphertext C")]
+    UpperC { source: ElgamalError },
+    #[error("Error calculating matrix of ciphertexts")]
+    MatrixC { source: MatrixError },
+    #[error("Error calculating product statement")]
+    ProdStatement { source: ProductArgumentError },
+    #[error("Error calculating input for product argument verification")]
+    ProdArgInput { source: ProductArgumentError },
+    #[error("Error verifiying product argument")]
+    ProdVerification { source: ProductArgumentError },
+    #[error("Error calculating multi exponentational statement")]
+    MultExpStatement {
+        source: MultiExponentiationArgumentError,
+    },
+    #[error("Error calculating input for multi exponentational argument verification")]
+    MultExpArgInput {
+        source: MultiExponentiationArgumentError,
+    },
+    #[error("Error verifiying multi exponentational argument")]
+    MultExpVerification {
+        source: MultiExponentiationArgumentError,
+    },
 }
 
 pub fn verify_shuffle_argument(
@@ -117,14 +135,17 @@ pub fn verify_shuffle_argument(
     let p = context.ep.p();
     let q = context.ep.q();
 
-    let x = get_x(context, statement, argument)?;
-    let y = get_y(context, statement, argument)?;
-    let z = get_z(context, statement, argument)?;
+    let x =
+        get_x(context, statement, argument).map_err(|e| ShuffleArgumentError::X { source: e })?;
+    let y =
+        get_y(context, statement, argument).map_err(|e| ShuffleArgumentError::Y { source: e })?;
+    let z =
+        get_z(context, statement, argument).map_err(|e| ShuffleArgumentError::Z { source: e })?;
 
     let upper_z_neg = Matrix::to_matrix(&vec![z.mod_negate(q); upper_n], (m, n))
-        .map_err(ShuffleArgumentError::MatrixError)?
+        .map_err(|e| ShuffleArgumentError::UZNeg { source: e })?
         .transpose()
-        .map_err(ShuffleArgumentError::MatrixError)?;
+        .map_err(|e| ShuffleArgumentError::UZNegTranspose { source: e })?;
 
     let cs_minus_z = get_commitment_matrix(
         context.ep,
@@ -132,7 +153,7 @@ pub fn verify_shuffle_argument(
         &vec![Integer::zero().clone(); m],
         context.ck,
     )
-    .map_err(ShuffleArgumentError::CommitmentError)?;
+    .map_err(|e| ShuffleArgumentError::CSMinusZ { source: e })?;
 
     let cs_upper_d = argument
         .cs_upper_a
@@ -144,7 +165,7 @@ pub fn verify_shuffle_argument(
                 .map(|v| v.mod_multiply(c_b_i, p))
         })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(ShuffleArgumentError::ModExponentiateError)?;
+        .map_err(|e| ShuffleArgumentError::CUppderD { source: e })?;
     /*argument
     .cs_upper_a
     .iter()
@@ -155,7 +176,7 @@ pub fn verify_shuffle_argument(
     let xs = (0..upper_n)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(MultiExponentiationArgumentError::ModExponentiateError)?;
+        .map_err(|e| ShuffleArgumentError::XS { source: e })?;
 
     let b = xs
         .iter()
@@ -175,31 +196,31 @@ pub fn verify_shuffle_argument(
         .map(|(c_d_i, c_z_i)| c_d_i.mod_multiply(c_z_i, p))
         .collect::<Vec<_>>();
     let p_statement = ProductStatement::new(p_statement_value.as_slice(), &b)
-        .map_err(ShuffleArgumentError::ProductArgumentError)?;
+        .map_err(|e| ShuffleArgumentError::ProdStatement { source: e })?;
     let product_verif = verify_product_argument(
         context,
         &ProductArgumentVerifyInput::new(context, &p_statement, &argument.product_argument)
-            .map_err(ShuffleArgumentError::ProductArgumentError)?,
+            .map_err(|e| ShuffleArgumentError::ProdArgInput { source: e })?,
     )
-    .map_err(ShuffleArgumentError::ProductArgumentError)?;
+    .map_err(|e| ShuffleArgumentError::ProdVerification { source: e })?;
 
     let upper_c =
         Ciphertext::get_ciphertext_vector_exponentiation(statement.upper_cs, &xs, context.ep)
-            .map_err(ShuffleArgumentError::ElgamalError)?;
+            .map_err(|e| ShuffleArgumentError::UpperC { source: e })?;
     let cipher_matrix = Matrix::to_matrix(statement.upper_c_primes, (m, n))
-        .map_err(ShuffleArgumentError::MatrixError)?;
+        .map_err(|e| ShuffleArgumentError::MatrixC { source: e })?;
     let m_statement =
         MultiExponentiationStatement::new(&cipher_matrix, &upper_c, argument.cs_upper_b)
-            .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
+            .map_err(|e| ShuffleArgumentError::MultExpStatement { source: e })?;
     let multi_verif = verify_multi_exponentiation_argument(
         context,
         &MultiExponentiationArgumentVerifyInput::new(
             &m_statement,
             &argument.multi_exponentiation_argument,
         )
-        .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?,
+        .map_err(|e| ShuffleArgumentError::MultExpArgInput { source: e })?,
     )
-    .map_err(ShuffleArgumentError::MultiExponentiationArgumentError)?;
+    .map_err(|e| ShuffleArgumentError::MultExpVerification { source: e })?;
 
     Ok(VerifyShuffleArgumentResult {
         product_verif,
@@ -211,11 +232,10 @@ pub fn get_x(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<Integer, ShuffleArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
-            .recursive_hash()
-            .map_err(ShuffleArgumentError::HashError)?
+            .recursive_hash()?
             .into_integer(),
     )
 }
@@ -224,11 +244,10 @@ pub fn get_y(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<Integer, ShuffleArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_y(context, statement, argument))
-            .recursive_hash()
-            .map_err(ShuffleArgumentError::HashError)?
+            .recursive_hash()?
             .into_integer(),
     )
 }
@@ -237,11 +256,10 @@ pub fn get_z(
     context: &ArgumentContext,
     statement: &ShuffleStatement,
     argument: &ShuffleArgument,
-) -> Result<Integer, ShuffleArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_z(context, statement, argument))
-            .recursive_hash()
-            .map_err(ShuffleArgumentError::HashError)?
+            .recursive_hash()?
             .into_integer(),
     )
 }
@@ -349,6 +367,24 @@ impl<'a> ShuffleArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        cs_upper_a: &'a [Integer],
+        cs_upper_b: &'a [Integer],
+        product_argument: ProductArgument<'a>,
+        multi_exponentiation_argument: MultiExponentiationArgument<'a>,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(
+            cs_upper_a,
+            cs_upper_b,
+            product_argument,
+            multi_exponentiation_argument,
+        )
+        .map_err(MixnetErrorRepr::from)
+        .map_err(|e| MixnetError {
+            source: Box::new(e),
+        })
+    }
+
+    fn new_impl(
         cs_upper_a: &'a [Integer],
         cs_upper_b: &'a [Integer],
         product_argument: ProductArgument<'a>,

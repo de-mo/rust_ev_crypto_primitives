@@ -16,21 +16,47 @@
 
 //! Module implementing the algorithm for the the mixnet
 
-pub mod arguments;
+mod arguments;
 mod commitments;
 mod matrix;
 mod shuffle;
 
-pub use shuffle::{ verify_shuffle, VerifyShuffleResult, ShuffleError };
 pub use arguments::{
-    ShuffleArgument,
-    HadamardArgument,
-    MultiExponentiationArgument,
-    SingleValueProductArgument,
-    ZeroArgument,
-    ProductArgument,
+    HadamardArgument, MultiExponentiationArgument, ProductArgument, ShuffleArgument,
+    SingleValueProductArgument, ZeroArgument,
 };
+use arguments::{
+    HadamardArgumentError, MultiExponentiationArgumentError, ProductArgumentError,
+    ShuffleArgumentError, SingleValueProductArgumentError, ZeroArgumentError,
+};
+use shuffle::ShuffleError;
+pub use shuffle::{verify_shuffle, VerifyShuffleResult};
+pub use thiserror::Error;
 
 pub trait MixNetResultTrait: std::fmt::Display {
     fn is_ok(&self) -> bool;
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct MixnetError {
+    source: Box<MixnetErrorRepr>,
+}
+
+#[derive(Error, Debug)]
+enum MixnetErrorRepr {
+    #[error("verify_shuffle error")]
+    Shuffle(#[from] ShuffleError),
+    #[error("Hadamard argument error")]
+    HadamardArgument(#[from] HadamardArgumentError),
+    #[error("Multiexponentiation argument error")]
+    MultiExponentiationArgument(#[from] MultiExponentiationArgumentError),
+    #[error("Product argument error")]
+    ProductArgument(#[from] ProductArgumentError),
+    #[error("Shuffle argument error")]
+    ShuffleArgument(#[from] ShuffleArgumentError),
+    #[error("Single value product argument error")]
+    SingleValueProductArgument(#[from] SingleValueProductArgumentError),
+    #[error("Zero argument error")]
+    ZeroArgument(#[from] ZeroArgumentError),
 }
