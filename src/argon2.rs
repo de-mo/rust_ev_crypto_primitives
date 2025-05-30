@@ -20,6 +20,7 @@ use crate::{
     basic_crypto_functions::{argon2_hash_password, random_bytes, BasisCryptoError},
     ByteArray,
 };
+use thiserror::Error;
 
 const STANDARD_MEMORY_EXPONENT: u32 = 21;
 const STANDARD_PARALLELISM: u32 = 4;
@@ -31,6 +32,20 @@ const TEST_MEMORY_EXPONENT: u32 = 14;
 const TEST_PARALLELISM: u32 = 4;
 const TEST_ITERATIONS: u32 = 1;
 const OUTPUT_SIZE: usize = 32;
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct Argon2Error(#[from] Argon2ErrorRepr);
+
+#[derive(Error, Debug)]
+pub enum Argon2ErrorRepr {
+    #[error("Error in gen_argon2id generating the salt")]
+    Salt { source: BasisCryptoError },
+    #[error("Error in gen_argon2id getting argon2i")]
+    GetArgon2i { source: Box<Argon2Error> },
+    #[error("Error in get_argon2id hashing the password")]
+    HashPwd { source: BasisCryptoError },
+}
 
 /// Object containing the parameters and the methods creating the key derivation functions
 /// with argon2id
@@ -86,9 +101,18 @@ impl Argon2id {
     pub fn gen_argon2id(
         &self,
         input_keying_material: &ByteArray,
-    ) -> Result<(ByteArray, ByteArray), BasisCryptoError> {
-        let s = random_bytes(16)?;
-        Ok((self.get_argon2id(input_keying_material, &s)?, s))
+    ) -> Result<(ByteArray, ByteArray), Argon2Error> {
+        let salt = random_bytes(16)
+            .map_err(|e| Argon2ErrorRepr::Salt { source: e })
+            .map_err(Argon2Error::from)?;
+        Ok((
+            self.get_argon2id(input_keying_material, &salt)
+                .map_err(|e| Argon2ErrorRepr::GetArgon2i {
+                    source: Box::new(e),
+                })
+                .map_err(Argon2Error::from)?,
+            salt,
+        ))
     }
 
     /// GetArgon2id according the specifications of Swiss Post
@@ -96,7 +120,7 @@ impl Argon2id {
         &self,
         input_keying_material: &ByteArray,
         salt: &ByteArray,
-    ) -> Result<ByteArray, BasisCryptoError> {
+    ) -> Result<ByteArray, Argon2Error> {
         argon2_hash_password(
             self.memory_usage_parameter,
             self.parallelism_parameter,
@@ -105,6 +129,8 @@ impl Argon2id {
             input_keying_material,
             salt,
         )
+        .map_err(|e| Argon2ErrorRepr::HashPwd { source: e })
+        .map_err(Argon2Error::from)
     }
 }
 
