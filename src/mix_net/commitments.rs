@@ -236,7 +236,7 @@ mod test {
             let expected = get_expected(&tc["output"]);
             let r = CommitmentKey::get_verifiable_commitment_key(&ep, k);
             assert!(r.is_ok(), "{}", description);
-            assert_eq!(r.unwrap(), expected, "{}", description);
+            assert_eq!(r.unwrap(), expected, "{description}");
         }
     }
 }

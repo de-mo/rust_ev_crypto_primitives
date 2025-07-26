@@ -170,8 +170,8 @@ impl Display for ProductArgumentResult {
             self.single_value_product_arg
         );
         match &self.hadamard_arg {
-            Some(r) => write!(f, "{}, Hadamard Argument: {{ {} }}", svp_str, r),
-            None => write!(f, "{}", svp_str),
+            Some(r) => write!(f, "{svp_str}, Hadamard Argument: {{ {r} }}"),
+            None => write!(f, "{svp_str}"),
         }
     }
 }

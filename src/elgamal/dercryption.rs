@@ -149,7 +149,7 @@ impl Display for VerifyDecryptionsResult {
                     let res_str = self
                         .errors
                         .iter()
-                        .map(|(i, err)| format!("{}: {{{}}}", i, err))
+                        .map(|(i, err)| format!("{i}: {{{err}}}"))
                         .collect::<Vec<_>>();
                     res_str.join(" / ")
                 }
