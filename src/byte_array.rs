@@ -191,7 +191,7 @@ impl ByteArray {
     /// # Error
     /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
     pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, ByteArrayError> {
-        if n < 1 || n > 8 * self.len() {
+        if n > 8 * self.len() {
             return Err(ByteArrayError::from(ByteArrayErrorRepr::from(
                 CutToBitLengthIndexError {
                     index: n,
@@ -199,28 +199,18 @@ impl ByteArray {
                 },
             )));
         }
-        let bs = self.to_bytes();
-        //println!("bs: {:?}", bs);
+        let upper_b = self.to_bytes();
+        let upper_n = self.len();
         let length = n.div_ceil(8);
-        //println!("length: {:?}", length);
-        let offset = self.len() - length;
-        //println!("offset: {:?}", length);
-        let mut arr: Vec<u8> = vec![];
+        let offset = upper_n - length;
+        let mut upper_b_prime: Vec<u8> = vec![];
+        for i in 0..length {
+            upper_b_prime.push(upper_b[offset + i]);
+        }
         if n % 8 != 0 {
-            //println!("n % 8: {:?}", (n % 8));
-            //println!("2^(n % 8): {:?}", Pow::pow(2u8, n % 8));
-            //println!("2^(n % 8)-1: {:?}", Pow::pow(2u8, n % 8) - 1);
-            //println!("mask: {:?}", (Pow::pow(2u8, n % 8) - 1));
-            arr.push(bs[offset] & (Pow::pow(2u8, n % 8) - 1));
-        } else {
-            arr.push(bs[offset]);
+            upper_b_prime[0] = upper_b[offset] & (Pow::pow(2u8, n % 8) - 1);
         }
-        for i in 1..length {
-            //println!("i: {:?}", i);
-            //println!("bs[offset+i]: {:?}", bs[offset + i]);
-            arr.push(bs[offset + i]);
-        }
-        Ok(ByteArray::from(&arr))
+        Ok(ByteArray::from(&upper_b_prime))
     }
 }
 
@@ -523,7 +513,10 @@ mod test {
                 .unwrap(),
             ByteArray::base64_decode("Ac0=").unwrap()
         );
-        assert!(ByteArray::from_bytes(b"10011").cut_bit_length(0).is_err());
+        assert_eq!(
+            ByteArray::from_bytes(b"10011").cut_bit_length(0).unwrap(),
+            ByteArray::from_bytes(&[0])
+        );
         assert!(ByteArray::from_bytes(b"\x11").cut_bit_length(9).is_err());
     }
 
