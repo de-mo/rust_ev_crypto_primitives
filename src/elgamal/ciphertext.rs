@@ -266,7 +266,8 @@ mod test {
     use super::*;
     use crate::{
         test_json_data::{
-            ep_from_json_value, json_64_value_to_integer, json_array_64_value_to_array_integer,
+            ep_from_json_value, get_ciphertext_values, json_64_value_to_integer,
+            json_array_64_value_to_array_integer, CiphertextValues,
         },
         Hexa,
     };
@@ -280,18 +281,6 @@ mod test {
     struct InputsGetCiphertextProduct {
         upper_c_a: CiphertextValues,
         upper_c_b: CiphertextValues,
-    }
-
-    struct CiphertextValues {
-        gamma: Integer,
-        phis: Vec<Integer>,
-    }
-
-    fn get_ciphertext_values(values: &Value) -> CiphertextValues {
-        CiphertextValues {
-            gamma: json_64_value_to_integer(&values["gamma"]),
-            phis: json_array_64_value_to_array_integer(&values["phis"]),
-        }
     }
 
     fn get_input_get_ciphertext(input: &Value) -> InputsGetCiphertext {

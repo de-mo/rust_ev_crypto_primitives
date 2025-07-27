@@ -199,4 +199,16 @@ mod test_json_data {
             json_64_value_to_integer(&values["g"]),
         )
     }
+
+    pub struct CiphertextValues {
+        pub gamma: Integer,
+        pub phis: Vec<Integer>,
+    }
+
+    pub fn get_ciphertext_values(values: &Value) -> CiphertextValues {
+        CiphertextValues {
+            gamma: json_64_value_to_integer(&values["gamma"]),
+            phis: json_array_64_value_to_array_integer(&values["phis"]),
+        }
+    }
 }
