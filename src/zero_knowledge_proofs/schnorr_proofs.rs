@@ -120,28 +120,16 @@ fn verify_schnorr_impl(
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
-    use serde_json::Value;
-
+    use super::*;
     use crate::{
         test_json_data::{
-            ep_from_json_value, json_64_value_to_integer, json_array_value_to_array_string,
+            get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_value_to_array_string, json_value_to_encryption_parameters,
         },
         zero_knowledge_proofs::test::{proof_from_json_values, Proof},
         Hexa,
     };
-
-    use super::*;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("zeroknowledgeproofs")
-            .join("verify-schnorr.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
+    use serde_json::Value;
 
     struct Input {
         proof: Proof,
@@ -192,8 +180,8 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases() {
-            let ep = ep_from_json_value(&tc["context"]);
+        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-schnorr.json") {
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
             assert!(
                 verify_schnorr(

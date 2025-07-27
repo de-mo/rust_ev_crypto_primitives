@@ -177,22 +177,12 @@ mod test {
     use super::*;
     use crate::{
         test_json_data::{
-            ep_from_json_value, json_array_64_value_to_array_integer,
+            json_value_to_encryption_parameters, get_test_cases_from_json_file, json_array_64_value_to_array_integer,
             json_array_value_to_array_string,
         },
         zero_knowledge_proofs::test::{proof_from_json_values, Proof},
     };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("zeroknowledgeproofs")
-            .join("verify-exponentiation.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     struct Input {
         bases: Vec<Integer>,
@@ -214,8 +204,8 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases() {
-            let ep = ep_from_json_value(&tc["context"]);
+        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-exponentiation.json") {
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
             let res = verify_exponentiation(
                 &ep,

@@ -158,22 +158,13 @@ mod test {
     use super::*;
     use crate::{
         test_json_data::{
-            ep_from_json_value, get_ciphertext_values, json_64_value_to_integer,
-            json_array_value_to_array_string, CiphertextValues,
+            get_test_cases_from_json_file, json_64_value_to_integer, json_array_value_to_array_string,
+            json_value_to_encryption_parameters, json_values_to_ciphertext_values,
+            CiphertextValues,
         },
         zero_knowledge_proofs::test::{proof_vec_from_json_values, ProofVec},
     };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("zeroknowledgeproofs")
-            .join("verify-plaintext-equality.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     struct Input {
         upper_c: CiphertextValues,
@@ -186,8 +177,8 @@ mod test {
 
     fn get_input(input: &Value) -> Input {
         Input {
-            upper_c: get_ciphertext_values(&input["upper_c"]),
-            upper_c_prime: get_ciphertext_values(&input["upper_c_prime"]),
+            upper_c: json_values_to_ciphertext_values(&input["upper_c"]),
+            upper_c_prime: json_values_to_ciphertext_values(&input["upper_c_prime"]),
             h: json_64_value_to_integer(&input["h"]),
             h_prime: json_64_value_to_integer(&input["h_prime"]),
             proof: proof_vec_from_json_values(&input["proof"]),
@@ -197,8 +188,8 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases() {
-            let ep = ep_from_json_value(&tc["context"]);
+        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-plaintext-equality.json") {
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
             let res = verify_plaintext_equality(
                 &ep,

@@ -259,18 +259,15 @@ impl From<&[Integer]> for Ciphertext {
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
-    use serde_json::Value;
-
     use super::*;
     use crate::{
         test_json_data::{
-            ep_from_json_value, get_ciphertext_values, json_64_value_to_integer,
+            json_value_to_encryption_parameters, json_values_to_ciphertext_values, get_test_cases_from_json_file, json_64_value_to_integer,
             json_array_64_value_to_array_integer, CiphertextValues,
         },
         Hexa,
     };
+    use serde_json::Value;
 
     struct InputsGetCiphertext {
         bold_m: Vec<Integer>,
@@ -293,26 +290,17 @@ mod test {
 
     fn get_input_get_ciphertext_product(input: &Value) -> InputsGetCiphertextProduct {
         InputsGetCiphertextProduct {
-            upper_c_a: get_ciphertext_values(&input["upper_c_a"]),
-            upper_c_b: get_ciphertext_values(&input["upper_c_b"]),
+            upper_c_a: json_values_to_ciphertext_values(&input["upper_c_a"]),
+            upper_c_b: json_values_to_ciphertext_values(&input["upper_c_b"]),
         }
-    }
-
-    fn get_test_cases(filename: &str) -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("elgamal")
-            .join(filename);
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
     }
 
     #[test]
     fn test_get_cyphertext() {
-        for tc in get_test_cases("get-ciphertext.json") {
-            let ep = ep_from_json_value(&tc["context"]);
+        for tc in get_test_cases_from_json_file("elgamal", "get-ciphertext.json") {
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input_get_ciphertext(&tc["input"]);
-            let output = get_ciphertext_values(&tc["output"]);
+            let output = json_values_to_ciphertext_values(&tc["output"]);
             let c_res = Ciphertext::get_ciphertext(&ep, &input.bold_m, &input.r, &input.bold_pk);
             assert!(c_res.is_ok());
             let c = c_res.unwrap();
@@ -331,10 +319,10 @@ mod test {
 
     #[test]
     fn test_get_cyphertext_product() {
-        for tc in get_test_cases("get-ciphertext-product.json") {
-            let ep = ep_from_json_value(&tc["context"]);
+        for tc in get_test_cases_from_json_file("elgamal", "get-ciphertext-product.json") {
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input_get_ciphertext_product(&tc["input"]);
-            let output = get_ciphertext_values(&tc["output"]);
+            let output = json_values_to_ciphertext_values(&tc["output"]);
             let res = (Ciphertext {
                 gamma: input.upper_c_a.gamma,
                 phis: input.upper_c_a.phis,

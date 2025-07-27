@@ -148,6 +148,18 @@ impl<T, E> DomainVerifications<T, E> {
 mod test_json_data {
     use crate::{elgamal::EncryptionParameters, DecodeTrait, Hexa, Integer};
     use serde_json::Value;
+    use std::path::Path;
+
+    const TEST_DATA_DIR: &str = "test_data";
+
+    pub fn get_test_cases_from_json_file(subdir_name: &str, filename: &str) -> Vec<Value> {
+        let test_file = Path::new("./")
+            .join(TEST_DATA_DIR)
+            .join(subdir_name)
+            .join(filename);
+        let json = std::fs::read_to_string(test_file).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
 
     pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
         array
@@ -188,11 +200,13 @@ mod test_json_data {
         }
     }
 
-    pub fn ep_from_json_value(values: &Value) -> EncryptionParameters {
-        EncryptionParameters::from(&encryption_parameters_values(values))
+    pub fn json_value_to_encryption_parameters(values: &Value) -> EncryptionParameters {
+        EncryptionParameters::from(&json_value_to_encryption_parameters_values(values))
     }
 
-    pub fn encryption_parameters_values(values: &Value) -> EncryptionParametersValues {
+    pub fn json_value_to_encryption_parameters_values(
+        values: &Value,
+    ) -> EncryptionParametersValues {
         EncryptionParametersValues(
             json_64_value_to_integer(&values["p"]),
             json_64_value_to_integer(&values["q"]),
@@ -205,7 +219,7 @@ mod test_json_data {
         pub phis: Vec<Integer>,
     }
 
-    pub fn get_ciphertext_values(values: &Value) -> CiphertextValues {
+    pub fn json_values_to_ciphertext_values(values: &Value) -> CiphertextValues {
         CiphertextValues {
             gamma: json_64_value_to_integer(&values["gamma"]),
             phis: json_array_64_value_to_array_integer(&values["phis"]),
