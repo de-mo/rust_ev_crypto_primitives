@@ -141,6 +141,23 @@ pub struct EncodeIntegerError {
     source: ByteArrayError,
 }
 
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error in to byte array
+pub struct ToByteArrayError(#[from] ToByteArrayErrorRepr);
+
+#[derive(Error, Debug)]
+enum ToByteArrayErrorRepr {
+    #[error("The given integer is negative {val}")]
+    Negative { val: Integer },
+    #[error("Requested length {m} is bigger than the byte length {byte_length} of {val}")]
+    LengthToSmall {
+        val: Integer,
+        m: usize,
+        byte_length: usize,
+    },
+}
+
 /// Trait to implement constant numbers
 pub trait ConstantsTrait: Sized {
     /// Zero
@@ -370,20 +387,74 @@ pub trait Hexa: Sized {
 }
 
 /// Trait to calculate byte length
-pub trait ByteLengthTrait {
+pub trait ToByteArryTrait {
+    type Error: std::error::Error;
     /// Byte legnth of an object
-    fn byte_length(&self) -> usize;
+    fn byte_length(&self) -> Result<usize, Self::Error>;
+
+    // convert an integer to a byte array with the desired size
+    fn to_fixed_length_byte_array(&self, m: usize) -> Result<ByteArray, Self::Error>;
+
+    // convert an integer to a byte array
+    fn to_byte_array(&self) -> Result<ByteArray, Self::Error>;
 }
 
-impl ByteLengthTrait for Integer {
-    fn byte_length(&self) -> usize {
+impl ToByteArryTrait for Integer {
+    type Error = ToByteArrayError;
+
+    fn byte_length(&self) -> Result<usize, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
         let bits = self.nb_bits();
         let bytes = bits / 8;
         if bits % 8 == 0 {
-            bytes
+            Ok(bytes)
         } else {
-            bytes + 1
+            Ok(bytes + 1)
         }
+    }
+
+    fn to_fixed_length_byte_array(&self, m: usize) -> Result<ByteArray, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
+        let byte_length = self
+            .byte_length()
+            .expect("Error calling byte_length in to_fixed_length_byte_array");
+        if byte_length > m {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::LengthToSmall {
+                val: self.clone(),
+                m,
+                byte_length,
+            }));
+        };
+        let mut x = self.clone();
+        let nb_256 = Integer::from(256u16);
+        let mut upper_b: Vec<u8> = Vec::new();
+        for _i in 0..m {
+            upper_b.insert(0, u8::try_from(Integer::from(&x % &nb_256)).unwrap());
+            x /= &nb_256;
+        }
+        Ok(ByteArray::from(&upper_b))
+    }
+
+    fn to_byte_array(&self) -> Result<ByteArray, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
+        let n = self
+            .byte_length()
+            .expect("Error calling byte_length in to_byte_array");
+        Ok(self
+            .to_fixed_length_byte_array(n)
+            .expect("Error calling to_fixed_length_byte_array in to_byte_array"))
     }
 }
 
@@ -651,12 +722,70 @@ mod test {
 
     #[test]
     fn byte_length() {
-        assert_eq!(Integer::from(0u32).byte_length(), 0);
-        assert_eq!(Integer::from(3u32).byte_length(), 1);
-        assert_eq!(Integer::from(23591u32).byte_length(), 2);
-        assert_eq!(Integer::from(23592u32).byte_length(), 2);
-        assert_eq!(Integer::from(4294967295u64).byte_length(), 4);
-        assert_eq!(Integer::from(4294967296u64).byte_length(), 5);
+        assert_eq!(Integer::from(0u32).byte_length().unwrap(), 0);
+        assert_eq!(Integer::from(3u32).byte_length().unwrap(), 1);
+        assert_eq!(Integer::from(23591u32).byte_length().unwrap(), 2);
+        assert_eq!(Integer::from(23592u32).byte_length().unwrap(), 2);
+        assert_eq!(Integer::from(4294967295u64).byte_length().unwrap(), 4);
+        assert_eq!(Integer::from(4294967296u64).byte_length().unwrap(), 5);
+        assert!(Integer::from(-1i32).byte_length().is_err())
+    }
+
+    #[test]
+    fn to_byte_array() {
+        assert_eq!(
+            Integer::from(0u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x00"),
+        );
+        assert_eq!(
+            Integer::from(3u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x03"),
+        );
+        assert_eq!(
+            Integer::from(23591u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x5c\x27"),
+        );
+        assert_eq!(
+            Integer::from(23592u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x5c\x28"),
+        );
+        assert_eq!(
+            Integer::from(4294967295u64).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\xff\xff\xff\xff"),
+        );
+        assert_eq!(
+            Integer::from(4294967296u64).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x01\x00\x00\x00\x00"),
+        );
+        assert!(Integer::from(-1i32).byte_length().is_err())
+    }
+
+    #[test]
+    fn to_fixed_length_byte_array() {
+        assert_eq!(
+            Integer::from(0u32).to_fixed_length_byte_array(2).unwrap(),
+            ByteArray::from_bytes(b"\x00\x00"),
+        );
+        assert_eq!(
+            Integer::from(3u32).to_fixed_length_byte_array(3).unwrap(),
+            ByteArray::from_bytes(b"\x00\x00\x03"),
+        );
+        assert_eq!(
+            Integer::from(23591u32)
+                .to_fixed_length_byte_array(2)
+                .unwrap(),
+            ByteArray::from_bytes(b"\x5c\x27"),
+        );
+        assert_eq!(
+            Integer::from(23592u32)
+                .to_fixed_length_byte_array(5)
+                .unwrap(),
+            ByteArray::from_bytes(b"\x00\x00\x00\x5c\x28"),
+        );
+        assert!(Integer::from(-1i32).to_fixed_length_byte_array(1).is_err());
+        assert!(Integer::from(23591u32)
+            .to_fixed_length_byte_array(1)
+            .is_err());
     }
 
     #[test]

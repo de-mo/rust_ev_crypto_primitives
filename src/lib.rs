@@ -58,7 +58,7 @@ pub mod zero_knowledge_proofs;
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
-    prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerOperationError,
+    prepare_fixed_based_optimization, ToByteArryTrait, ConstantsTrait, Hexa, IntegerOperationError,
     ModExponentiateError, OperationsTrait,
 };
 pub use number_theory::{

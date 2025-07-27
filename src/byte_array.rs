@@ -16,7 +16,7 @@
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use crate::{shared_error::IsNegativeError, ByteLengthTrait, ConstantsTrait, Integer};
+use crate::{integer::ToByteArrayError, ConstantsTrait, Integer, ToByteArryTrait};
 use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
@@ -60,7 +60,7 @@ struct CutToBitLengthIndexError {
 #[derive(Error, Debug)]
 enum FromIntegerError {
     #[error("Error try_from Integer")]
-    IsNegagative { source: IsNegativeError },
+    ToByteArrayError { source: ToByteArrayError },
 }
 
 /// ByteArray represent a byte of arrays
@@ -295,24 +295,11 @@ impl TryFrom<&Integer> for ByteArray {
     type Error = ByteArrayError;
 
     fn try_from(value: &Integer) -> Result<Self, Self::Error> {
-        if value < Integer::zero() {
-            return Err(ByteArrayError::from(ByteArrayErrorRepr::from(
-                FromIntegerError::IsNegagative {
-                    source: IsNegativeError {
-                        val: value.to_string(),
-                    },
-                },
-            )));
-        }
-        let byte_length = std::cmp::max(value.byte_length(), 1);
-        let mut x = value.clone();
-        let mut d: Vec<u8> = Vec::new();
-        let nb_256 = Integer::from(256u16);
-        for _i in 0..byte_length {
-            d.insert(0, u8::try_from(Integer::from(&x % &nb_256)).unwrap());
-            x /= &nb_256;
-        }
-        Ok(ByteArray::from(&d))
+        value
+            .to_byte_array()
+            .map_err(|e| FromIntegerError::ToByteArrayError { source: e })
+            .map_err(ByteArrayErrorRepr::FromIntegerError)
+            .map_err(ByteArrayError)
     }
 }
 
