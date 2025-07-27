@@ -266,7 +266,7 @@ pub mod test {
         ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
     };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
     use serde_json::Value;
     use std::path::Path;
 
@@ -292,8 +292,8 @@ pub mod test {
 
     fn get_statement_values(statement: &Value) -> SVPStatementValues {
         SVPStatementValues(
-            json_value_to_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["b"]),
+            json_exa_value_to_integer(&statement["c_a"]),
+            json_exa_value_to_integer(&statement["b"]),
         )
     }
 
@@ -303,13 +303,13 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> SVPArgumentValues {
         SVPArgumentValues(
-            json_value_to_mpinteger(&argument["c_d"]),
-            json_value_to_mpinteger(&argument["c_lower_delta"]),
-            json_value_to_mpinteger(&argument["c_upper_delta"]),
-            json_array_value_to_array_mpinteger(&argument["a_tilde"]),
-            json_array_value_to_array_mpinteger(&argument["b_tilde"]),
-            json_value_to_mpinteger(&argument["r_tilde"]),
-            json_value_to_mpinteger(&argument["s_tilde"]),
+            json_exa_value_to_integer(&argument["c_d"]),
+            json_exa_value_to_integer(&argument["c_lower_delta"]),
+            json_exa_value_to_integer(&argument["c_upper_delta"]),
+            json_array_exa_value_to_array_integer(&argument["a_tilde"]),
+            json_array_exa_value_to_array_integer(&argument["b_tilde"]),
+            json_exa_value_to_integer(&argument["r_tilde"]),
+            json_exa_value_to_integer(&argument["s_tilde"]),
         )
     }
 
@@ -340,7 +340,7 @@ pub mod test {
             );
             assert_eq!(
                 x_res.unwrap(),
-                json_value_to_mpinteger(&tc["output"]["x"]),
+                json_exa_value_to_integer(&tc["output"]["x"]),
                 "{}",
                 tc["description"]
             );

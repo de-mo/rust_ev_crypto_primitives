@@ -58,8 +58,8 @@ pub mod zero_knowledge_proofs;
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
-    prepare_fixed_based_optimization, ToByteArryTrait, ConstantsTrait, Hexa, IntegerOperationError,
-    ModExponentiateError, OperationsTrait,
+    prepare_fixed_based_optimization, ConstantsTrait, Hexa, IntegerOperationError,
+    ModExponentiateError, OperationsTrait, ToByteArryTrait,
 };
 pub use number_theory::{
     IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
@@ -146,7 +146,7 @@ impl<T, E> DomainVerifications<T, E> {
 
 #[cfg(test)]
 mod test_json_data {
-    use crate::{Hexa, Integer};
+    use crate::{elgamal::EncryptionParameters, DecodeTrait, Hexa, Integer};
     use serde_json::Value;
 
     pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
@@ -158,11 +158,45 @@ mod test_json_data {
             .collect()
     }
 
-    pub fn json_array_value_to_array_mpinteger(array: &Value) -> Vec<Integer> {
+    pub fn json_array_exa_value_to_array_integer(array: &Value) -> Vec<Integer> {
         Integer::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
     }
 
-    pub fn json_value_to_mpinteger(value: &Value) -> Integer {
+    pub fn json_exa_value_to_integer(value: &Value) -> Integer {
         Integer::from_hexa_string(value.as_str().unwrap()).unwrap()
+    }
+
+    pub fn json_array_64_value_to_array_integer(array: &Value) -> Vec<Integer> {
+        Integer::base_64_decode_vector(
+            &json_array_value_to_array_string(array)
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+
+    pub fn json_64_value_to_integer(value: &Value) -> Integer {
+        Integer::base64_decode(value.as_str().unwrap()).unwrap()
+    }
+
+    pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
+
+    impl From<&EncryptionParametersValues> for EncryptionParameters {
+        fn from(value: &EncryptionParametersValues) -> Self {
+            EncryptionParameters::from((&value.0, &value.1, &value.2))
+        }
+    }
+
+    pub fn ep_from_json_value(values: &Value) -> EncryptionParameters {
+        EncryptionParameters::from(&encryption_parameters_values(values))
+    }
+
+    pub fn encryption_parameters_values(values: &Value) -> EncryptionParametersValues {
+        EncryptionParametersValues(
+            json_64_value_to_integer(&values["p"]),
+            json_64_value_to_integer(&values["q"]),
+            json_64_value_to_integer(&values["g"]),
+        )
     }
 }

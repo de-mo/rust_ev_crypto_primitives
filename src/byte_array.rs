@@ -120,7 +120,7 @@ pub trait DecodeTrait: Sized {
     /// Return [ByteArrayError] if decode not possible
     fn base64_decode(s: &str) -> Result<Self, Self::Error>;
 
-    fn base_64_decode_vector(vs: &[String]) -> Result<Vec<Self>, Self::Error> {
+    fn base_64_decode_vector(vs: &[&str]) -> Result<Vec<Self>, Self::Error> {
         vs.iter()
             .map(|s| Self::base64_decode(s))
             .collect::<Result<Vec<_>, _>>()

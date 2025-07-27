@@ -273,7 +273,7 @@ pub mod test {
         ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
     };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
     use serde_json::Value;
     use std::path::Path;
 
@@ -301,9 +301,9 @@ pub mod test {
 
     fn get_statement_values(statement: &Value) -> ZeroStatementValues {
         ZeroStatementValues(
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_array_value_to_array_mpinteger(&statement["c_b"]),
-            json_value_to_mpinteger(&statement["y"]),
+            json_array_exa_value_to_array_integer(&statement["c_a"]),
+            json_array_exa_value_to_array_integer(&statement["c_b"]),
+            json_exa_value_to_integer(&statement["y"]),
         )
     }
 
@@ -313,14 +313,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> ZeroArgumentValues {
         ZeroArgumentValues(
-            json_value_to_mpinteger(&argument["c_a0"]),
-            json_value_to_mpinteger(&argument["c_bm"]),
-            json_array_value_to_array_mpinteger(&argument["c_d"]),
-            json_array_value_to_array_mpinteger(&argument["a"]),
-            json_array_value_to_array_mpinteger(&argument["b"]),
-            json_value_to_mpinteger(&argument["r"]),
-            json_value_to_mpinteger(&argument["s"]),
-            json_value_to_mpinteger(&argument["t"]),
+            json_exa_value_to_integer(&argument["c_a0"]),
+            json_exa_value_to_integer(&argument["c_bm"]),
+            json_array_exa_value_to_array_integer(&argument["c_d"]),
+            json_array_exa_value_to_array_integer(&argument["a"]),
+            json_array_exa_value_to_array_integer(&argument["b"]),
+            json_exa_value_to_integer(&argument["r"]),
+            json_exa_value_to_integer(&argument["s"]),
+            json_exa_value_to_integer(&argument["t"]),
         )
     }
 
@@ -351,7 +351,7 @@ pub mod test {
             );
             assert_eq!(
                 x_res.unwrap(),
-                json_value_to_mpinteger(&tc["output"]["x"]),
+                json_exa_value_to_integer(&tc["output"]["x"]),
                 "{}",
                 tc["description"]
             );

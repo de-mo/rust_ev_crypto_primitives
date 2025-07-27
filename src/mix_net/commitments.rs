@@ -167,7 +167,7 @@ pub fn get_commitment_vector(
 mod test {
     use super::*;
     use crate::{
-        test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger},
+        test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer},
         Hexa,
     };
     use serde_json::Value;
@@ -214,16 +214,16 @@ mod test {
 
     fn get_verif_commitment_key_ep(value: &Value) -> EncryptionParameters {
         EncryptionParameters::from((
-            &json_value_to_mpinteger(&value["p"]),
-            &json_value_to_mpinteger(&value["q"]),
-            &json_value_to_mpinteger(&value["g"]),
+            &json_exa_value_to_integer(&value["p"]),
+            &json_exa_value_to_integer(&value["q"]),
+            &json_exa_value_to_integer(&value["g"]),
         ))
     }
 
     fn get_expected(value: &Value) -> CommitmentKey {
         CommitmentKey {
-            h: json_value_to_mpinteger(&value["h"]),
-            gs: json_array_value_to_array_mpinteger(&value["g"]),
+            h: json_exa_value_to_integer(&value["h"]),
+            gs: json_array_exa_value_to_array_integer(&value["g"]),
         }
     }
 

@@ -431,7 +431,7 @@ pub mod test {
     use super::super::test::context_from_json_value;
     use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
     use serde_json::Value;
     use std::path::Path;
 
@@ -465,8 +465,8 @@ pub mod test {
 
     fn get_ciphertext(tc: &Value) -> Ciphertext {
         Ciphertext::from_expanded(
-            &json_value_to_mpinteger(&tc["gamma"]),
-            &json_array_value_to_array_mpinteger(&tc["phis"]),
+            &json_exa_value_to_integer(&tc["gamma"]),
+            &json_array_exa_value_to_array_integer(&tc["phis"]),
         )
     }
 
@@ -486,7 +486,7 @@ pub mod test {
         MEStatementValues(
             get_ciphertext_matrix(&statement["ciphertexts"]),
             get_ciphertext(&statement["ciphertext_product"]),
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
+            json_array_exa_value_to_array_integer(&statement["c_a"]),
         )
     }
 
@@ -496,14 +496,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> MEArgumentValues {
         MEArgumentValues(
-            json_value_to_mpinteger(&argument["c_a_0"]),
-            json_array_value_to_array_mpinteger(&argument["c_b"]),
+            json_exa_value_to_integer(&argument["c_a_0"]),
+            json_array_exa_value_to_array_integer(&argument["c_b"]),
             get_ciphertexts(&argument["e"]),
-            json_array_value_to_array_mpinteger(&argument["a"]),
-            json_value_to_mpinteger(&argument["r"]),
-            json_value_to_mpinteger(&argument["b"]),
-            json_value_to_mpinteger(&argument["s"]),
-            json_value_to_mpinteger(&argument["tau"]),
+            json_array_exa_value_to_array_integer(&argument["a"]),
+            json_exa_value_to_integer(&argument["r"]),
+            json_exa_value_to_integer(&argument["b"]),
+            json_exa_value_to_integer(&argument["s"]),
+            json_exa_value_to_integer(&argument["tau"]),
         )
     }
 

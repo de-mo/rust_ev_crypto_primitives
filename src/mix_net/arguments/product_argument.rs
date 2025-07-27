@@ -281,7 +281,7 @@ pub mod test {
         zero_argument::test::get_argument as get_zero_argument,
     };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
     use serde_json::Value;
     use std::path::Path;
 
@@ -303,8 +303,8 @@ pub mod test {
 
     fn get_statement_values(statement: &Value) -> ProductStatementValues {
         ProductStatementValues(
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["b"]),
+            json_array_exa_value_to_array_integer(&statement["c_a"]),
+            json_exa_value_to_integer(&statement["b"]),
         )
     }
 
@@ -318,7 +318,7 @@ pub mod test {
             argument
                 .get("hadamard_argument")
                 .map(get_hadamard_argument_values),
-            argument.get("c_b").map(json_value_to_mpinteger),
+            argument.get("c_b").map(json_exa_value_to_integer),
         )
     }
 

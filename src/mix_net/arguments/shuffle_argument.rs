@@ -476,7 +476,7 @@ mod test {
         zero_argument::test::get_argument as get_zero_argument,
     };
     use super::*;
-    use crate::test_json_data::json_array_value_to_array_mpinteger;
+    use crate::test_json_data::json_array_exa_value_to_array_integer;
     use serde_json::Value;
     use std::path::Path;
 
@@ -510,8 +510,8 @@ mod test {
 
     fn get_argument_values(argument: &Value) -> ShuffleArgumentValues {
         ShuffleArgumentValues(
-            json_array_value_to_array_mpinteger(&argument["ca"]),
-            json_array_value_to_array_mpinteger(&argument["cb"]),
+            json_array_exa_value_to_array_integer(&argument["ca"]),
+            json_array_exa_value_to_array_integer(&argument["cb"]),
             get_product_argument_values(&argument["product_argument"]),
             get_me_argument_values(&argument["multi_exp_argument"]),
         )

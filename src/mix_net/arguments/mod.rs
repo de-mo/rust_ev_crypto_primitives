@@ -97,7 +97,7 @@ impl<'a> ArgumentContext<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
     use serde_json::Value;
     use std::path::Path;
 
@@ -113,14 +113,14 @@ mod test {
     pub fn context_values(context: &Value) -> ContextValues {
         ContextValues(
             EncryptionParametersValues(
-                json_value_to_mpinteger(&context["p"]),
-                json_value_to_mpinteger(&context["q"]),
-                json_value_to_mpinteger(&context["g"]),
+                json_exa_value_to_integer(&context["p"]),
+                json_exa_value_to_integer(&context["q"]),
+                json_exa_value_to_integer(&context["g"]),
             ),
-            json_array_value_to_array_mpinteger(&context["pk"]),
+            json_array_exa_value_to_array_integer(&context["pk"]),
             CommitmentKeyValues(
-                json_value_to_mpinteger(&context["ck"]["h"]),
-                json_array_value_to_array_mpinteger(&context["ck"]["g"]),
+                json_exa_value_to_integer(&context["ck"]["h"]),
+                json_array_exa_value_to_array_integer(&context["ck"]["g"]),
             ),
         )
     }
@@ -156,9 +156,9 @@ mod test {
     fn get_input(tc: &Value) -> (Integer, Vec<Integer>, Vec<Integer>) {
         let input = tc["input"].clone();
         (
-            json_value_to_mpinteger(&input["y"]),
-            json_array_value_to_array_mpinteger(&input["a"]),
-            json_array_value_to_array_mpinteger(&input["b"]),
+            json_exa_value_to_integer(&input["y"]),
+            json_array_exa_value_to_array_integer(&input["a"]),
+            json_array_exa_value_to_array_integer(&input["b"]),
         )
     }
 
@@ -179,7 +179,7 @@ mod test {
             );
             assert_eq!(
                 s_res.unwrap(),
-                json_value_to_mpinteger(&tc["output"]["value"]),
+                json_exa_value_to_integer(&tc["output"]["value"]),
                 "{}",
                 tc["description"]
             );
