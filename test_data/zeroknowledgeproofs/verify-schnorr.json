@@ -1,0 +1,24 @@
+[
+	{
+		"description": "3072-schnorr-proof",
+		"context": {
+			"p": "ALfhUWKK7Spqv3FYgJz088di5xYPOLTaVqeE2QRRkM/vMk53OJJs++X0v42NjDHXY9oGyAq7EYXrT3x7V1f1lYSQz9R9fBm7QhWNlVT3tGvO1VxNef1fJNZhPDHDg5ot34qaJ2vPv6HId8VihNq3nNTCsyk9IOnl6vAqxgrMk+2HRCKlLssjj+7lq2rdg1/RoHU9Co945TfSuVu3nY3K7GQsHp8juCm1wngL84c334uzANATNKDQvYZFy/pzphYP/jk8SMu7ygYPD/jsbTG+tczu1/LwuwiAFxY7xg30Wg7LG80omwbLv+ohrQjhhH8/c3jVbO2UZA1u8NPTe+ZwCOGG0b8nW5skHetkdJpH39+5ZjLD6wYbZHK7+EwmFE5JwtBMMk7xDeUT0/URS4tdN02Ty4h5x9Uv/XK6Cq5yd9p7obSvFIjY6DavFIZebDeraHb+aQtXESE4KvNBr+lPd7zwbIO4/1Z18JeQdK2aeHvFub1LDFk30+3kw6eTlkGc1w==",
+			"q": "W/CosUV2lTVfuKxATnp547FziwecWm0rU8JsgijIZ/eZJzucSTZ98vpfxsbGGOux7QNkBV2IwvWnvj2rq/rKwkhn6j6+DN2hCsbKqnvaNedqria8/q+SazCeGOHBzRbvxU0Tteff0OQ74rFCbVvOamFZlJ6QdPL1eBVjBWZJ9sOiEVKXZZHH93LVtW7Br+jQOp6FR7xym+lcrdvOxuV2MhYPT5HcFNrhPAX5w5vvxdmAaAmaUGhewyLl/TnTCwf/HJ4kZd3lAweH/HY2mN9a5ndr+XhdhEALix3jBvotB2WN5pRNg2Xf9RDWhHDCP5+5vGq2dsoyBrd4aem98zgEcMNo35OtzZIO9bI6TSPv79yzGWH1gw2yOV38JhMKJyThaCYZJ3iG8onp+oilxa6bpsnlxDzj6pf+uV0FVzk77T3Q2leKRGx0G1eKQy82G9W0O380hauIkJwVeaDX9Ke73ng2Qdx/qzr4S8g6Vs08PeLc3qWGLJvp9vJh08nLIM5r",
+			"g": "Ag=="
+		},
+		"input": {
+			"proof": {
+				"e": "FkWCcxm4LvE4HHmlDB9Hini8foiZ7bPXm8WhsHQ7pxI=",
+				"z": "KYVNkCEZp4ySz7w+D9f8GdByMbMZHnQ5yP6x/0+I6GnWHVpMyTmALK1yob0aXnRF2Wc0CTvUvuN/sQVtCRccYjOXqJ8GEfT0MHJw9j/yXzHICwSVaTC7hHdEs/7V5lnKjld1m/cJu3B7bllhxbPVTtOxwxRIVrQjvd2hHh3QzaEFusXilkL1cQCDXTTTnKQKHmnbvvsiCzZ1m8AJx2YvPDMZU4+h1NdzunhgGBf6DxUVuNmk+sRlL6HdtgmVQe+61lGwAr7I+E938FVxVZAEKerHIp78AA7Mo0dEK6SXL81i0SnHLRMVWYIy9FU7m7dUaXbMCsYvtMjnHLU8VI678XOgl5ih+byq+keRgIy0GBwEIn9QfkW3biinavUeJDwh88swWAIO+KvGZI3Ex5edJDiyYRabysFalpCVAWZFFcjKHJmlLVWGuhUqEb2E+5OycRBMBMgq+5icJQs2EeqmSgPVLGYSs10to51iHbis70vG5yC2287ofcO7Qf411ySo"
+			},
+			"statement": "GxpmwWpvYUN4vMwvAX+m0uj3L14fLCXjAvrMqPAQfNAZdFwqT6gUxIqKRZVlAe6Uji/u/gl7+PwFNzOoApQjgmKeR2Uvr70af5zpTy5sBCX0nHBw3cqjhsLFEGE+glvfw5LT59phKqCnbNJh9Qpx7cfI/7Io08UTLlHMko+e6rUNeTuruEiXqYedC1qVGEpX3C/Kyz+7brgtId8kJ6L79N8eb6S19IYxHXQgM8kQ+tDBf9VB0edlei6zIYL0ogfM2ObGhYqBaY73fJxUrqDJXb1/pdZCNRadbg531Le9i9+4yDa6421Lk5Zm3MOjVg7VX/1NWzgfHXqryBy6ZOR1t0h5tplovlMP2BCUr2dOQe53MWSEcmiQ52Xm9oDVMutDpaiIZXq7JZCnegCCOdhakzfohkIllK1mzK9/Ktn1VGjfLlWzhUIVcqrC2u3pemD6w/E7+RNnaHyE1vBpvuo2Rng0dm9Sf0C/iVH0wJsKdd3/Ic+7gqeFJn4MsOlc2Tea",
+			"additional_information": [
+				"test-0",
+				"test-1"
+			]
+		},
+		"output": {
+			"result": "true"
+		}
+	}
+]

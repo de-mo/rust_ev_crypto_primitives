@@ -29,3 +29,37 @@ pub use decryption::{verify_decryption, DecryptionProofError};
 pub use exponentiation::{verify_exponentiation, ExponentiationProofError};
 pub use plaintext_equality::{verify_plaintext_equality, PlaintextProofError};
 pub use schnorr_proofs::verify_schnorr;
+
+#[cfg(test)]
+mod test {
+    use serde_json::Value;
+
+    use crate::{
+        test_json_data::{json_64_value_to_integer, json_array_64_value_to_array_integer},
+        Integer,
+    };
+
+    pub struct Proof {
+        pub e: Integer,
+        pub z: Integer,
+    }
+
+    pub struct ProofVec {
+        pub e: Integer,
+        pub z: Vec<Integer>,
+    }
+
+    pub fn proof_from_json_values(values: &Value) -> Proof {
+        Proof {
+            e: json_64_value_to_integer(&values["e"]),
+            z: json_64_value_to_integer(&values["z"]),
+        }
+    }
+
+    pub fn proof_vec_from_json_values(values: &Value) -> ProofVec {
+        ProofVec {
+            e: json_64_value_to_integer(&values["e"]),
+            z: json_array_64_value_to_array_integer(&values["z"]),
+        }
+    }
+}
