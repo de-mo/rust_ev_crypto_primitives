@@ -269,13 +269,13 @@ impl<'a, 'b> ZeroArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::mix_net::arguments::test::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct ZeroStatementValues(pub Vec<Integer>, pub Vec<Integer>, pub Integer);
 
@@ -290,20 +290,11 @@ pub mod test {
         pub Integer,
     );
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-zero-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> ZeroStatementValues {
         ZeroStatementValues(
-            json_array_exa_value_to_array_integer(&statement["c_a"]),
-            json_array_exa_value_to_array_integer(&statement["c_b"]),
-            json_exa_value_to_integer(&statement["y"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_array_64_value_to_array_integer(&statement["c_b"]),
+            json_64_value_to_integer(&statement["y"]),
         )
     }
 
@@ -313,14 +304,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> ZeroArgumentValues {
         ZeroArgumentValues(
-            json_exa_value_to_integer(&argument["c_a0"]),
-            json_exa_value_to_integer(&argument["c_bm"]),
-            json_array_exa_value_to_array_integer(&argument["c_d"]),
-            json_array_exa_value_to_array_integer(&argument["a"]),
-            json_array_exa_value_to_array_integer(&argument["b"]),
-            json_exa_value_to_integer(&argument["r"]),
-            json_exa_value_to_integer(&argument["s"]),
-            json_exa_value_to_integer(&argument["t"]),
+            json_64_value_to_integer(&argument["c_a0"]),
+            json_64_value_to_integer(&argument["c_bm"]),
+            json_array_64_value_to_array_integer(&argument["c_d"]),
+            json_array_64_value_to_array_integer(&argument["a"]),
+            json_array_64_value_to_array_integer(&argument["b"]),
+            json_64_value_to_integer(&argument["r"]),
+            json_64_value_to_integer(&argument["s"]),
+            json_64_value_to_integer(&argument["t"]),
         )
     }
 
@@ -333,11 +324,9 @@ pub mod test {
 
     #[test]
     fn test_get_x() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-zero-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
@@ -351,7 +340,7 @@ pub mod test {
             );
             assert_eq!(
                 x_res.unwrap(),
-                json_exa_value_to_integer(&tc["output"]["x"]),
+                json_64_value_to_integer(&tc["output"]["x"]),
                 "{}",
                 tc["description"]
             );
@@ -360,11 +349,9 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-zero-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);

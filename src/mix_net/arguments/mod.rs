@@ -103,7 +103,6 @@ mod test {
         json_exa_value_to_integer, json_value_to_encryption_parameters,
     };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
     pub struct CommitmentKeyValuesOld(pub Integer, pub Vec<Integer>);
@@ -195,15 +194,6 @@ mod test {
         ck: &'a CommitmentKey,
     ) -> ArgumentContext<'a> {
         ArgumentContext::new(ep, &values.1, ck)
-    }
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("bilinearMap.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
     }
 
     fn get_input(tc: &Value) -> (Integer, Vec<Integer>, Vec<Integer>) {
