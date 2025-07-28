@@ -97,28 +97,81 @@ impl<'a> ArgumentContext<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer, json_array_exa_value_to_array_integer,
+        json_exa_value_to_integer, json_value_to_encryption_parameters,
+    };
     use serde_json::Value;
     use std::path::Path;
 
     pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
-    pub struct CommitmentKeyValues(pub Integer, pub Vec<Integer>);
+    pub struct CommitmentKeyValuesOld(pub Integer, pub Vec<Integer>);
 
-    pub struct ContextValues(
+    pub struct CommitmentKeyValues {
+        pub h: Integer,
+        pub gs: Vec<Integer>,
+    }
+
+    pub struct ContextValuesOld(
         pub EncryptionParametersValues,
         Vec<Integer>,
-        pub CommitmentKeyValues,
+        pub CommitmentKeyValuesOld,
     );
 
-    pub fn context_values(context: &Value) -> ContextValues {
-        ContextValues(
+    pub struct ContextValues {
+        pub ep: EncryptionParameters,
+        pub pk: Vec<Integer>,
+        pub ck: CommitmentKey,
+    }
+
+    impl<'a> From<&'a ContextValues> for ArgumentContext<'a> {
+        fn from(value: &'a ContextValues) -> Self {
+            Self {
+                ep: &value.ep,
+                pks: &value.pk,
+                ck: &value.ck,
+            }
+        }
+    }
+
+    impl From<&CommitmentKeyValues> for CommitmentKey {
+        fn from(value: &CommitmentKeyValues) -> Self {
+            CommitmentKey {
+                h: value.h.clone(),
+                gs: value.gs.clone(),
+            }
+        }
+    }
+
+    pub fn json_to_commitment_key_values(value: &Value) -> CommitmentKeyValues {
+        CommitmentKeyValues {
+            h: json_64_value_to_integer(&value["h"]),
+            gs: json_array_64_value_to_array_integer(&value["g"]),
+        }
+    }
+
+    pub fn json_to_commitment_key(value: &Value) -> CommitmentKey {
+        CommitmentKey::from(&json_to_commitment_key_values(value))
+    }
+
+    pub fn json_to_context_values(value: &Value) -> ContextValues {
+        ContextValues {
+            ep: json_value_to_encryption_parameters(value),
+            pk: json_array_64_value_to_array_integer(&value["pk"]),
+            ck: json_to_commitment_key(&value["ck"]),
+        }
+    }
+
+    pub fn context_values(context: &Value) -> ContextValuesOld {
+        ContextValuesOld(
             EncryptionParametersValues(
                 json_exa_value_to_integer(&context["p"]),
                 json_exa_value_to_integer(&context["q"]),
                 json_exa_value_to_integer(&context["g"]),
             ),
             json_array_exa_value_to_array_integer(&context["pk"]),
-            CommitmentKeyValues(
+            CommitmentKeyValuesOld(
                 json_exa_value_to_integer(&context["ck"]["h"]),
                 json_array_exa_value_to_array_integer(&context["ck"]["g"]),
             ),
@@ -129,7 +182,7 @@ mod test {
         EncryptionParameters::from((&values.0, &values.1, &values.2))
     }
 
-    pub fn ck_from_json_value(values: &CommitmentKeyValues) -> CommitmentKey {
+    pub fn ck_from_json_value(values: &CommitmentKeyValuesOld) -> CommitmentKey {
         CommitmentKey {
             h: values.0.clone(),
             gs: values.1.clone(),
@@ -137,7 +190,7 @@ mod test {
     }
 
     pub fn context_from_json_value<'a>(
-        values: &'a ContextValues,
+        values: &'a ContextValuesOld,
         ep: &'a EncryptionParameters,
         ck: &'a CommitmentKey,
     ) -> ArgumentContext<'a> {
@@ -156,19 +209,17 @@ mod test {
     fn get_input(tc: &Value) -> (Integer, Vec<Integer>, Vec<Integer>) {
         let input = tc["input"].clone();
         (
-            json_exa_value_to_integer(&input["y"]),
-            json_array_exa_value_to_array_integer(&input["a"]),
-            json_array_exa_value_to_array_integer(&input["b"]),
+            json_64_value_to_integer(&input["y"]),
+            json_array_64_value_to_array_integer(&input["a"]),
+            json_array_64_value_to_array_integer(&input["b"]),
         )
     }
 
     #[test]
     fn test_star_map() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "bilinearMap.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let (y, a, b) = get_input(tc);
             let s_res = star_map(context.ep.q(), &y, &a, &b);
             assert!(
@@ -179,7 +230,7 @@ mod test {
             );
             assert_eq!(
                 s_res.unwrap(),
-                json_exa_value_to_integer(&tc["output"]["value"]),
+                json_64_value_to_integer(&tc["output"]["value"]),
                 "{}",
                 tc["description"]
             );
