@@ -167,11 +167,13 @@ pub fn get_commitment_vector(
 mod test {
     use super::*;
     use crate::{
-        test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer},
+        test_json_data::{
+            get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_64_value_to_array_integer, json_value_to_encryption_parameters,
+        },
         Hexa,
     };
     use serde_json::Value;
-    use std::path::Path;
 
     #[test]
     fn test_recursive_hash() {
@@ -203,37 +205,22 @@ mod test {
         );
     }
 
-    fn get_verif_commitment_key_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("get-verifiable-commitment-key.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
-    fn get_verif_commitment_key_ep(value: &Value) -> EncryptionParameters {
-        EncryptionParameters::from((
-            &json_exa_value_to_integer(&value["p"]),
-            &json_exa_value_to_integer(&value["q"]),
-            &json_exa_value_to_integer(&value["g"]),
-        ))
-    }
-
-    fn get_expected(value: &Value) -> CommitmentKey {
+    fn get_output(value: &Value) -> CommitmentKey {
         CommitmentKey {
-            h: json_exa_value_to_integer(&value["h"]),
-            gs: json_array_exa_value_to_array_integer(&value["g"]),
+            h: json_64_value_to_integer(&value["h"]),
+            gs: json_array_64_value_to_array_integer(&value["g"]),
         }
     }
 
     #[test]
     fn test_verifiable_commitment_key() {
-        for tc in get_verif_commitment_key_test_cases().iter() {
+        for tc in
+            get_test_cases_from_json_file("mixnet", "get-verifiable-commitment-key.json").iter()
+        {
             let description = tc["description"].as_str().unwrap();
-            let ep = get_verif_commitment_key_ep(&tc["context"]);
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let k = tc["input"]["k"].as_number().unwrap().as_u64().unwrap() as usize;
-            let expected = get_expected(&tc["output"]);
+            let expected = get_output(&tc["output"]);
             let r = CommitmentKey::get_verifiable_commitment_key(&ep, k);
             assert!(r.is_ok(), "{}", description);
             assert_eq!(r.unwrap(), expected, "{description}");
