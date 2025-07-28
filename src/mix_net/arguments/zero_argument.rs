@@ -323,31 +323,6 @@ pub mod test {
     }
 
     #[test]
-    fn test_get_x() {
-        for tc in get_test_cases_from_json_file("mixnet", "verify-zero-argument.json").iter() {
-            let context_values = json_to_context_values(&tc["context"]);
-            let context = ArgumentContext::from(&context_values);
-            let statement_values = get_statement_values(&tc["input"]["statement"]);
-            let statement = get_statement(&statement_values);
-            let argument_values = get_argument_values(&tc["input"]["argument"]);
-            let argument = get_argument(&argument_values);
-            let x_res = get_x(&context, &statement, &argument);
-            assert!(
-                x_res.is_ok(),
-                "Error unwraping {}: {}",
-                tc["description"],
-                x_res.unwrap_err()
-            );
-            assert_eq!(
-                x_res.unwrap(),
-                json_64_value_to_integer(&tc["output"]["x"]),
-                "{}",
-                tc["description"]
-            );
-        }
-    }
-
-    #[test]
     fn test_verify() {
         for tc in get_test_cases_from_json_file("mixnet", "verify-zero-argument.json").iter() {
             let context_values = json_to_context_values(&tc["context"]);
@@ -357,18 +332,31 @@ pub mod test {
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = ZeroArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_zero_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x{}",
+                tc["description"]
+            );
+            let res = verify_zero_argument(&context, &input);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                res.is_ok(),
+                "Error unwraping res {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }
