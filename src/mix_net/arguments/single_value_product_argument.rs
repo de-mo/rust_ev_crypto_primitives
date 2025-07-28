@@ -16,10 +16,7 @@
 
 //! Module implementing the verification for the Single Value Product Argument (§9.3.6)
 
-use std::fmt::Display;
-
-use thiserror::Error;
-
+use super::ArgumentContext;
 use crate::{
     integer::ModExponentiateError,
     mix_net::{
@@ -28,8 +25,8 @@ use crate::{
     },
     HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
-
-use super::ArgumentContext;
+use std::fmt::Display;
+use thiserror::Error;
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
@@ -262,13 +259,13 @@ impl Display for SingleValueProductArgumentResult {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::mix_net::arguments::test::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct SVPStatementValues(pub Integer, pub Integer);
     pub struct SVPArgumentValues(
@@ -281,19 +278,10 @@ pub mod test {
         pub Integer,
     );
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-single-value-product-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> SVPStatementValues {
         SVPStatementValues(
-            json_exa_value_to_integer(&statement["c_a"]),
-            json_exa_value_to_integer(&statement["b"]),
+            json_64_value_to_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["b"]),
         )
     }
 
@@ -303,13 +291,13 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> SVPArgumentValues {
         SVPArgumentValues(
-            json_exa_value_to_integer(&argument["c_d"]),
-            json_exa_value_to_integer(&argument["c_lower_delta"]),
-            json_exa_value_to_integer(&argument["c_upper_delta"]),
-            json_array_exa_value_to_array_integer(&argument["a_tilde"]),
-            json_array_exa_value_to_array_integer(&argument["b_tilde"]),
-            json_exa_value_to_integer(&argument["r_tilde"]),
-            json_exa_value_to_integer(&argument["s_tilde"]),
+            json_64_value_to_integer(&argument["c_d"]),
+            json_64_value_to_integer(&argument["c_lower_delta"]),
+            json_64_value_to_integer(&argument["c_upper_delta"]),
+            json_array_64_value_to_array_integer(&argument["a_tilde"]),
+            json_array_64_value_to_array_integer(&argument["b_tilde"]),
+            json_64_value_to_integer(&argument["r_tilde"]),
+            json_64_value_to_integer(&argument["s_tilde"]),
         )
     }
 
@@ -321,44 +309,31 @@ pub mod test {
     }
 
     #[test]
-    fn test_get_x() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
-            let statement_values = get_statement_values(&tc["input"]["statement"]);
-            let statement = get_statement(&statement_values);
-            let argument_values = get_argument_values(&tc["input"]["argument"]);
-            let argument = get_argument(&argument_values);
-            let x_res = get_x(&context, &statement, &argument);
-            assert!(
-                x_res.is_ok(),
-                "Error unwraping {}: {}",
-                tc["description"],
-                x_res.unwrap_err()
-            );
-            assert_eq!(
-                x_res.unwrap(),
-                json_exa_value_to_integer(&tc["output"]["x"]),
-                "{}",
-                tc["description"]
-            );
-        }
-    }
-
-    #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in
+            get_test_cases_from_json_file("mixnet", "verify-single-value-product-argument.json")
+                .iter()
+        {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = SingleValueProductVerifyInput::new(&statement, &argument).unwrap();
+            let x_res = get_x(&context, &statement, &argument);
+            assert!(
+                x_res.is_ok(),
+                "Error unwraping x {}: {}",
+                tc["description"],
+                x_res.unwrap_err()
+            );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Not same x: {}",
+                tc["description"]
+            );
             let x_res = verify_single_value_product_argument(&context, &input);
             assert!(
                 x_res.is_ok(),
