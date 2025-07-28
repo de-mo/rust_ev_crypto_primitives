@@ -733,10 +733,7 @@ mod test {
 
     #[test]
     fn to_byte_array() {
-        assert_eq!(
-            Integer::from(0u32).to_byte_array().unwrap(),
-            ByteArray::from_bytes(b"\x00"),
-        );
+        assert_eq!(Integer::from(0u32).to_byte_array().unwrap().to_bytes(), b"",);
         assert_eq!(
             Integer::from(3u32).to_byte_array().unwrap(),
             ByteArray::from_bytes(b"\x03"),
@@ -762,6 +759,13 @@ mod test {
 
     #[test]
     fn to_fixed_length_byte_array() {
+        assert_eq!(
+            Integer::from(0u32)
+                .to_fixed_length_byte_array(0)
+                .unwrap()
+                .to_bytes(),
+            b"",
+        );
         assert_eq!(
             Integer::from(0u32).to_fixed_length_byte_array(2).unwrap(),
             ByteArray::from_bytes(b"\x00\x00"),
@@ -1026,26 +1030,28 @@ mod test {
 
     #[test]
     fn base16_encode() {
-        assert_eq!(Integer::from(0u8).base16_encode().unwrap(), "00");
+        assert_eq!(Integer::from(0u8).base16_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base16_encode().unwrap(), "0A");
         assert!(Integer::from(-2i64).base16_encode().is_err());
     }
 
     #[test]
     fn base16_decode() {
+        assert_eq!(Integer::base16_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base16_decode("00").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base16_decode("A1").unwrap(), Integer::from(161u8));
     }
 
     #[test]
     fn base32_encode() {
-        assert_eq!(Integer::from(0u8).base32_encode().unwrap(), "AA======");
+        assert_eq!(Integer::from(0u8).base32_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base32_encode().unwrap(), "BI======");
         assert!(Integer::from(-2i64).base32_encode().is_err());
     }
 
     #[test]
     fn base32_decode() {
+        assert_eq!(Integer::base32_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(
             Integer::base32_decode("AA======").unwrap(),
             Integer::from(0u8)
@@ -1058,13 +1064,14 @@ mod test {
 
     #[test]
     fn base64_encode() {
-        assert_eq!(Integer::from(0u8).base64_encode().unwrap(), "AA==");
+        assert_eq!(Integer::from(0u8).base64_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base64_encode().unwrap(), "Cg==");
         assert!(Integer::from(-2i64).base64_encode().is_err());
     }
 
     #[test]
     fn base64_decode() {
+        assert_eq!(Integer::base64_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("AA==").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("Cg==").unwrap(), Integer::from(10u8));
     }
