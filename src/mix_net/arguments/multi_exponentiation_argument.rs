@@ -428,28 +428,20 @@ impl Display for MultiExponentiationArgumentResult {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::context_from_json_value;
-    use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer, json_values_to_ciphertext,
+    };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-multiexp-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     pub fn get_ciphertexts(value: &Value) -> Vec<Ciphertext> {
         value
             .as_array()
             .unwrap()
             .iter()
-            .map(get_ciphertext)
+            .map(json_values_to_ciphertext)
             .collect()
     }
 
@@ -461,13 +453,6 @@ pub mod test {
             .map(get_ciphertexts)
             .collect();
         Matrix::from_rows(&temp).unwrap()
-    }
-
-    fn get_ciphertext(tc: &Value) -> Ciphertext {
-        Ciphertext::from_expanded(
-            &json_exa_value_to_integer(&tc["gamma"]),
-            &json_array_exa_value_to_array_integer(&tc["phis"]),
-        )
     }
 
     pub struct MEStatementValues(pub Matrix<Ciphertext>, pub Ciphertext, pub Vec<Integer>);
@@ -485,8 +470,8 @@ pub mod test {
     fn get_statement_values(statement: &Value) -> MEStatementValues {
         MEStatementValues(
             get_ciphertext_matrix(&statement["ciphertexts"]),
-            get_ciphertext(&statement["ciphertext_product"]),
-            json_array_exa_value_to_array_integer(&statement["c_a"]),
+            json_values_to_ciphertext(&statement["ciphertext_product"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
         )
     }
 
@@ -496,14 +481,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> MEArgumentValues {
         MEArgumentValues(
-            json_exa_value_to_integer(&argument["c_a_0"]),
-            json_array_exa_value_to_array_integer(&argument["c_b"]),
+            json_64_value_to_integer(&argument["c_a_0"]),
+            json_array_64_value_to_array_integer(&argument["c_b"]),
             get_ciphertexts(&argument["e"]),
-            json_array_exa_value_to_array_integer(&argument["a"]),
-            json_exa_value_to_integer(&argument["r"]),
-            json_exa_value_to_integer(&argument["b"]),
-            json_exa_value_to_integer(&argument["s"]),
-            json_exa_value_to_integer(&argument["tau"]),
+            json_array_64_value_to_array_integer(&argument["a"]),
+            json_64_value_to_integer(&argument["r"]),
+            json_64_value_to_integer(&argument["b"]),
+            json_64_value_to_integer(&argument["s"]),
+            json_64_value_to_integer(&argument["tau"]),
         )
     }
 
@@ -516,28 +501,39 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-multiexp-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = MultiExponentiationArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_multi_exponentiation_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x: {}",
+                tc["description"]
+            );
+            let res = verify_multi_exponentiation_argument(&context, &input);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }

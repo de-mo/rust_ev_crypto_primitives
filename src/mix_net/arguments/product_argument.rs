@@ -264,9 +264,6 @@ impl<'a, 'b> ProductArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::super::{
         hadamard_argument::test::HadamardArgumentValues,
         hadamard_argument::test::{
@@ -281,18 +278,12 @@ pub mod test {
         zero_argument::test::get_argument as get_zero_argument,
     };
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-product-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     pub struct ProductStatementValues(pub Vec<Integer>, pub Integer);
     pub struct ProductArgumentValues(
@@ -303,8 +294,8 @@ pub mod test {
 
     fn get_statement_values(statement: &Value) -> ProductStatementValues {
         ProductStatementValues(
-            json_array_exa_value_to_array_integer(&statement["c_a"]),
-            json_exa_value_to_integer(&statement["b"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["b"]),
         )
     }
 
@@ -318,7 +309,7 @@ pub mod test {
             argument
                 .get("hadamard_argument")
                 .map(get_hadamard_argument_values),
-            argument.get("c_b").map(json_exa_value_to_integer),
+            argument.get("c_b").map(json_64_value_to_integer),
         )
     }
 
@@ -332,11 +323,9 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-product-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);

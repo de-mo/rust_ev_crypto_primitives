@@ -459,9 +459,6 @@ impl<'a, 'b> ShuffleArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::super::{
         hadamard_argument::test::get_argument as get_hadamard_argument,
         multi_exponentiation_argument::test::{
@@ -476,18 +473,12 @@ mod test {
         zero_argument::test::get_argument as get_zero_argument,
     };
     use super::*;
-    use crate::test_json_data::json_array_exa_value_to_array_integer;
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-shuffle-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     pub struct ShuffleStatementValues(pub Vec<Ciphertext>, pub Vec<Ciphertext>);
     pub struct ShuffleArgumentValues(
@@ -510,8 +501,8 @@ mod test {
 
     fn get_argument_values(argument: &Value) -> ShuffleArgumentValues {
         ShuffleArgumentValues(
-            json_array_exa_value_to_array_integer(&argument["ca"]),
-            json_array_exa_value_to_array_integer(&argument["cb"]),
+            json_array_64_value_to_array_integer(&argument["ca"]),
+            json_array_64_value_to_array_integer(&argument["cb"]),
             get_product_argument_values(&argument["product_argument"]),
             get_me_argument_values(&argument["multi_exp_argument"]),
         )
@@ -527,11 +518,9 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-shuffle-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
@@ -550,18 +539,57 @@ mod test {
                 get_product_argument(product_argument_values, hadamard_argument, svp_argument);
             let argument = get_argument(&argument_values, product_argument, me_argument);
             let input = ShuffleArgumentVerifyInput::new(&context, &statement, &argument).unwrap();
-            let x_res = verify_shuffle_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x{}",
+                tc["description"]
+            );
+            let y_res = get_y(&context, &statement, &argument);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                y_res.is_ok(),
+                "Error unwraping y {}: {}",
+                tc["description"],
+                y_res.unwrap_err()
+            );
+            assert_eq!(
+                y_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["y"]),
+                "Verifying y: {}",
+                tc["description"]
+            );
+            let z_res = get_z(&context, &statement, &argument);
+            assert!(
+                z_res.is_ok(),
+                "Error unwraping z {}: {}",
+                tc["description"],
+                z_res.unwrap_err()
+            );
+            assert_eq!(
+                z_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["z"]),
+                "Verifying z: {}",
+                tc["description"]
+            );
+            let res = verify_shuffle_argument(&context, &input);
+            assert!(
+                res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }

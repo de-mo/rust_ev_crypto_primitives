@@ -95,28 +95,18 @@ impl<'a> ArgumentContext<'a> {
 }
 
 #[cfg(test)]
-mod test {
+mod test_json_data {
     use super::*;
     use crate::test_json_data::{
-        get_test_cases_from_json_file, json_64_value_to_integer,
-        json_array_64_value_to_array_integer, json_array_exa_value_to_array_integer,
-        json_exa_value_to_integer, json_value_to_encryption_parameters,
+        json_64_value_to_integer, json_array_64_value_to_array_integer,
+        json_value_to_encryption_parameters,
     };
     use serde_json::Value;
-
-    pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
-    pub struct CommitmentKeyValuesOld(pub Integer, pub Vec<Integer>);
 
     pub struct CommitmentKeyValues {
         pub h: Integer,
         pub gs: Vec<Integer>,
     }
-
-    pub struct ContextValuesOld(
-        pub EncryptionParametersValues,
-        Vec<Integer>,
-        pub CommitmentKeyValuesOld,
-    );
 
     pub struct ContextValues {
         pub ep: EncryptionParameters,
@@ -161,40 +151,21 @@ mod test {
             ck: json_to_commitment_key(&value["ck"]),
         }
     }
+}
 
-    pub fn context_values(context: &Value) -> ContextValuesOld {
-        ContextValuesOld(
-            EncryptionParametersValues(
-                json_exa_value_to_integer(&context["p"]),
-                json_exa_value_to_integer(&context["q"]),
-                json_exa_value_to_integer(&context["g"]),
-            ),
-            json_array_exa_value_to_array_integer(&context["pk"]),
-            CommitmentKeyValuesOld(
-                json_exa_value_to_integer(&context["ck"]["h"]),
-                json_array_exa_value_to_array_integer(&context["ck"]["g"]),
-            ),
-        )
-    }
+#[cfg(test)]
+mod test {
+    use serde_json::Value;
 
-    pub fn ep_from_json_value(values: &EncryptionParametersValues) -> EncryptionParameters {
-        EncryptionParameters::from((&values.0, &values.1, &values.2))
-    }
+    use crate::{
+        mix_net::arguments::test_json_data::json_to_context_values,
+        test_json_data::{
+            get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_64_value_to_array_integer,
+        },
+    };
 
-    pub fn ck_from_json_value(values: &CommitmentKeyValuesOld) -> CommitmentKey {
-        CommitmentKey {
-            h: values.0.clone(),
-            gs: values.1.clone(),
-        }
-    }
-
-    pub fn context_from_json_value<'a>(
-        values: &'a ContextValuesOld,
-        ep: &'a EncryptionParameters,
-        ck: &'a CommitmentKey,
-    ) -> ArgumentContext<'a> {
-        ArgumentContext::new(ep, &values.1, ck)
-    }
+    use super::*;
 
     fn get_input(tc: &Value) -> (Integer, Vec<Integer>, Vec<Integer>) {
         let input = tc["input"].clone();

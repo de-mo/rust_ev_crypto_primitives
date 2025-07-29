@@ -296,33 +296,25 @@ impl<'a, 'b> HadamardArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::context_from_json_value;
-    use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::super::zero_argument::test::{
         get_argument as get_zero_argument, get_argument_values as get_zero_argument_values,
         ZeroArgumentValues,
     };
     use super::*;
-    use crate::test_json_data::{json_array_exa_value_to_array_integer, json_exa_value_to_integer};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct HadamardStatementValues(pub Vec<Integer>, pub Integer);
     pub struct HadamardArgumentValues(pub Vec<Integer>, pub ZeroArgumentValues);
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-hadamard-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> HadamardStatementValues {
         HadamardStatementValues(
-            json_array_exa_value_to_array_integer(&statement["c_a"]),
-            json_exa_value_to_integer(&statement["c_b"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["c_b"]),
         )
     }
 
@@ -332,7 +324,7 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> HadamardArgumentValues {
         HadamardArgumentValues(
-            json_array_exa_value_to_array_integer(&argument["cUpperB"]),
+            json_array_64_value_to_array_integer(&argument["cUpperB"]),
             get_zero_argument_values(&argument["zero_argument"]),
         )
     }
@@ -346,29 +338,53 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-hadamard-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let statement = get_statement(&statement_values);
             let zero_argument = get_zero_argument(&argument_values.1);
             let argument = get_argument(&argument_values, zero_argument);
             let input = HadamardArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_hadamard_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x{}",
+                tc["description"]
+            );
+            let y_res = get_y(&context, &statement, &argument);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                y_res.is_ok(),
+                "Error unwraping y {}: {}",
+                tc["description"],
+                y_res.unwrap_err()
+            );
+            assert_eq!(
+                y_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["y"]),
+                "Verifying y: {}",
+                tc["description"]
+            );
+            let res = verify_hadamard_argument(&context, &input);
+            assert!(
+                res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }

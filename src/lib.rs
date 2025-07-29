@@ -146,7 +146,10 @@ impl<T, E> DomainVerifications<T, E> {
 
 #[cfg(test)]
 mod test_json_data {
-    use crate::{elgamal::EncryptionParameters, DecodeTrait, Hexa, Integer};
+    use crate::{
+        elgamal::{Ciphertext, EncryptionParameters},
+        DecodeTrait, Integer,
+    };
     use serde_json::Value;
     use std::path::Path;
 
@@ -168,14 +171,6 @@ mod test_json_data {
             .iter()
             .map(|v| v.as_str().unwrap().to_string())
             .collect()
-    }
-
-    pub fn json_array_exa_value_to_array_integer(array: &Value) -> Vec<Integer> {
-        Integer::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
-    }
-
-    pub fn json_exa_value_to_integer(value: &Value) -> Integer {
-        Integer::from_hexa_string(value.as_str().unwrap()).unwrap()
     }
 
     pub fn json_array_64_value_to_array_integer(array: &Value) -> Vec<Integer> {
@@ -219,10 +214,23 @@ mod test_json_data {
         pub phis: Vec<Integer>,
     }
 
+    impl From<&CiphertextValues> for Ciphertext {
+        fn from(value: &CiphertextValues) -> Self {
+            Ciphertext {
+                gamma: value.gamma.clone(),
+                phis: value.phis.clone(),
+            }
+        }
+    }
+
     pub fn json_values_to_ciphertext_values(values: &Value) -> CiphertextValues {
         CiphertextValues {
             gamma: json_64_value_to_integer(&values["gamma"]),
             phis: json_array_64_value_to_array_integer(&values["phis"]),
         }
+    }
+
+    pub fn json_values_to_ciphertext(values: &Value) -> Ciphertext {
+        Ciphertext::from(&json_values_to_ciphertext_values(values))
     }
 }

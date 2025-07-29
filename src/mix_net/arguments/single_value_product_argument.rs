@@ -260,7 +260,7 @@ impl Display for SingleValueProductArgumentResult {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::mix_net::arguments::test::json_to_context_values;
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
     use crate::test_json_data::{
         get_test_cases_from_json_file, json_64_value_to_integer,
         json_array_64_value_to_array_integer,
