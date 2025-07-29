@@ -4,7 +4,7 @@
 
 This crate implements functionalities of the crpyto primitives for the E-Voting system of Swiss Post. It is based on the specifications of Swiss Post, according to the following document version:
 
-- [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.1
+- [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.5.0
 
 It implements only the functionalities that are necessary for the implementation of the Verifier.
 

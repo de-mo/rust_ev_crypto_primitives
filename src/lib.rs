@@ -17,7 +17,7 @@
 //! Crate implementing the cryptographic functions for E-Voting
 //!
 //! It is based on the specifications of Swiss Post, according to the following document version:
-//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.1
+//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.5.0
 //!
 //! The crate reduces actually at the necessary functions for the Verifier. The crate is grouped in modules releated
 //! to themes, like the specifications
@@ -33,10 +33,11 @@
 //!
 //! # Features
 //!
-//! Following feature is possible:
-//! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post.
+//! Following features are possible:
+//! - "checks": The feature will perform checks of the input data, according to the specifications of Swiss Post.
 //!   This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
 //!   not to activate the feature
+//! - "gmpmee": Use the library gmpmee for fixed exponentiation. See [rug-gmpmee](https://docs.rs/rug-gmpmee/0.1.4/rug_gmpmee/) for details
 //!
 
 pub mod alphabets;
