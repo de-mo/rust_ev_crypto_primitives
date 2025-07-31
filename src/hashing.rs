@@ -21,7 +21,7 @@ use crate::{
     basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
     ByteArray, ByteArrayError, Integer, GROUP_PARAMETER_Q_LENGTH, SECURITY_STRENGTH,
 };
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug, str::FromStr};
 use thiserror::Error;
 
 /// Trait implementing defining an interface for objects implementing a recursive hash function.
@@ -201,6 +201,172 @@ impl HashableMessage<'_> {
     pub fn is_hashed(&self) -> bool {
         matches!(self, HashableMessage::Hashed(_))
             || matches!(self, HashableMessage::HashedOfLength(_))
+    }
+
+    /// Composte self to the expected hashable message
+    ///
+    /// `deepness` is the deepness of the composite elements. 0 as default
+    ///
+    /// Return Ok if the hashable messages are the same, of an error
+    pub fn compare_to<'b>(
+        &self,
+        expected: &HashableMessage<'b>,
+        deepness: Option<usize>,
+    ) -> Result<(), String> {
+        let deep = deepness.unwrap_or(0);
+        let res: Result<(), String> = match self {
+            HashableMessage::ByteArray(cal) => match expected {
+                HashableMessage::ByteArray(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+                HashableMessage::Integer(_) => Err("ByteArray found, Integer expected".to_string()),
+                HashableMessage::USize(_) => Err("ByteArray found, usize expected".to_string()),
+                HashableMessage::String(_) => Err("ByteArray found, string expected".to_string()),
+                HashableMessage::Composite(_) => {
+                    Err("ByteArray found, composite expected".to_string())
+                }
+                HashableMessage::Hashed(_) => Err("ByteArray found, hashed expected".to_string()),
+                HashableMessage::HashedOfLength(_) => {
+                    Err("ByteArray found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::Integer(cal) => match expected {
+                HashableMessage::ByteArray(_) => Err("Integer found, Integer expected".to_string()),
+                HashableMessage::Integer(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+                HashableMessage::USize(exp) => {
+                    match cal.as_ref() == &Integer::from(*exp.as_ref()) {
+                        false => Err(format!("{cal:?} != {exp:?}")),
+                        true => Ok(()),
+                    }
+                }
+                HashableMessage::String(exp) => match Integer::from_str(exp) {
+                    Ok(n) => match &n == cal.as_ref() {
+                        true => Ok(()),
+                        false => Err("Integer found, string expected".to_string()),
+                    },
+                    Err(_) => Err("Integer found, string expected".to_string()),
+                },
+                HashableMessage::Composite(_) => {
+                    Err("Integer found, composite expected".to_string())
+                }
+                HashableMessage::Hashed(_) => Err("Integer found, hashed expected".to_string()),
+                HashableMessage::HashedOfLength(_) => {
+                    Err("Integer found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::USize(cal) => match expected {
+                HashableMessage::ByteArray(_) => Err("usize found, ByteArray expected".to_string()),
+                HashableMessage::Integer(exp) => {
+                    match exp.as_ref() == &Integer::from(*cal.as_ref()) {
+                        false => Err(format!("{cal:?} != {exp:?}")),
+                        true => Ok(()),
+                    }
+                }
+                HashableMessage::USize(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+                HashableMessage::String(_) => Err("usize found, string expected".to_string()),
+                HashableMessage::Composite(_) => Err("usize found, composite expected".to_string()),
+                HashableMessage::Hashed(_) => Err("usize found, hashed expected".to_string()),
+                HashableMessage::HashedOfLength(_) => {
+                    Err("usize found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::String(cal) => match expected {
+                HashableMessage::ByteArray(_) => {
+                    Err("string found, ByteArray expected".to_string())
+                }
+                HashableMessage::Integer(_) => Err("string found, Integer expected".to_string()),
+                HashableMessage::USize(_) => Err("string found, usize expected".to_string()),
+                HashableMessage::String(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+                HashableMessage::Composite(_) => {
+                    Err("string found, composite expected".to_string())
+                }
+                HashableMessage::Hashed(_) => Err("string found, hashed expected".to_string()),
+                HashableMessage::HashedOfLength(_) => {
+                    Err("string found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::Composite(cal) => match expected {
+                HashableMessage::ByteArray(_) => {
+                    Err("Composite found, ByteArray expected".to_string())
+                }
+                HashableMessage::Integer(_) => Err("Composite found, Integer expected".to_string()),
+                HashableMessage::USize(_) => Err("Composite found, usize expected".to_string()),
+                HashableMessage::String(_) => Err("Composite found, string expected".to_string()),
+                HashableMessage::Composite(exp) => match cal.len() == exp.len() {
+                    false => Err(format!(
+                        "Composite has length {} and expected has length {}",
+                        cal.len(),
+                        exp.len()
+                    )),
+                    true => cal
+                        .iter()
+                        .zip(exp.iter())
+                        .enumerate()
+                        .try_for_each(|(i, (c, e))| {
+                            c.as_ref()
+                                .compare_to(e.as_ref(), Some(deep + 1))
+                                .map_err(|s| format!("{s} (at position {i})"))
+                        }),
+                },
+                HashableMessage::Hashed(_) => Err("Composite found, hashed expected".to_string()),
+                HashableMessage::HashedOfLength(_) => {
+                    Err("Composite found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::Hashed(cal) => match expected {
+                HashableMessage::ByteArray(_) => {
+                    Err("hashed found, ByteArray expected".to_string())
+                }
+                HashableMessage::Integer(_) => Err("hashed found, Integer expected".to_string()),
+                HashableMessage::USize(_) => Err("hashed found, usize expected".to_string()),
+                HashableMessage::String(_) => Err("hashed found, string expected".to_string()),
+                HashableMessage::Composite(_) => {
+                    Err("hashed found, composite expected".to_string())
+                }
+                HashableMessage::Hashed(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+                HashableMessage::HashedOfLength(_) => {
+                    Err("hashed found, hashed_of_length expected".to_string())
+                }
+            },
+            HashableMessage::HashedOfLength(cal) => match expected {
+                HashableMessage::ByteArray(_) => {
+                    Err("hashed_of_length found, ByteArray expected".to_string())
+                }
+                HashableMessage::Integer(_) => {
+                    Err("hashed_of_length found, Integer expected".to_string())
+                }
+                HashableMessage::USize(_) => {
+                    Err("hashed_of_length found, usize expected".to_string())
+                }
+                HashableMessage::String(_) => {
+                    Err("hashed_of_length found, string expected".to_string())
+                }
+                HashableMessage::Composite(_) => {
+                    Err("hashed_of_length found, composite expected".to_string())
+                }
+                HashableMessage::Hashed(_) => {
+                    Err("hashed_of_length found, hashed expected".to_string())
+                }
+                HashableMessage::HashedOfLength(exp) => match cal == exp {
+                    false => Err(format!("{cal:?} != {exp:?}")),
+                    true => Ok(()),
+                },
+            },
+        };
+        res.map_err(|s| format!("Match error at deepness {deep} -> {s}"))
     }
 }
 
