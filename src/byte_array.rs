@@ -186,6 +186,11 @@ impl ByteArray {
         res
     }
 
+    /// Truncate to the given len
+    pub fn truncate(&mut self, len: usize) {
+        self.inner.truncate(len);
+    }
+
     /// Cut the byte array to given bit length according to the specifications of Swiss Post (Algorithm 3.1)
     ///
     /// # Error
