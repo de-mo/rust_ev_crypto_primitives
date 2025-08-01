@@ -52,18 +52,21 @@ pub struct AuthenticatedEncryptionDecrypt {
     decrypter: Decrypter,
 }
 
-fn collect_associated_data(
+/// Transform the associated data to byte array according to the specification of Swiss Post
+pub fn associated_data_to_byte_array(
     associated_data: &[String],
-) -> Result<ByteArray, SymAuthenticatedEncryptionErrorRepr> {
+) -> Result<ByteArray, SymAuthenticatedEncryptionError> {
     associated_data
         .iter()
         .enumerate()
         .try_fold(ByteArray::default(), |acc, (i, a)| {
             if a.len() > 255 {
-                return Err(SymAuthenticatedEncryptionErrorRepr::AssocitedDataLength {
-                    position: i,
-                    length: a.len(),
-                });
+                return Err(SymAuthenticatedEncryptionError::from(
+                    SymAuthenticatedEncryptionErrorRepr::AssocitedDataLength {
+                        position: i,
+                        length: a.len(),
+                    },
+                ));
             }
             Ok(acc
                 .new_append(&ByteArray::from(&vec![a.len() as u8]))
@@ -80,7 +83,7 @@ impl AuthenticatedEncryptionDecrypt {
         nonce: &ByteArray,
         associated_data: &[String],
     ) -> Result<Self, SymAuthenticatedEncryptionError> {
-        let aad = collect_associated_data(associated_data)?;
+        let aad = associated_data_to_byte_array(associated_data)?;
         Ok(Self {
             decrypter: Decrypter::new(nonce, encryption_key, &aad)
                 .map_err(|e| SymAuthenticatedEncryptionErrorRepr::NewDecrypter { source: e })?,
@@ -93,7 +96,7 @@ impl AuthenticatedEncryptionDecrypt {
         ciphertext: &ByteArray,
     ) -> Result<ByteArray, SymAuthenticatedEncryptionError> {
         self.decrypter
-            .decrypt(ciphertext)
+            .decrypt_and_finalize_with_tag(ciphertext)
             .map_err(|e| SymAuthenticatedEncryptionErrorRepr::GetPlaintextSymmetric { source: e })
             .map_err(SymAuthenticatedEncryptionError::from)
     }
@@ -119,7 +122,7 @@ impl AuthenticatedEncryptionEncrypt {
             None => random_bytes(AUTH_ENCRPYTION_NONCE_SIZE)
                 .map_err(|e| SymAuthenticatedEncryptionErrorRepr::RandomNonce { source: e })?,
         };
-        let aad = collect_associated_data(associated_data)?;
+        let aad = associated_data_to_byte_array(associated_data)?;
         Ok(Self {
             nonce: nonce.clone(),
             encrypter: Encrypter::new(&nonce, encryption_key, &aad)
@@ -138,7 +141,7 @@ impl AuthenticatedEncryptionEncrypt {
         plaintext: &ByteArray,
     ) -> Result<ByteArray, SymAuthenticatedEncryptionError> {
         self.encrypter
-            .encrypt(plaintext)
+            .encrypt_and_finalize_with_tag(plaintext)
             .map_err(|e| SymAuthenticatedEncryptionErrorRepr::GenCiphertextSymmetric { source: e })
             .map_err(SymAuthenticatedEncryptionError::from)
     }
@@ -170,9 +173,8 @@ mod test {
                 &tc["description"],
                 plaintext_res.unwrap_err()
             );
-            let mut plaintext = plaintext_res.unwrap();
+            let plaintext = plaintext_res.unwrap();
             let expected = json_64_value_to_byte_array(&tc["output"]["plaintext"]);
-            plaintext.truncate(expected.len());
             assert_eq!(plaintext, expected, "{}", &tc["description"])
         }
     }
@@ -198,8 +200,7 @@ mod test {
                 ciphertext_res.unwrap_err()
             );
             let ciphertext = ciphertext_res.unwrap();
-            let mut expected = json_64_value_to_byte_array(&tc["output"]["ciphertext"]);
-            expected.truncate(ciphertext.len());
+            let expected = json_64_value_to_byte_array(&tc["output"]["ciphertext"]);
             assert_eq!(ciphertext, expected, "{}", &tc["description"])
         }
     }

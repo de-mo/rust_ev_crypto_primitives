@@ -54,4 +54,6 @@ enum BasisCryptoErrorRepr {
     CertificateError(#[from] CertificateError),
     #[error(transparent)]
     SignatureError(#[from] SignatureError),
+    #[error("Input too small, since the tag size is 16")]
+    TooSmallInput,
 }

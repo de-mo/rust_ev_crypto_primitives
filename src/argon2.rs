@@ -22,6 +22,9 @@ use crate::{
 };
 use thiserror::Error;
 
+/// The size of the salt
+pub const ARGON2_SALT_SIZE: usize = 16;
+
 const STANDARD_MEMORY_EXPONENT: u32 = 21;
 const STANDARD_PARALLELISM: u32 = 4;
 const STANDARD_ITERATIONS: u32 = 1;
