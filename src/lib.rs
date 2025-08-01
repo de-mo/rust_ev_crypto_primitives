@@ -54,6 +54,7 @@ pub mod random;
 mod shared_error;
 pub mod signature;
 pub mod string;
+pub mod symmetric_autheticated_encryption;
 pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
@@ -149,7 +150,7 @@ impl<T, E> DomainVerifications<T, E> {
 mod test_json_data {
     use crate::{
         elgamal::{Ciphertext, EncryptionParameters},
-        DecodeTrait, Integer,
+        ByteArray, DecodeTrait, Integer,
     };
     use serde_json::Value;
     use std::path::Path;
@@ -186,6 +187,10 @@ mod test_json_data {
 
     pub fn json_64_value_to_integer(value: &Value) -> Integer {
         Integer::base64_decode(value.as_str().unwrap()).unwrap()
+    }
+
+    pub fn json_64_value_to_byte_array(value: &Value) -> ByteArray {
+        ByteArray::base64_decode(value.as_str().unwrap()).unwrap()
     }
 
     pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);

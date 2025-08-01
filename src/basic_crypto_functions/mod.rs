@@ -24,7 +24,7 @@ mod rand;
 mod signature;
 
 use aes::AESError;
-pub use aes::Decrypter;
+pub use aes::{Decrypter, Encrypter};
 pub use argon2::*;
 pub use certificate::*;
 pub use hash::*;

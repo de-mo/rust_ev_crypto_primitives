@@ -1,0 +1,49 @@
+[
+	{
+		"description": "symmetric-decryption-0",
+		"input": {
+			"encryption_key": "zGUf6uSgEmpRwpU8qJw8RJtPAj7r5c4KsbcFX9BJUj4=",
+			"ciphertext": "OgIHr9gmTyiDYzwU7MlGIws5vU3O9LvmSpt/Ylv4asE=",
+			"nonce": "Uv38ByGCZU8WP18P",
+			"associated_data": [
+				""
+			]
+		},
+		"output": {
+			"plaintext": "nmoYUiC2vbJUM4+CGLoilQ=="
+		}
+	},
+	{
+		"description": "symmetric-decryption-1",
+		"input": {
+			"encryption_key": "gmq/d8NJbiXqwljnSNhl1f94wMbBkKfaEfIXyerqkok=",
+			"ciphertext": "bIAAEhlh7WFPg/97gKmzlukLzSabwNUriToYgO9y9jd83pLz9Y/R9ECSx97+JYZc51NDe16llXSCsTKIUw==",
+			"nonce": "mmIdcpVmx00QA3xN",
+			"associated_data": [
+				"single string"
+			]
+		},
+		"output": {
+			"plaintext": "a9sZvV3RLl4aAEZ+kWD+9onAJgPBjnnlR61cM2bD9H4z1ZgxcyQ/lCp39Wrv"
+		}
+	},
+	{
+		"description": "symmetric-decryption-2",
+		"input": {
+			"encryption_key": "5+x/W2mI+bwzTLcZsMjF3tQAQgQJrUflJdEVmMc4J0o=",
+			"ciphertext": "cvIVPAeg9xnPqUtB1udURhWNfSsYXtWL84jAM/CvSmE4aHjCbha5wxWwN5A9PZZBfWNZ4M/cSnTAO8gNy9ytFxNCOhldxzYwkDkP5YUX1l1EF9of1QkrrEZ3P8srli0aePT2Er65pQJhP8cR3S8QTea0wLBuvjxerbgIMvsOIrg1/mgYFGHVYk7E4KLaFA==",
+			"nonce": "e7sEB9HixkmBhVrY",
+			"associated_data": [
+				"and",
+				"now",
+				"for",
+				"something",
+				"completely",
+				"different"
+			]
+		},
+		"output": {
+			"plaintext": "YIFZrI28VDh9cspY3zWwL1Zx5VuRGHZve+utSqFDfUupPEvrh+xfBVof9pyzk2dtiYfwRSF3WK8bNIJN4tK9tXrSqCBWZmkt6Hef7dEOvcStM+/X/A8sB0xmckRJP4SgB0UcH1KBrKn6NihUpqcgHurEbcfNLZM7Jiw0/kvH"
+		}
+	}
+]
