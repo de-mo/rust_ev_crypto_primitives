@@ -53,7 +53,7 @@ pub struct AuthenticatedEncryptionDecrypt {
 }
 
 /// Transform the associated data to byte array according to the specification of Swiss Post
-pub fn associated_data_to_byte_array(
+fn associated_data_to_byte_array(
     associated_data: &[String],
 ) -> Result<ByteArray, SymAuthenticatedEncryptionError> {
     associated_data
