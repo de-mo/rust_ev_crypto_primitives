@@ -21,7 +21,7 @@ pub const AUTH_ENCRPYTION_NONCE_SIZE: usize = 12;
 
 use crate::{
     basic_crypto_functions::{BasisCryptoError, Decrypter, Encrypter},
-    random::random_bytes,
+    random::{random_bytes, RandomError},
     ByteArray,
 };
 use thiserror::Error;
@@ -38,7 +38,7 @@ enum SymAuthenticatedEncryptionErrorRepr {
     #[error("Error getting the plaintext")]
     GetPlaintextSymmetric { source: BasisCryptoError },
     #[error("Error generating the random nonce")]
-    RandomNonce { source: BasisCryptoError },
+    RandomNonce { source: RandomError },
     #[error("Error creating the encrypter")]
     NewEncrypter { source: BasisCryptoError },
     #[error("Error generating the ciphertext")]
