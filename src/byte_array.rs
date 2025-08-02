@@ -313,13 +313,20 @@ impl From<&usize> for ByteArray {
         ByteArray::try_from(&Integer::from(*value)).unwrap()
     }
 }
+
 impl From<&Vec<u8>> for ByteArray {
     fn from(bytes: &Vec<u8>) -> Self {
+        ByteArray::from(bytes.as_slice())
+    }
+}
+
+impl From<&[u8]> for ByteArray {
+    fn from(bytes: &[u8]) -> Self {
         if bytes.is_empty() {
             ByteArray::default()
         } else {
             ByteArray {
-                inner: (*bytes.clone()).to_vec(),
+                inner: bytes.to_vec(),
             }
         }
     }
