@@ -107,7 +107,10 @@ impl Decrypter {
         let (c_slice, tag_slice) = &input.to_bytes().split_at(input.len() - CRYPTER_TAG_SIZE);
         let ciphertext = ByteArray::from(&c_slice.to_vec());
         let tag = ByteArray::from(&tag_slice.to_vec());
-        let plaintext = self.decrypt(&ciphertext)?;
+        let plaintext = match ciphertext.len() {
+            0 => ByteArray::default(),
+            _ => self.decrypt(&ciphertext)?,
+        };
         let crypter = self.0.crypter_mut();
         crypter
             .set_tag(tag.to_bytes())
