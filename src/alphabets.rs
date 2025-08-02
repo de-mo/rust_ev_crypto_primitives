@@ -19,9 +19,10 @@
 use lazy_static::lazy_static;
 
 lazy_static! {
-    /// Static struct of the alphabet latin according to §4.2 of the specifications
-    pub static ref ALPHABET_LATIN: AlphabetLatin = AlphabetLatin::default();
-}
+/// Static struct of the alphabet latin according to §4.2 of the specifications
+pub static ref ALPHABET_LATIN: Alphabet = Alphabet::new(ALPHABET_LATIN_CONTENT);
+/// Static struct of the user friendly alphabet according to §4.1 of the specifications
+pub static ref ALPHABET_USER_FRIENDLY: Alphabet = Alphabet::new(ALPHABET_USER_FRIENDLY_CONTENT);}
 
 const ALPHABET_LATIN_CONTENT: &str = "\u{23}\u{20}\u{27}\u{28}\u{29}\u{2C}\u{2D}\u{2E}\u{2F}\u{30}\
 \u{31}\u{32}\u{33}\u{34}\u{35}\u{36}\u{37}\u{38}\u{39}\u{41}\
@@ -39,10 +40,16 @@ const ALPHABET_LATIN_CONTENT: &str = "\u{23}\u{20}\u{27}\u{28}\u{29}\u{2C}\u{2D}
 \u{f4}\u{f5}\u{f6}\u{f8}\u{f9}\u{fa}\u{fb}\u{fc}\u{fd}\u{fe}\
 \u{ff}";
 
-/// Alphabet latin according to §4.2 of the specifications
-pub struct AlphabetLatin(&'static str);
+const ALPHABET_USER_FRIENDLY_CONTENT: &str = "abcdefghijkmnpqrstuvwxyz23456789";
 
-impl AlphabetLatin {
+/// Alphabet
+pub struct Alphabet(&'static str);
+
+impl Alphabet {
+    pub fn new(chars: &'static str) -> Self {
+        Self(chars)
+    }
+
     /// Size of the alphabet
     pub fn size(&self) -> usize {
         self.0.chars().count()
@@ -51,12 +58,6 @@ impl AlphabetLatin {
     /// Character at position `pos` of the alphabet
     pub fn character_at_pos(&self, pos: usize) -> Option<char> {
         self.0.chars().nth(pos)
-    }
-}
-
-impl Default for AlphabetLatin {
-    fn default() -> Self {
-        Self(ALPHABET_LATIN_CONTENT)
     }
 }
 
