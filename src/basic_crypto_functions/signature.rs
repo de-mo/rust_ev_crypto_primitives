@@ -16,6 +16,8 @@
 
 //! Implement necessary signature functions for the crate
 
+use crate::basic_crypto_functions::{PublicKey, Secretkey};
+
 use super::{super::byte_array::ByteArray, BasisCryptoError, BasisCryptoErrorRepr};
 use openssl::{
     error::ErrorStack,
@@ -47,11 +49,11 @@ pub(super) enum SignatureError {
 /// The length of the salt is set to the length of the underlying hash function (i.e. 32 bytes).
 /// The trailer field number is 1, which represents the trailer field with value 0xbc, in accordance with the same RFC.
 pub fn verify(
-    pkey: &PKeyRef<Public>,
+    pkey: &PublicKey,
     hashed: &ByteArray,
     signature: &ByteArray,
 ) -> Result<bool, BasisCryptoError> {
-    verify_repr(pkey, hashed, signature)
+    verify_repr(pkey.pkey_public(), hashed, signature)
         .map_err(BasisCryptoErrorRepr::from)
         .map_err(BasisCryptoError::from)
 }
@@ -109,8 +111,8 @@ fn verify_repr(
 /// The mask generation function used for PSS is MGF1, defined in appendix B.2 of RFC8017.
 /// The length of the salt is set to the length of the underlying hash function (i.e. 32 bytes).
 /// The trailer field number is 1, which represents the trailer field with value 0xbc, in accordance with the same RFC.
-pub fn sign(skey: &PKeyRef<Private>, hashed: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
-    sign_repr(skey, hashed)
+pub fn sign(skey: &Secretkey, hashed: &ByteArray) -> Result<ByteArray, BasisCryptoError> {
+    sign_repr(skey.pkey_private(), hashed)
         .map_err(BasisCryptoErrorRepr::from)
         .map_err(BasisCryptoError::from)
 }

@@ -121,7 +121,6 @@ fn verify_signature_impl(
     let pkey = cert
         .public_key()
         .map_err(|e| SignatureInternalError::PublicKey { source: e })?;
-    let pub_key = pkey.pkey_public().as_ref();
 
     // Calculate hash
     // Precalulate hash of message and additional_context to avoid problem with lifetimes
@@ -142,8 +141,7 @@ fn verify_signature_impl(
         .map_err(|e| SignatureInternalError::HashH { source: e })?;
 
     // Verify signature
-    verify(pub_key, &h, signature)
-        .map_err(|e| SignatureInternalError::VerifySignature { source: e })
+    verify(&pkey, &h, signature).map_err(|e| SignatureInternalError::VerifySignature { source: e })
 }
 
 /// Sign the message according to the specification of Swiss Post (Algorithm 7.3)
@@ -182,8 +180,7 @@ fn sign_impl(
     let pk_private = cert
         .secret_key()
         .as_ref()
-        .ok_or(SignatureInternalError::MissingSecretKey)?
-        .pkey_private();
+        .ok_or(SignatureInternalError::MissingSecretKey)?;
 
     // Calculate hash
     // Precalulate hash of message and additional_context to avoid problem with lifetimes
