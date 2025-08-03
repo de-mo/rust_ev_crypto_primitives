@@ -54,7 +54,7 @@ pub mod random;
 mod shared_error;
 pub mod signature;
 pub mod string;
-pub mod symmetric_autheticated_encryption;
+pub mod symmetric_authenticated_encryption;
 pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
