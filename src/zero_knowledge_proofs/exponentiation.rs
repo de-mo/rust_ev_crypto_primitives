@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
@@ -177,8 +177,8 @@ mod test {
     use super::*;
     use crate::{
         test_json_data::{
-            json_value_to_encryption_parameters, get_test_cases_from_json_file, json_array_64_value_to_array_integer,
-            json_array_value_to_array_string,
+            get_test_cases_from_json_file, json_array_64_value_to_array_integer,
+            json_array_value_to_array_string, json_value_to_encryption_parameters,
         },
         zero_knowledge_proofs::test::{proof_from_json_values, Proof},
     };
@@ -204,7 +204,8 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-exponentiation.json") {
+        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-exponentiation.json")
+        {
             let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
             let res = verify_exponentiation(
