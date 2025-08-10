@@ -16,6 +16,7 @@
 
 //! Module that implement key derivation functions with argon2id
 //!
+
 use crate::{
     basic_crypto_functions::{argon2_hash_password, random_bytes, BasisCryptoError},
     ByteArray,
@@ -50,6 +51,14 @@ pub enum Argon2ErrorRepr {
     HashPwd { source: BasisCryptoError },
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Default)]
+pub enum Argon2idParameters {
+    #[default]
+    Standard,
+    Less,
+    Test,
+}
+
 /// Object containing the parameters and the methods creating the key derivation functions
 /// with argon2id
 ///
@@ -70,8 +79,16 @@ pub struct Argon2id {
 }
 
 impl Argon2id {
+    pub fn new(parameters: Argon2idParameters) -> Self {
+        match parameters {
+            Argon2idParameters::Standard => Self::new_standard(),
+            Argon2idParameters::Less => Self::new_less(),
+            Argon2idParameters::Test => Self::new_test(),
+        }
+    }
+
     /// New object with standard parameters (see specifications of Swiss Post)
-    pub fn new_standard() -> Self {
+    fn new_standard() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(STANDARD_MEMORY_EXPONENT),
             parallelism_parameter: STANDARD_PARALLELISM,
@@ -81,7 +98,7 @@ impl Argon2id {
     }
 
     /// New object with less parameters (see specifications of Swiss Post)
-    pub fn new_less() -> Self {
+    fn new_less() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(LESS_MEMORY_EXPONENT),
             parallelism_parameter: LESS_PARALLELISM,
@@ -91,7 +108,7 @@ impl Argon2id {
     }
 
     /// New object with test parameters (see specifications of Swiss Post)
-    pub fn new_test() -> Self {
+    fn new_test() -> Self {
         Self {
             memory_usage_parameter: 2u32.pow(TEST_MEMORY_EXPONENT),
             parallelism_parameter: TEST_PARALLELISM,
