@@ -64,11 +64,11 @@ pub enum Argon2idParameters {
 ///
 /// # Usage (example)
 /// ```
-/// use rust_ev_crypto_primitives::{argon2::Argon2id, ByteArray, DecodeTrait};
+/// use rust_ev_crypto_primitives::{argon2::{Argon2id, Argon2idParameters}, ByteArray, DecodeTrait};
 /// let key = ByteArray::base64_decode("dGVzdCBwYXNzd29yZA==").unwrap();
 /// let salt = ByteArray::base64_decode("1YBBD3ZMrqhZr5bLsddvSA==").unwrap();
 /// let expected_tag = ByteArray::base64_decode("qYOoULGijoHNdsDaz6PqnVrTriSLuTB74cGtqHEbO7o=").unwrap();
-/// let tag = Argon2id::new_test().get_argon2id(&key, &salt).unwrap();
+/// let tag = Argon2id::new(Argon2idParameters::Test).get_argon2id(&key, &salt).unwrap();
 /// assert_eq!(tag, expected_tag);
 /// ```
 pub struct Argon2id {
