@@ -18,8 +18,8 @@
 //!
 
 use crate::{
-    basic_crypto_functions::{sha3_256, shake256, BasisCryptoError},
-    ByteArray, ByteArrayError, Integer, GROUP_PARAMETER_Q_LENGTH, SECURITY_STRENGTH,
+    ByteArray, ByteArrayError, GROUP_PARAMETER_Q_LENGTH, Integer, SECURITY_STRENGTH,
+    basic_crypto_functions::{BasisCryptoError, sha3_256, shake256},
 };
 use std::{borrow::Cow, fmt::Debug, str::FromStr};
 use thiserror::Error;
@@ -383,7 +383,7 @@ impl RecursiveHashTrait for HashableMessage<'_> {
 
     fn recursive_hash_of_length(&self, length: usize) -> Result<ByteArray, HashError> {
         let mut upper_l = length / 8;
-        if length % 8 > 0 {
+        if !length.is_multiple_of(8) {
             upper_l += 1;
         }
         let b = self.to_hashable_byte_array_of_length(length)?;

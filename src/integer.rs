@@ -23,8 +23,8 @@
 use crate::byte_array::ByteArrayError;
 use crate::shared_error::{IsNegativeError, NotImplemented};
 use crate::{ByteArray, DecodeTrait, EncodeTrait, NotOddError};
-use rug::integer::ParseIntegerError;
 use rug::Integer;
+use rug::integer::ParseIntegerError;
 use std::sync::OnceLock;
 use std::{fmt::Debug, sync::LazyLock};
 use thiserror::Error;
@@ -32,9 +32,9 @@ use tracing::info;
 
 #[cfg(feature = "gmpmee")]
 use rug_gmpmee::{
+    GmpMEEError,
     fpowm::{cache_base_modulus, cache_fpown, cache_init_precomp},
     spown::spowm,
-    GmpMEEError,
 };
 
 #[derive(Error, Debug)]
@@ -410,7 +410,7 @@ impl ToByteArryTrait for Integer {
         }
         let bits = self.nb_bits();
         let bytes = bits / 8;
-        if bits % 8 == 0 {
+        if bits.is_multiple_of(8) {
             Ok(bytes)
         } else {
             Ok(bytes + 1)
@@ -787,9 +787,11 @@ mod test {
             ByteArray::from_bytes(b"\x00\x00\x00\x5c\x28"),
         );
         assert!(Integer::from(-1i32).to_fixed_length_byte_array(1).is_err());
-        assert!(Integer::from(23591u32)
-            .to_fixed_length_byte_array(1)
-            .is_err());
+        assert!(
+            Integer::from(23591u32)
+                .to_fixed_length_byte_array(1)
+                .is_err()
+        );
     }
 
     #[test]

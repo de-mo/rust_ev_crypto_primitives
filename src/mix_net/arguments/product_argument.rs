@@ -19,20 +19,20 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use super::{
+    ArgumentContext,
     hadamard_argument::{
-        verify_hadamard_argument, HadamardArgument, HadamardArgumentError, HadamardArgumentResult,
-        HadamardArgumentVerifyInput, HadamardStatement,
+        HadamardArgument, HadamardArgumentError, HadamardArgumentResult,
+        HadamardArgumentVerifyInput, HadamardStatement, verify_hadamard_argument,
     },
     single_value_product_argument::{
-        verify_single_value_product_argument, SingleValueProductArgument,
-        SingleValueProductArgumentError, SingleValueProductArgumentResult,
-        SingleValueProductStatement, SingleValueProductVerifyInput,
+        SingleValueProductArgument, SingleValueProductArgumentError,
+        SingleValueProductArgumentResult, SingleValueProductStatement,
+        SingleValueProductVerifyInput, verify_single_value_product_argument,
     },
-    ArgumentContext,
 };
 use crate::{
-    mix_net::{MixNetResultTrait, MixnetError, MixnetErrorRepr},
     Integer,
+    mix_net::{MixNetResultTrait, MixnetError, MixnetErrorRepr},
 };
 
 /// Statement in input of the verify algorithm
@@ -250,10 +250,10 @@ impl<'a, 'b> ProductArgumentVerifyInput<'a, 'b> {
         if statement.m() == 0 {
             return Err(ProductArgumentError::MNotPositive);
         }
-        if let Some(h_arg) = &argument.hadamard_arg {
-            if h_arg.n() < 2 || h_arg.n() > context.ck.nu() {
-                return Err(ProductArgumentError::NNotCorrect);
-            }
+        if let Some(h_arg) = &argument.hadamard_arg
+            && (h_arg.n() < 2 || h_arg.n() > context.ck.nu())
+        {
+            return Err(ProductArgumentError::NNotCorrect);
         }
         Ok(Self {
             statement,

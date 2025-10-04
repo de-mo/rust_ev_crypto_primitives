@@ -16,7 +16,7 @@
 
 use thiserror::Error;
 
-use crate::{elgamal::Ciphertext, HashableMessage, Integer};
+use crate::{HashableMessage, Integer, elgamal::Ciphertext};
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T>
@@ -42,7 +42,7 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         let mut n = upper_n;
         let mut i = (upper_n as f64).sqrt() as usize;
         while i > 1 {
-            if upper_n % i == 0 {
+            if upper_n.is_multiple_of(i) {
                 m = i;
                 n = upper_n / i;
                 return (m, n);

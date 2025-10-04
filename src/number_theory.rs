@@ -183,7 +183,7 @@ impl SmallPrimeTrait for usize {
         if *self == 2 || *self == 3 {
             return Ok(true);
         }
-        if self % 2 == 0 || self % 3 == 0 {
+        if self.is_multiple_of(2) || self.is_multiple_of(3) {
             return Ok(false);
         }
         if self <= SMALL_PRIMES.last().unwrap() {
@@ -192,7 +192,7 @@ impl SmallPrimeTrait for usize {
         let mut i = 5;
         let limit = (f64::sqrt(*self as f64) as usize) + 1;
         while i <= limit {
-            if self % i == 0 || self % (i + 2) == 0 {
+            if self.is_multiple_of(i) || self.is_multiple_of(i + 2) {
                 return Ok(false);
             }
             i += 6;
@@ -286,20 +286,26 @@ mod test {
                 .unwrap(),
             -1
         );
-        assert!(Integer::from(1001u32)
-            .jacobi_symbol(&Integer::from(4u32))
-            .is_err(),);
+        assert!(
+            Integer::from(1001u32)
+                .jacobi_symbol(&Integer::from(4u32))
+                .is_err(),
+        );
     }
 
     #[test]
     fn test_is_quadratic_residue() {
-        assert!(!Integer::from(17u8)
-            .is_quadratic_residue(&Integer::from(3u8))
-            .unwrap());
+        assert!(
+            !Integer::from(17u8)
+                .is_quadratic_residue(&Integer::from(3u8))
+                .unwrap()
+        );
         assert!(!Integer::from(17u8).is_quadratic_residue_unchecked(&Integer::from(3u8)));
-        assert!(Integer::from(17u8)
-            .is_quadratic_residue(&Integer::from(13u8))
-            .unwrap());
+        assert!(
+            Integer::from(17u8)
+                .is_quadratic_residue(&Integer::from(13u8))
+                .unwrap()
+        );
         assert!(Integer::from(17u8).is_quadratic_residue_unchecked(&Integer::from(13u8)));
         let p = Integer::from_hexa_string(
             "0xCE9E0307D2AE75BDBEEC3E0A6E71A279417B56C955C602FFFD067586BACFDAC3BCC49A49EB4D126F5E9255E57C14F3E09492B6496EC8AC1366FC4BB7F678573FA2767E6547FA727FC0E631AA6F155195C035AF7273F31DFAE1166D1805C8522E95F9AF9CE33239BF3B68111141C20026673A6C8B9AD5FA8372ED716799FE05C0BB6EAF9FCA1590BD9644DBEFAA77BA01FD1C0D4F2D53BAAE965B1786EC55961A8E2D3E4FE8505914A408D50E6B99B71CDA78D8F9AF1A662512F8C4C3A9E72AC72D40AE5D4A0E6571135CBBAAE08C7A2AA0892F664549FA7EEC81BA912743F3E584AC2B2092243C4A17EC98DF079D8EECB8B885E6BBAFA452AAFA8CB8C08024EFF28DE4AF4AC710DCD3D66FD88212101BCB412BCA775F94A2DCE18B1A6452D4CF818B6D099D4505E0040C57AE1F3E84F2F8E07A69C0024C05ACE05666A6B63B0695904478487E78CD0704C14461F24636D7A3F267A654EEDCF8789C7F627C72B4CBD54EED6531C0E54E325D6F09CB648AE9185A7BDA6553E40B125C78E5EAA867"

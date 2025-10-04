@@ -16,8 +16,8 @@
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use crate::{integer::ToByteArrayError, ConstantsTrait, Integer, ToByteArryTrait};
-use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
+use crate::{ConstantsTrait, Integer, ToByteArryTrait, integer::ToByteArrayError};
+use data_encoding::{BASE32, BASE64, DecodeError, HEXUPPER};
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
@@ -212,7 +212,7 @@ impl ByteArray {
         for i in 0..length {
             upper_b_prime.push(upper_b[offset + i]);
         }
-        if n % 8 != 0 {
+        if !n.is_multiple_of(8) {
             upper_b_prime[0] = upper_b[offset] & (Pow::pow(2u8, n % 8) - 1);
         }
         Ok(ByteArray::from(&upper_b_prime))

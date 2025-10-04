@@ -15,26 +15,26 @@
 // <https://www.gnu.org/licenses/>
 
 use super::{
+    ArgumentContext,
     multi_exponentiation_argument::{
-        verify_multi_exponentiation_argument, MultiExponentiationArgument,
-        MultiExponentiationArgumentError, MultiExponentiationArgumentResult,
-        MultiExponentiationArgumentVerifyInput, MultiExponentiationStatement,
+        MultiExponentiationArgument, MultiExponentiationArgumentError,
+        MultiExponentiationArgumentResult, MultiExponentiationArgumentVerifyInput,
+        MultiExponentiationStatement, verify_multi_exponentiation_argument,
     },
     product_argument::{ProductArgument, ProductArgumentError, ProductArgumentResult},
-    ArgumentContext,
 };
 use crate::{
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
     elgamal::{Ciphertext, ElgamalError},
     integer::ModExponentiateError,
     mix_net::{
-        arguments::product_argument::{
-            verify_product_argument, ProductArgumentVerifyInput, ProductStatement,
-        },
-        commitments::{get_commitment_matrix, CommitmentError},
-        matrix::{Matrix, MatrixError},
         MixNetResultTrait, MixnetError, MixnetErrorRepr,
+        arguments::product_argument::{
+            ProductArgumentVerifyInput, ProductStatement, verify_product_argument,
+        },
+        commitments::{CommitmentError, get_commitment_matrix},
+        matrix::{Matrix, MatrixError},
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 use std::fmt::Display;
 use thiserror::Error;
@@ -405,12 +405,12 @@ impl<'a> ShuffleArgument<'a> {
                 "ProductArgmuent".to_string(),
             ));
         }
-        if let Some(p_n) = product_argument.n() {
-            if p_n != n {
-                return Err(ShuffleArgumentError::NNotConsistent(
-                    "ProductArgmuent".to_string(),
-                ));
-            }
+        if let Some(p_n) = product_argument.n()
+            && p_n != n
+        {
+            return Err(ShuffleArgumentError::NNotConsistent(
+                "ProductArgmuent".to_string(),
+            ));
         }
         Ok(Self {
             cs_upper_a,
@@ -462,12 +462,12 @@ mod test {
     use super::super::{
         hadamard_argument::test::get_argument as get_hadamard_argument,
         multi_exponentiation_argument::test::{
-            get_argument as get_me_argument, get_argument_values as get_me_argument_values,
-            get_ciphertexts, MEArgumentValues,
+            MEArgumentValues, get_argument as get_me_argument,
+            get_argument_values as get_me_argument_values, get_ciphertexts,
         },
         product_argument::test::{
-            get_argument as get_product_argument,
-            get_argument_values as get_product_argument_values, ProductArgumentValues,
+            ProductArgumentValues, get_argument as get_product_argument,
+            get_argument_values as get_product_argument_values,
         },
         single_value_product_argument::test::get_argument as get_single_vpa_argument,
         zero_argument::test::get_argument as get_zero_argument,

@@ -21,15 +21,15 @@ use std::{fmt::Display, ops::ControlFlow};
 use thiserror::Error;
 
 use crate::{
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait,
     elgamal::{Ciphertext, ElgamalError},
     integer::ModExponentiateError,
     mix_net::{
-        commitments::{get_commitment, CommitmentError},
-        matrix::Matrix,
         MixNetResultTrait, MixnetError, MixnetErrorRepr,
+        commitments::{CommitmentError, get_commitment},
+        matrix::Matrix,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait,
 };
 
 use super::ArgumentContext;
@@ -164,8 +164,13 @@ pub fn verify_multi_exponentiation_argument(
     .fold(argument.cs_upper_b[0].clone(), |acc, v| {
         acc.mod_multiply(&v, p)
     });*/
-    let comm_upper_b = get_commitment(context.ep, &[argument.b.clone()], argument.s, context.ck)
-        .map_err(|e| MultiExponentiationArgumentError::CommitmentB { source: e })?;
+    let comm_upper_b = get_commitment(
+        context.ep,
+        std::slice::from_ref(argument.b),
+        argument.s,
+        context.ck,
+    )
+    .map_err(|e| MultiExponentiationArgumentError::CommitmentB { source: e })?;
     let verif_upper_b = prod_upper_c_b == comm_upper_b;
 
     let prod_upper_e = match argument
