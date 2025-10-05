@@ -214,7 +214,8 @@ impl OperationsOptimizationTrait for OperationOptimization {
         exponent_bitlen: usize,
     ) -> Result<bool, OptimizationError> {
         cache_init_precomp(base, modulus, block_width, exponent_bitlen)
-            .map_err(|e| OptimizationError::FPownPrepareFixBased { source: e })
+            .map_err(|e| OptimizationErrorRepr::FPownPrepareFixBased { source: e })
+            .map_err(OptimizationError::from)
     }
 
     fn is_fpowm_optimized_for(&self, base: &Integer, modulus: &Integer) -> bool {
@@ -225,7 +226,9 @@ impl OperationsOptimizationTrait for OperationOptimization {
     }
 
     fn optimized_fpowm(&self, exponent: &Integer) -> Result<Integer, OptimizationError> {
-        cache_fpown(exponent).ok_or(OptimizationError::FPownCacheNotinitialized)
+        cache_fpown(exponent)
+            .ok_or(OptimizationErrorRepr::FPownCacheNotinitialized)
+            .map_err(OptimizationError::from)
     }
 
     fn optimized_spowm(
@@ -234,7 +237,9 @@ impl OperationsOptimizationTrait for OperationOptimization {
         exponents: &[Integer],
         modulus: &Integer,
     ) -> Result<Integer, OptimizationError> {
-        spowm(bases, exponents, modulus).map_err(|e| OptimizationError::SPown { source: e })
+        spowm(bases, exponents, modulus)
+            .map_err(|e| OptimizationErrorRepr::SPown { source: e })
+            .map_err(OptimizationError::from)
     }
 }
 
