@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,25 +10,23 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
 //! Module implementing the verification for the Single Value Product Argument (§9.3.6)
 
-use std::fmt::Display;
-
-use thiserror::Error;
-
+use super::ArgumentContext;
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
-        MixNetResultTrait,
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
     },
-    HashError, HashableMessage, Integer, IntegerError, OperationsTrait, RecursiveHashTrait,
+    HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
-
-use super::ArgumentContext;
+use std::fmt::Display;
+use thiserror::Error;
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
@@ -71,12 +69,16 @@ pub enum SingleValueProductArgumentError {
     ExponentVectorNotSameLen,
     #[error("Exponent vectors a_tilde and b_tilde to small")]
     TooSmallExponentVector,
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    #[error("Error calculating the product C_a")]
+    ProdCA { source: ModExponentiateError },
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("error calculation Commitment A")]
+    CommitmentA { source: CommitmentError },
+    #[error("Error calculating the product of Delta")]
+    ProdDelta { source: ModExponentiateError },
+    #[error("error calculation Commitment Delta")]
+    CommitmentDelta { source: CommitmentError },
 }
 
 impl<'a> SingleValueProductStatement<'a> {
@@ -89,10 +91,34 @@ impl<'a> SingleValueProductStatement<'a> {
 }
 
 impl<'a> SingleValueProductArgument<'a> {
-    /// New argument cloning the data
+    /// New argument
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        c_d: &'a Integer,
+        c_lower_delta: &'a Integer,
+        c_upper_delta: &'a Integer,
+        a_tilde: &'a [Integer],
+        b_tilde: &'a [Integer],
+        r_tilde: &'a Integer,
+        s_tilde: &'a Integer,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(
+            c_d,
+            c_lower_delta,
+            c_upper_delta,
+            a_tilde,
+            b_tilde,
+            r_tilde,
+            s_tilde,
+        )
+        .map_err(MixnetErrorRepr::from)
+        .map_err(|e| MixnetError {
+            source: Box::new(e),
+        })
+    }
+
+    fn new_impl(
         c_d: &'a Integer,
         c_lower_delta: &'a Integer,
         c_upper_delta: &'a Integer,
@@ -145,19 +171,22 @@ pub fn verify_single_value_product_argument(
     let q = context.ep.q();
     let n = argument.a_tilde.len();
 
-    let x = get_x(context, statement, argument)?;
+    let x = get_x(context, statement, argument)
+        .map_err(|e| SingleValueProductArgumentError::X { source: e })?;
 
     let prod_upper_c_a = statement
         .c_a
-        .mod_exponentiate(&x, p)?
+        .mod_exponentiate(&x, p)
+        .map_err(|e| SingleValueProductArgumentError::ProdCA { source: e })?
         .mod_multiply(argument.c_d, p);
     let comm_upper_a = get_commitment(context.ep, argument.a_tilde, argument.r_tilde, context.ck)
-        .map_err(SingleValueProductArgumentError::CommitmentError)?;
+        .map_err(|e| SingleValueProductArgumentError::CommitmentA { source: e })?;
     let verif_upper_a = prod_upper_c_a == comm_upper_a;
 
     let prod_delta = argument
         .c_upper_delta
-        .mod_exponentiate(&x, p)?
+        .mod_exponentiate(&x, p)
+        .map_err(|e| SingleValueProductArgumentError::ProdDelta { source: e })?
         .mod_multiply(argument.c_lower_delta, p);
     let e: Vec<Integer> = argument
         .a_tilde
@@ -175,11 +204,8 @@ pub fn verify_single_value_product_argument(
                 .mod_sub(&b_i.mod_multiply(a_i_plus_1, q), q)
         })
         .collect();
-    println!("e: {:?}", &e);
     let comm_delta = get_commitment(context.ep, &e, argument.s_tilde, context.ck)
-        .map_err(SingleValueProductArgumentError::CommitmentError)?;
-    println!("prod_delta: {}", prod_delta);
-    println!("comm_delta: {}", comm_delta);
+        .map_err(|e| SingleValueProductArgumentError::CommitmentDelta { source: e })?;
     let verif_delta = prod_delta == comm_delta;
 
     let verif_upper_b = argument.b_tilde[0] == argument.a_tilde[0]
@@ -196,7 +222,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &SingleValueProductStatement,
     argument: &SingleValueProductArgument,
-) -> Result<Integer, SingleValueProductArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -208,8 +234,7 @@ fn get_x(
         HashableMessage::from(statement.b),
         HashableMessage::from(statement.c_a),
     ])
-    .recursive_hash()
-    .map_err(SingleValueProductArgumentError::HashError)?
+    .recursive_hash()?
     .into_integer())
 }
 
@@ -234,13 +259,13 @@ impl Display for SingleValueProductArgumentResult {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct SVPStatementValues(pub Integer, pub Integer);
     pub struct SVPArgumentValues(
@@ -253,19 +278,10 @@ pub mod test {
         pub Integer,
     );
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-single-value-product-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> SVPStatementValues {
         SVPStatementValues(
-            json_value_to_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["b"]),
+            json_64_value_to_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["b"]),
         )
     }
 
@@ -275,13 +291,13 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> SVPArgumentValues {
         SVPArgumentValues(
-            json_value_to_mpinteger(&argument["c_d"]),
-            json_value_to_mpinteger(&argument["c_lower_delta"]),
-            json_value_to_mpinteger(&argument["c_upper_delta"]),
-            json_array_value_to_array_mpinteger(&argument["a_tilde"]),
-            json_array_value_to_array_mpinteger(&argument["b_tilde"]),
-            json_value_to_mpinteger(&argument["r_tilde"]),
-            json_value_to_mpinteger(&argument["s_tilde"]),
+            json_64_value_to_integer(&argument["c_d"]),
+            json_64_value_to_integer(&argument["c_lower_delta"]),
+            json_64_value_to_integer(&argument["c_upper_delta"]),
+            json_array_64_value_to_array_integer(&argument["a_tilde"]),
+            json_array_64_value_to_array_integer(&argument["b_tilde"]),
+            json_64_value_to_integer(&argument["r_tilde"]),
+            json_64_value_to_integer(&argument["s_tilde"]),
         )
     }
 
@@ -293,44 +309,31 @@ pub mod test {
     }
 
     #[test]
-    fn test_get_x() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
-            let statement_values = get_statement_values(&tc["input"]["statement"]);
-            let statement = get_statement(&statement_values);
-            let argument_values = get_argument_values(&tc["input"]["argument"]);
-            let argument = get_argument(&argument_values);
-            let x_res = get_x(&context, &statement, &argument);
-            assert!(
-                x_res.is_ok(),
-                "Error unwraping {}: {}",
-                tc["description"],
-                x_res.unwrap_err()
-            );
-            assert_eq!(
-                x_res.unwrap(),
-                json_value_to_mpinteger(&tc["output"]["x"]),
-                "{}",
-                tc["description"]
-            );
-        }
-    }
-
-    #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in
+            get_test_cases_from_json_file("mixnet", "verify-single-value-product-argument.json")
+                .iter()
+        {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = SingleValueProductVerifyInput::new(&statement, &argument).unwrap();
+            let x_res = get_x(&context, &statement, &argument);
+            assert!(
+                x_res.is_ok(),
+                "Error unwraping x {}: {}",
+                tc["description"],
+                x_res.unwrap_err()
+            );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Not same x: {}",
+                tc["description"]
+            );
             let x_res = verify_single_value_product_argument(&context, &input);
             assert!(
                 x_res.is_ok(),

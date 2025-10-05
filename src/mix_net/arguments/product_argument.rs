@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
@@ -19,20 +19,20 @@ use std::fmt::Display;
 use thiserror::Error;
 
 use super::{
+    ArgumentContext,
     hadamard_argument::{
-        verify_hadamard_argument, HadamardArgument, HadamardArgumentError, HadamardArgumentResult,
-        HadamardArgumentVerifyInput, HadamardStatement,
+        HadamardArgument, HadamardArgumentError, HadamardArgumentResult,
+        HadamardArgumentVerifyInput, HadamardStatement, verify_hadamard_argument,
     },
     single_value_product_argument::{
-        verify_single_value_product_argument, SingleValueProductArgument,
-        SingleValueProductArgumentError, SingleValueProductArgumentResult,
-        SingleValueProductStatement, SingleValueProductVerifyInput,
+        SingleValueProductArgument, SingleValueProductArgumentError,
+        SingleValueProductArgumentResult, SingleValueProductStatement,
+        SingleValueProductVerifyInput, verify_single_value_product_argument,
     },
-    ArgumentContext,
 };
 use crate::{
-    mix_net::{commitments::CommitmentError, MixNetResultTrait},
-    HashError, Integer,
+    Integer,
+    mix_net::{MixNetResultTrait, MixnetError, MixnetErrorRepr},
 };
 
 /// Statement in input of the verify algorithm
@@ -77,19 +77,24 @@ pub enum ProductArgumentError {
     MNotPositive,
     #[error("n must be between 2 and nu")]
     NNotCorrect,
-    //#[error("Exponent vectors a' and b' have not the same size")]
-    //ExponentVectorNotSameLen,
-    //#[error(
-    //    "Commitment vector c_d has not the size 2*m + 1 where m={0}"
-    //)] CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("SingleValueProductArgumentError: {0}")]
-    SingleValueProductArgument(#[from] SingleValueProductArgumentError),
-    #[error("HadamardArgumentError: {0}")]
-    HadamardArgumentError(#[from] HadamardArgumentError),
+    #[error("Error creating Hadamard statement")]
+    HadamardStatement { source: HadamardArgumentError },
+    #[error("Error creating inputs for Hadamard arguemnt")]
+    HadamardArgumentInput { source: HadamardArgumentError },
+    #[error("Error verifying Hadamard arguemnt")]
+    HadamardArgumentVerification { source: HadamardArgumentError },
+    #[error("Error creating single value statement")]
+    SVPStatement {
+        source: SingleValueProductArgumentError,
+    },
+    #[error("Error creating inputs for single value arguemnt")]
+    SVPArgumentInput {
+        source: SingleValueProductArgumentError,
+    },
+    #[error("Error verifying single value arguemnt")]
+    SVPArgumentVerification {
+        source: SingleValueProductArgumentError,
+    },
 }
 
 pub fn verify_product_argument(
@@ -102,9 +107,9 @@ pub fn verify_product_argument(
     if statement.m() > 1 {
         let c_b = &argument.c_b.as_ref().unwrap();
         let h_statement = HadamardStatement::new(statement.cs_upper_a, c_b)
-            .map_err(ProductArgumentError::HadamardArgumentError)?;
+            .map_err(|e| ProductArgumentError::HadamardStatement { source: e })?;
         let s_statement = SingleValueProductStatement::new(c_b, statement.b)
-            .map_err(ProductArgumentError::SingleValueProductArgument)?;
+            .map_err(|e| ProductArgumentError::SVPStatement { source: e })?;
         Ok(ProductArgumentResult {
             hadamard_arg: Some(
                 verify_hadamard_argument(
@@ -113,9 +118,9 @@ pub fn verify_product_argument(
                         &h_statement,
                         argument.hadamard_arg.as_ref().unwrap(),
                     )
-                    .map_err(ProductArgumentError::HadamardArgumentError)?,
+                    .map_err(|e| ProductArgumentError::HadamardArgumentInput { source: e })?,
                 )
-                .map_err(ProductArgumentError::HadamardArgumentError)?,
+                .map_err(|e| ProductArgumentError::HadamardArgumentVerification { source: e })?,
             ),
             single_value_product_arg: verify_single_value_product_argument(
                 context,
@@ -123,13 +128,13 @@ pub fn verify_product_argument(
                     &s_statement,
                     &argument.single_value_product_arg,
                 )
-                .map_err(ProductArgumentError::SingleValueProductArgument)?,
+                .map_err(|e| ProductArgumentError::SVPArgumentInput { source: e })?,
             )
-            .map_err(ProductArgumentError::SingleValueProductArgument)?,
+            .map_err(|e| ProductArgumentError::SVPArgumentVerification { source: e })?,
         })
     } else {
         let s_statement = SingleValueProductStatement::new(&statement.cs_upper_a[0], statement.b)
-            .map_err(ProductArgumentError::SingleValueProductArgument)?;
+            .map_err(|e| ProductArgumentError::SVPStatement { source: e })?;
         Ok(ProductArgumentResult {
             hadamard_arg: None,
             single_value_product_arg: verify_single_value_product_argument(
@@ -138,9 +143,9 @@ pub fn verify_product_argument(
                     &s_statement,
                     &argument.single_value_product_arg,
                 )
-                .map_err(ProductArgumentError::SingleValueProductArgument)?,
+                .map_err(|e| ProductArgumentError::SVPArgumentInput { source: e })?,
             )
-            .map_err(ProductArgumentError::SingleValueProductArgument)?,
+            .map_err(|e| ProductArgumentError::SVPArgumentVerification { source: e })?,
         })
     }
 }
@@ -165,8 +170,8 @@ impl Display for ProductArgumentResult {
             self.single_value_product_arg
         );
         match &self.hadamard_arg {
-            Some(r) => write!(f, "{}, Hadamard Argument: {{ {} }}", svp_str, r),
-            None => write!(f, "{}", svp_str),
+            Some(r) => write!(f, "{svp_str}, Hadamard Argument: {{ {r} }}"),
+            None => write!(f, "{svp_str}"),
         }
     }
 }
@@ -189,6 +194,18 @@ impl<'a> ProductArgument<'a> {
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        c_b: Option<&'a Integer>,
+        hadamard_arg: Option<HadamardArgument<'a>>,
+        single_value_product_arg: SingleValueProductArgument<'a>,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(c_b, hadamard_arg, single_value_product_arg)
+            .map_err(MixnetErrorRepr::from)
+            .map_err(|e| MixnetError {
+                source: Box::new(e),
+            })
+    }
+
+    fn new_impl(
         c_b: Option<&'a Integer>,
         hadamard_arg: Option<HadamardArgument<'a>>,
         single_value_product_arg: SingleValueProductArgument<'a>,
@@ -233,10 +250,10 @@ impl<'a, 'b> ProductArgumentVerifyInput<'a, 'b> {
         if statement.m() == 0 {
             return Err(ProductArgumentError::MNotPositive);
         }
-        if let Some(h_arg) = &argument.hadamard_arg {
-            if h_arg.n() < 2 || h_arg.n() > context.ck.nu() {
-                return Err(ProductArgumentError::NNotCorrect);
-            }
+        if let Some(h_arg) = &argument.hadamard_arg
+            && (h_arg.n() < 2 || h_arg.n() > context.ck.nu())
+        {
+            return Err(ProductArgumentError::NNotCorrect);
         }
         Ok(Self {
             statement,
@@ -247,9 +264,6 @@ impl<'a, 'b> ProductArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::super::{
         hadamard_argument::test::HadamardArgumentValues,
         hadamard_argument::test::{
@@ -264,18 +278,12 @@ pub mod test {
         zero_argument::test::get_argument as get_zero_argument,
     };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-product-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     pub struct ProductStatementValues(pub Vec<Integer>, pub Integer);
     pub struct ProductArgumentValues(
@@ -286,8 +294,8 @@ pub mod test {
 
     fn get_statement_values(statement: &Value) -> ProductStatementValues {
         ProductStatementValues(
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["b"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["b"]),
         )
     }
 
@@ -301,7 +309,7 @@ pub mod test {
             argument
                 .get("hadamard_argument")
                 .map(get_hadamard_argument_values),
-            argument.get("c_b").map(json_value_to_mpinteger),
+            argument.get("c_b").map(json_64_value_to_integer),
         )
     }
 
@@ -315,11 +323,9 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-product-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);

@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,13 +10,13 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
 use thiserror::Error;
 
-use crate::{elgamal::Ciphertext, HashableMessage, Integer};
+use crate::{HashableMessage, Integer, elgamal::Ciphertext};
 
 #[derive(Debug, Clone)]
 pub struct Matrix<T>
@@ -42,7 +42,7 @@ impl<T: Clone + Default + std::fmt::Debug> Matrix<T> {
         let mut n = upper_n;
         let mut i = (upper_n as f64).sqrt() as usize;
         while i > 1 {
-            if upper_n % i == 0 {
+            if upper_n.is_multiple_of(i) {
                 m = i;
                 n = upper_n / i;
                 return (m, n);
@@ -189,16 +189,6 @@ impl<'a> From<&'a Matrix<Ciphertext>> for HashableMessage<'a> {
         )
     }
 }
-
-/*
-impl<T> IntoIterator for Matrix<T> where T: Clone + Default + std::fmt::Debug {
-    type Item = T;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.into_iter()
-    }
-}*/
 
 struct ColIter<'a, T>
 where

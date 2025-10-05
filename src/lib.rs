@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,14 +10,14 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
 //! Crate implementing the cryptographic functions for E-Voting
 //!
 //! It is based on the specifications of Swiss Post, according to the following document version:
-//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.4.1
+//! [Crypo-primitives](https://gitlab.com/swisspost-evoting/crypto-primitives/crypto-primitives), version 1.5.0
 //!
 //! The crate reduces actually at the necessary functions for the Verifier. The crate is grouped in modules releated
 //! to themes, like the specifications
@@ -33,10 +33,11 @@
 //!
 //! # Features
 //!
-//! Following feature is possible:
-//! - "checks": The library will perform checks of the input data, according to the specifications of Swiss Post.
+//! Following features are possible:
+//! - "checks": The feature will perform checks of the input data, according to the specifications of Swiss Post.
 //!   This reduces the performance. If the checks are performed during the usage of the crate, it is recommended,
 //!   not to activate the feature
+//! - "gmpmee": Use the library gmpmee for fixed exponentiation. See [rug-gmpmee](https://docs.rs/rug-gmpmee/0.1.4/rug_gmpmee/) for details
 //!
 
 pub mod alphabets;
@@ -50,18 +51,24 @@ mod integer;
 pub mod mix_net;
 mod number_theory;
 pub mod random;
+mod shared_error;
 pub mod signature;
 pub mod string;
+pub mod symmetric_authenticated_encryption;
 pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
-    prepare_fixed_based_optimization, ByteLengthTrait, ConstantsTrait, Hexa, IntegerError,
-    OperationsTrait,
+    prepare_fixed_based_optimization, ConstantsTrait, Hexa, IntegerOperationError,
+    ModExponentiateError, OperationsTrait, ToByteArryTrait,
 };
-pub use number_theory::{NumberTheoryError, NumberTheoryMethodTrait, SmallPrimeTrait};
+pub use number_theory::{
+    IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
+    SmallPrimeTrait,
+};
 pub use rug::Integer;
+pub use shared_error::{NotOddError, NotPositiveError};
 
 /// The length of the group parameter `p` according to the security level in the specifications
 pub const GROUP_PARAMETER_P_LENGTH: usize = 3072;
@@ -141,8 +148,23 @@ impl<T, E> DomainVerifications<T, E> {
 
 #[cfg(test)]
 mod test_json_data {
-    use crate::{Hexa, Integer};
+    use crate::{
+        elgamal::{Ciphertext, EncryptionParameters},
+        ByteArray, DecodeTrait, Integer,
+    };
     use serde_json::Value;
+    use std::path::Path;
+
+    const TEST_DATA_DIR: &str = "test_data";
+
+    pub fn get_test_cases_from_json_file(subdir_name: &str, filename: &str) -> Vec<Value> {
+        let test_file = Path::new("./")
+            .join(TEST_DATA_DIR)
+            .join(subdir_name)
+            .join(filename);
+        let json = std::fs::read_to_string(test_file).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
 
     pub fn json_array_value_to_array_string(array: &Value) -> Vec<String> {
         array
@@ -153,11 +175,68 @@ mod test_json_data {
             .collect()
     }
 
-    pub fn json_array_value_to_array_mpinteger(array: &Value) -> Vec<Integer> {
-        Integer::from_hexa_string_slice(&json_array_value_to_array_string(array)).unwrap()
+    pub fn json_array_64_value_to_array_integer(array: &Value) -> Vec<Integer> {
+        Integer::base_64_decode_vector(
+            &json_array_value_to_array_string(array)
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
     }
 
-    pub fn json_value_to_mpinteger(value: &Value) -> Integer {
-        Integer::from_hexa_string(value.as_str().unwrap()).unwrap()
+    pub fn json_64_value_to_integer(value: &Value) -> Integer {
+        Integer::base64_decode(value.as_str().unwrap()).unwrap()
+    }
+
+    pub fn json_64_value_to_byte_array(value: &Value) -> ByteArray {
+        ByteArray::base64_decode(value.as_str().unwrap()).unwrap()
+    }
+
+    pub struct EncryptionParametersValues(pub Integer, pub Integer, pub Integer);
+
+    impl From<&EncryptionParametersValues> for EncryptionParameters {
+        fn from(value: &EncryptionParametersValues) -> Self {
+            EncryptionParameters::from((&value.0, &value.1, &value.2))
+        }
+    }
+
+    pub fn json_value_to_encryption_parameters(values: &Value) -> EncryptionParameters {
+        EncryptionParameters::from(&json_value_to_encryption_parameters_values(values))
+    }
+
+    pub fn json_value_to_encryption_parameters_values(
+        values: &Value,
+    ) -> EncryptionParametersValues {
+        EncryptionParametersValues(
+            json_64_value_to_integer(&values["p"]),
+            json_64_value_to_integer(&values["q"]),
+            json_64_value_to_integer(&values["g"]),
+        )
+    }
+
+    pub struct CiphertextValues {
+        pub gamma: Integer,
+        pub phis: Vec<Integer>,
+    }
+
+    impl From<&CiphertextValues> for Ciphertext {
+        fn from(value: &CiphertextValues) -> Self {
+            Ciphertext {
+                gamma: value.gamma.clone(),
+                phis: value.phis.clone(),
+            }
+        }
+    }
+
+    pub fn json_values_to_ciphertext_values(values: &Value) -> CiphertextValues {
+        CiphertextValues {
+            gamma: json_64_value_to_integer(&values["gamma"]),
+            phis: json_array_64_value_to_array_integer(&values["phis"]),
+        }
+    }
+
+    pub fn json_values_to_ciphertext(values: &Value) -> Ciphertext {
+        Ciphertext::from(&json_values_to_ciphertext_values(values))
     }
 }

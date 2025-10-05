@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,22 +10,34 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
 //! Implementation of the structure for the Encryption parameters
 
-use thiserror::Error;
-
+use super::{ElgamalError, ElgamalErrorRepr};
 use crate::{
-    basic_crypto_functions::shake256,
-    number_theory::{NumberTheoryMethodTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
+    basic_crypto_functions::{shake256, BasisCryptoError},
+    number_theory::{IsPrimeTrait, QuadraticResidueTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
     ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
     VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
+use thiserror::Error;
 
-use super::ElgamalError;
+#[derive(Error, Debug)]
+pub(super) enum EncryptionParameterError {
+    #[error("Error calculating q_b^ in get_encryption_parameters")]
+    QBHat { source: BasisCryptoError },
+    #[error("To few number of small primes found. Expcted: {expected}, found: {found}")]
+    TooFewSmallPrimeNumbers { expected: usize, found: usize },
+    #[error("Number {name} with value {val} is not prime")]
+    NotPrime { name: &'static str, val: Integer },
+    #[error("The relation p=2q+1 is not satisfied")]
+    CheckRelationPQ,
+    #[error("The value should not be one")]
+    CheckNotOne,
+}
 
 /// Encryption parameters for the ecryption system according to the specification of Swiss Post
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,15 +47,19 @@ pub struct EncryptionParameters {
     g: Integer,
 }
 
+#[derive(Error, Debug)]
+#[error("Error checking the domain of the encryption parameters")]
+pub struct EncryptionParameterDomainError(#[from] EncryptionParameterDomainErrorRepr);
+
 // Enum reprsenting the elgamal errors
 #[derive(Error, Debug, Clone)]
-pub enum EncryptionParameterDomainError {
+enum EncryptionParameterDomainErrorRepr {
     #[error("p does not satisfy the requirements: {0}")]
-    PNotSatisfiedDomain(String),
+    P(String),
     #[error("q does not satisfy the requirements: {0}")]
-    QNotSatisfiedDomain(String),
+    Q(String),
     #[error("g does not satisfy the requirements: {0}")]
-    GNotSatisfiedDomain(String),
+    G(String),
 }
 
 impl EncryptionParameters {
@@ -86,7 +102,9 @@ impl EncryptionParameters {
     // GetEncryptionParameters according to the specification of Swiss Post (Algorithm 8.1)
     pub fn get_encryption_parameters(seed: &str) -> Result<Self, ElgamalError> {
         let q_b_hat = shake256(&ByteArray::from(seed), GROUP_PARAMETER_P_LENGTH / 8)
-            .map_err(ElgamalError::OpenSSLError)?;
+            .map_err(|e| EncryptionParameterError::QBHat { source: e })
+            .map_err(ElgamalErrorRepr::from)
+            .map_err(ElgamalError::from)?;
         let q_b = q_b_hat.new_prepend_byte(2u8);
         let q_prime: Integer = q_b.into_integer() >> 3;
         let q = &q_prime - Integer::from(&q_prime % 6u8) + Integer::five();
@@ -159,10 +177,12 @@ impl EncryptionParameters {
             current += 2;
         }
         if res.len() != desired_number {
-            return Err(ElgamalError::TooFewSmallPrimeNumbers {
-                expected: desired_number,
-                found: res.len(),
-            });
+            return Err(ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::TooFewSmallPrimeNumbers {
+                    expected: desired_number,
+                    found: res.len(),
+                },
+            )));
         }
         Ok(res)
     }
@@ -178,7 +198,12 @@ impl EncryptionParameters {
     pub fn validate_p(&self) -> Vec<ElgamalError> {
         match self.p.result_is_prime() {
             Ok(_) => vec![],
-            Err(e) => vec![ElgamalError::CheckNumberTheory(e)],
+            Err(_) => vec![ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::NotPrime {
+                    name: "p",
+                    val: self.p.clone(),
+                },
+            ))],
         }
     }
 
@@ -188,13 +213,16 @@ impl EncryptionParameters {
     pub fn validate_q(&self) -> Vec<ElgamalError> {
         let mut res = vec![];
         if self.p != Integer::from(&self.q * 2u8) + 1u8 {
-            res.push(ElgamalError::CheckRelationPQ);
+            res.push(ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::CheckRelationPQ,
+            )));
         }
-        if let Err(e) = self
-            .q
-            .result_is_prime()
-            .map_err(ElgamalError::CheckNumberTheory)
-        {
+        if let Err(e) = self.q.result_is_prime().map_err(|_| {
+            ElgamalError::from(ElgamalErrorRepr::from(EncryptionParameterError::NotPrime {
+                name: "q",
+                val: self.q.clone(),
+            }))
+        }) {
             res.push(e);
         }
         res
@@ -205,12 +233,19 @@ impl EncryptionParameters {
     /// Return a [`Vec<ElgamalError>`] if the check is not positive. Else None
     pub fn validate_g(&self) -> Vec<ElgamalError> {
         if &self.g == Integer::one() {
-            return vec![ElgamalError::CheckNotOne];
+            return vec![ElgamalError::from(ElgamalErrorRepr::from(
+                EncryptionParameterError::CheckNotOne,
+            ))];
         }
         if let Err(e) = self
             .g
             .result_is_quadratic_residue_unchecked(&self.p)
-            .map_err(ElgamalError::CheckNumberTheory)
+            .map_err(|_| {
+                ElgamalError::from(ElgamalErrorRepr::from(EncryptionParameterError::NotPrime {
+                    name: "g",
+                    val: self.g.clone(),
+                }))
+            })
         {
             return vec![e];
         }
@@ -245,8 +280,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_p(ep) {
-                res.push(EncryptionParameterDomainError::PNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::P(e.to_string()),
                 ))
             }
             res
@@ -254,8 +289,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_q(ep) {
-                res.push(EncryptionParameterDomainError::QNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::Q(e.to_string()),
                 ))
             }
             res
@@ -263,8 +298,8 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
         res.add_verification(|ep| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_g(ep) {
-                res.push(EncryptionParameterDomainError::GNotSatisfiedDomain(
-                    e.to_string(),
+                res.push(EncryptionParameterDomainError::from(
+                    EncryptionParameterDomainErrorRepr::G(e.to_string()),
                 ))
             }
             res
@@ -276,7 +311,7 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Hexa;
+    use crate::{DecodeTrait, Hexa};
 
     #[test]
     fn test_get_small_prime_group_members() {
@@ -300,13 +335,13 @@ mod test {
         let ep_res = EncryptionParameters::get_encryption_parameters("31");
         assert!(ep_res.is_ok());
         let ep = ep_res.unwrap();
-        let p_exp = Integer::from_hexa_string(
-            "0xBEDCDE3405B8A18D6C7615FCFF97DB1C29CD2CA69F1BB1432E690E1E947836FC1DE9160D5C2ADEE52ED244F7997ECCE19FF979D00CC3CCE3784DA6C6495D0D87337B24ABB0FD848C79EBBCF298349396FAE4031A3B7EC2BF313CAEF36AB191CAD36D4AEFDFFA87F72DAACB2EA854FFFCCC66E99C2896911EBA93341C006DD3AA4DD06B432B2D3FCD79B5F7C61DED181B734B2DC1C869E498B2647E8C4301DBFD1787F1C7F5E687D118F2A5D410DB73689586377AA9273DEEC051B60DB813DD0C22FAD561BABE3C59CC67EB284387EE6D3F8C38F6A0B34DE82CEF929B853C3B1A52C6CD6B87AA0A882C30F8B716B3687CCB8EB9EC1BF67407C5142315D2BDFFA5D37E0ADB968593BC66A999695DF11B0164B21A62F7A0A7006D49EF8DEB31408E66AD53A4A6BE38F20EF09C84C729A9544EDF854274DC2120CAFA1BC08E20E7C7F1969DCD4C2C08DCB8AB419B6A8B22F1D6F183B1912E54B045C84E95E668D282073EF9216E3106C173FF9A1D29DC445059491209FA9540D06B666611EB5ECE77"
+        let p_exp = Integer::base64_decode(
+            "AL7c3jQFuKGNbHYV/P+X2xwpzSymnxuxQy5pDh6UeDb8HekWDVwq3uUu0kT3mX7M4Z/5edAMw8zjeE2mxkldDYczeySrsP2EjHnrvPKYNJOW+uQDGjt+wr8xPK7zarGRytNtSu/f+of3LarLLqhU//zMZumcKJaRHrqTNBwAbdOqTdBrQystP815tffGHe0YG3NLLcHIaeSYsmR+jEMB2/0Xh/HH9eaH0RjypdQQ23NolYY3eqknPe7AUbYNuBPdDCL61WG6vjxZzGfrKEOH7m0/jDj2oLNN6CzvkpuFPDsaUsbNa4eqCogsMPi3FrNofMuOuewb9nQHxRQjFdK9/6XTfgrbloWTvGapmWld8RsBZLIaYvegpwBtSe+N6zFAjmatU6SmvjjyDvCchMcpqVRO34VCdNwhIMr6G8COIOfH8ZadzUwsCNy4q0Gbaosi8dbxg7GRLlSwRchOleZo0oIHPvkhbjEGwXP/mh0p3ERQWUkSCfqVQNBrZmYR617Odw=="
         ).unwrap();
-        let q_exp = Integer::from_hexa_string(
-            "0x5F6E6F1A02DC50C6B63B0AFE7FCBED8E14E696534F8DD8A19734870F4A3C1B7E0EF48B06AE156F729769227BCCBF6670CFFCBCE80661E671BC26D36324AE86C399BD9255D87EC2463CF5DE794C1A49CB7D72018D1DBF615F989E5779B558C8E569B6A577EFFD43FB96D56597542A7FFE663374CE144B488F5D499A0E0036E9D526E835A195969FE6BCDAFBE30EF68C0DB9A596E0E434F24C59323F462180EDFE8BC3F8E3FAF343E88C7952EA086DB9B44AC31BBD54939EF76028DB06DC09EE86117D6AB0DD5F1E2CE633F59421C3F7369FC61C7B5059A6F41677C94DC29E1D8D296366B5C3D5054416187C5B8B59B43E65C75CF60DFB3A03E28A118AE95EFFD2E9BF056DCB42C9DE3354CCB4AEF88D80B2590D317BD0538036A4F7C6F598A0473356A9D2535F1C7907784E426394D4AA276FC2A13A6E1090657D0DE0471073E3F8CB4EE6A616046E5C55A0CDB5459178EB78C1D8C8972A5822E4274AF3346941039F7C90B7188360B9FFCD0E94EE22282CA48904FD4AA06835B33308F5AF673B"
+        let q_exp = Integer::base64_decode(
+            "X25vGgLcUMa2Owr+f8vtjhTmllNPjdihlzSHD0o8G34O9IsGrhVvcpdpInvMv2Zwz/y86AZh5nG8JtNjJK6Gw5m9klXYfsJGPPXeeUwaSct9cgGNHb9hX5ieV3m1WMjlabald+/9Q/uW1WWXVCp//mYzdM4US0iPXUmaDgA26dUm6DWhlZaf5rza++MO9owNuaWW4OQ08kxZMj9GIYDt/ovD+OP680PojHlS6ghtubRKwxu9VJOe92Ao2wbcCe6GEX1qsN1fHizmM/WUIcP3Np/GHHtQWab0FnfJTcKeHY0pY2a1w9UFRBYYfFuLWbQ+Zcdc9g37OgPiihGK6V7/0um/BW3LQsneM1TMtK74jYCyWQ0xe9BTgDak98b1mKBHM1ap0lNfHHkHeE5CY5TUqidvwqE6bhCQZX0N4EcQc+P4y07mphYEblxVoM21RZF463jB2MiXKlgi5CdK8zRpQQOffJC3GINguf/NDpTuIigspIkE/UqgaDWzMwj1r2c7"
         ).unwrap();
-        let g_exp = Integer::from(2u8);
+        let g_exp = Integer::base64_decode("Ag==").unwrap();
         assert_eq!(ep.p, p_exp);
         assert_eq!(ep.q, q_exp);
         assert_eq!(ep.g, g_exp);

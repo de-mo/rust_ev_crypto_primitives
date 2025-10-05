@@ -14,27 +14,32 @@
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
-//! Implementation the algorithms for strings
+//! Definition of some shared error types
 
-use std::cmp::min;
+use thiserror::Error;
 
-pub fn truncate(s: &str, l: usize) -> String {
-    let u = s.len();
-    let m = min(u, l);
-    s.chars().take(m).collect()
+#[derive(Error, Debug)]
+#[error("The value is not positive")]
+/// Error if the value is not positive
+pub struct NotPositiveError {}
+
+#[derive(Error, Debug)]
+#[error("The value {val} is negative")]
+/// Error if the value is not positive
+pub struct IsNegativeError {
+    pub(crate) val: String,
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
+#[derive(Error, Debug)]
+#[error("The value {val} is not odd")]
+/// Error if the value is not odd
+pub struct NotOddError {
+    pub(crate) val: String,
+}
 
-    #[test]
-    fn test_truncate() {
-        let s = "1234567890";
-        assert_eq!(truncate(s, 2), "12".to_string());
-        assert_eq!(truncate(s, 0), String::new());
-        assert_eq!(truncate(s, 5), "12345".to_string());
-        assert_eq!(truncate(s, 10), "1234567890".to_string());
-        assert_eq!(truncate(s, 11), "1234567890".to_string());
-    }
+#[derive(Error, Debug)]
+#[error("The fn {function} is not implemented")]
+/// Error if the value is not odd
+pub struct NotImplemented {
+    pub(crate) function: &'static str,
 }

@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
@@ -20,8 +20,11 @@
 //! used in the client modules
 //!
 
-use crate::{ByteArray, DecodeTrait, EncodeTrait};
+use crate::byte_array::ByteArrayError;
+use crate::shared_error::{IsNegativeError, NotImplemented};
+use crate::{ByteArray, DecodeTrait, EncodeTrait, NotOddError};
 use rug::Integer;
+use rug::integer::ParseIntegerError;
 use std::sync::OnceLock;
 use std::{fmt::Debug, sync::LazyLock};
 use thiserror::Error;
@@ -29,9 +32,131 @@ use tracing::info;
 
 #[cfg(feature = "gmpmee")]
 use rug_gmpmee::{
+    GmpMEEError,
     fpowm::{cache_base_modulus, cache_fpown, cache_init_precomp},
     spown::spowm,
 };
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error im Mod Exponentiate
+pub struct ModExponentiateError(#[from] ModExponentiateErrorRepr);
+
+#[derive(Error, Debug)]
+enum ModExponentiateErrorRepr {
+    #[error("mod_exponentiate error for {name}")]
+    IsNegative {
+        name: &'static str,
+        source: IsNegativeError,
+    },
+    #[error("mod_exponentiate error for {name}")]
+    NotOdd {
+        name: &'static str,
+        source: NotOddError,
+    },
+    #[error("pow_mod_ref return a None value")]
+    PowModRefIsNone,
+    #[error("Error with optimization")]
+    OptimizationError { source: OptimizationError },
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// enum representing the errors with optimizations
+pub struct OptimizationError(#[from] OptimizationErrorRepr);
+
+#[cfg(feature = "gmpmee")]
+#[derive(Error, Debug)]
+enum OptimizationErrorRepr {
+    #[error("Error in prepare_fixed_base_exponentiate initializing the cache")]
+    FPownPrepareFixBased { source: GmpMEEError },
+    #[error("The cache for optimized_fpowm is not initialized")]
+    FPownCacheNotinitialized,
+    #[error("Error in optimized_spowm")]
+    SPown { source: GmpMEEError },
+    #[error(transparent)]
+    Notimplemented(#[from] NotImplemented),
+}
+
+#[cfg(not(feature = "gmpmee"))]
+#[derive(Error, Debug)]
+enum OptimizationErrorRepr {
+    #[error(transparent)]
+    Notimplemented(#[from] NotImplemented),
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error in parse hexa
+pub struct HexaParseError(#[from] HexaParseErrorRepr);
+
+#[derive(Error, Debug)]
+pub enum HexaParseErrorRepr {
+    #[error("String {0} must start with \"0x\" of \"0X\"")]
+    WrongStartChar(String),
+    #[error("Error parsing {s}")]
+    ParseError {
+        s: String,
+        source: ParseIntegerError,
+    },
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error in operations with big integer
+pub struct IntegerOperationError(#[from] IntegerOperationErrorRepr);
+
+#[derive(Error, Debug)]
+enum IntegerOperationErrorRepr {
+    #[error("Error in mod_square")]
+    Square {
+        val: Integer,
+        modulus: Integer,
+        source: ModExponentiateError,
+    },
+    #[error("Error in mod_square")]
+    Inverse {
+        val: Integer,
+        modulus: Integer,
+        source: ModExponentiateError,
+    },
+    #[error("Error in mod_multi_exponentiate")]
+    MultiExpExponentiate {
+        modulus: Integer,
+        source: ModExponentiateError,
+    },
+    #[error("Error in mod_multi_exponentiate")]
+    MultiExpOptimization {
+        modulus: Integer,
+        source: OptimizationError,
+    },
+}
+
+/// Error encoding Integer to basis
+#[derive(Error, Debug)]
+#[error("Error encoding integer {orig} to base {base}")]
+pub struct EncodeIntegerError {
+    orig: Integer,
+    base: &'static str,
+    source: ByteArrayError,
+}
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error in to byte array
+pub struct ToByteArrayError(#[from] ToByteArrayErrorRepr);
+
+#[derive(Error, Debug)]
+enum ToByteArrayErrorRepr {
+    #[error("The given integer is negative {val}")]
+    Negative { val: Integer },
+    #[error("Requested length {m} is bigger than the byte length {byte_length} of {val}")]
+    LengthToSmall {
+        val: Integer,
+        m: usize,
+        byte_length: usize,
+    },
+}
 
 /// Trait to implement constant numbers
 pub trait ConstantsTrait: Sized {
@@ -58,7 +183,7 @@ static OP_OPTIMIZATION: LazyLock<OperationOptimization> = LazyLock::new(Operatio
 pub fn prepare_fixed_based_optimization(
     base: &Integer,
     modulus: &Integer,
-) -> Result<bool, IntegerError> {
+) -> Result<bool, OptimizationError> {
     OP_OPTIMIZATION.prepare_fixed_base_exponentiate(base, modulus, 16, modulus.nb_bits() - 1)
 }
 
@@ -87,13 +212,10 @@ impl OperationsOptimizationTrait for OperationOptimization {
         modulus: &Integer,
         block_width: usize,
         exponent_bitlen: usize,
-    ) -> Result<bool, IntegerError> {
-        cache_init_precomp(base, modulus, block_width, exponent_bitlen).map_err(|e| {
-            IntegerError::GMPMEE {
-                msg: "prepare_fixed_base_exponentiate".to_string(),
-                error: e.to_string(),
-            }
-        })
+    ) -> Result<bool, OptimizationError> {
+        cache_init_precomp(base, modulus, block_width, exponent_bitlen)
+            .map_err(|e| OptimizationErrorRepr::FPownPrepareFixBased { source: e })
+            .map_err(OptimizationError::from)
     }
 
     fn is_fpowm_optimized_for(&self, base: &Integer, modulus: &Integer) -> bool {
@@ -103,10 +225,10 @@ impl OperationsOptimizationTrait for OperationOptimization {
         }
     }
 
-    fn optimized_fpowm(&self, exponent: &Integer) -> Result<Integer, IntegerError> {
-        cache_fpown(exponent).ok_or(IntegerError::Optimization(
-            "cache_fpown return None".to_string(),
-        ))
+    fn optimized_fpowm(&self, exponent: &Integer) -> Result<Integer, OptimizationError> {
+        cache_fpown(exponent)
+            .ok_or(OptimizationErrorRepr::FPownCacheNotinitialized)
+            .map_err(OptimizationError::from)
     }
 
     fn optimized_spowm(
@@ -114,11 +236,10 @@ impl OperationsOptimizationTrait for OperationOptimization {
         bases: &[Integer],
         exponents: &[Integer],
         modulus: &Integer,
-    ) -> Result<Integer, IntegerError> {
-        spowm(bases, exponents, modulus).map_err(|e| IntegerError::GMPMEE {
-            msg: "optimized_spowm".to_string(),
-            error: e.to_string(),
-        })
+    ) -> Result<Integer, OptimizationError> {
+        spowm(bases, exponents, modulus)
+            .map_err(|e| OptimizationErrorRepr::SPown { source: e })
+            .map_err(OptimizationError::from)
     }
 }
 
@@ -143,7 +264,7 @@ pub trait OperationsOptimizationTrait: Sized {
         _modulus: &Integer,
         _block_width: usize,
         _exponent_bitlen: usize,
-    ) -> Result<bool, IntegerError> {
+    ) -> Result<bool, OptimizationError> {
         Ok(false)
     }
 
@@ -157,8 +278,12 @@ pub trait OperationsOptimizationTrait: Sized {
     /// Optimized fpown
     ///
     /// Return [IntegerError::Notimplemented] per default
-    fn optimized_fpowm(&self, _exponent: &Integer) -> Result<Integer, IntegerError> {
-        Err(IntegerError::Notimplemented("optimized_fpowm".to_string()))
+    fn optimized_fpowm(&self, _exponent: &Integer) -> Result<Integer, OptimizationError> {
+        Err(OptimizationError::from(OptimizationErrorRepr::from(
+            NotImplemented {
+                function: "optimized_fpowm",
+            },
+        )))
     }
 
     /// Optimized spown
@@ -169,8 +294,12 @@ pub trait OperationsOptimizationTrait: Sized {
         _bases: &[Integer],
         _exponents: &[Integer],
         _modulus: &Integer,
-    ) -> Result<Integer, IntegerError> {
-        Err(IntegerError::Notimplemented("optimized_spowm".to_string()))
+    ) -> Result<Integer, OptimizationError> {
+        Err(OptimizationError::from(OptimizationErrorRepr::from(
+            NotImplemented {
+                function: "optimized_spowm",
+            },
+        )))
     }
 }
 
@@ -194,7 +323,7 @@ pub trait OperationsTrait: Sized {
     fn mod_sub(&self, other: &Self, modulus: &Self) -> Self;
 
     /// Calculate the exponentiate modulo: self^exp % modulus
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, IntegerError>;
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError>;
 
     /// Calculate the negative number modulo modulus (is a positive number): -self & modulus
     fn mod_negate(&self, modulus: &Self) -> Self;
@@ -211,14 +340,14 @@ pub trait OperationsTrait: Sized {
     }
 
     /// Calculate the square modulo: self*2 % modulus
-    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerError>;
+    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError>;
 
     /// Calculate the inverse modulo: self^(-1) % modulus
     ///
     /// Return the correct answer only if modulus is prime
-    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerError>;
+    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError>;
 
-    fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Result<Self, IntegerError> {
+    fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Result<Self, IntegerOperationError> {
         Ok(self.mod_multiply(&divisor.mod_inverse(modulus)?, modulus))
     }
 
@@ -227,7 +356,7 @@ pub trait OperationsTrait: Sized {
         bases: &[Self],
         exponents: &[Self],
         modulus: &Self,
-    ) -> Result<Self, IntegerError>;
+    ) -> Result<Self, IntegerOperationError>;
 
     /// Multi Exponentation modulo using iterators (prouct of b_^e_i mod modulus)
     ///
@@ -241,18 +370,18 @@ pub trait OperationsTrait: Sized {
         bases_iter: &mut T,
         exponents_iter: &mut S,
         modulus: &Self,
-    ) -> Result<Self, IntegerError>;
+    ) -> Result<Self, IntegerOperationError>;
 }
 
 /// Transformation from or to String in hexadecimal according to the specifications
 pub trait Hexa: Sized {
     /// Create object from hexadecimal String. If not valid return an error
-    fn from_hexa_string(s: &str) -> Result<Self, IntegerError>;
+    fn from_hexa_string(s: &str) -> Result<Self, HexaParseError>;
 
     /// Generate the hexadecimal String
     fn to_hexa(&self) -> String;
 
-    fn from_hexa_string_slice(vs: &[String]) -> Result<Vec<Self>, IntegerError> {
+    fn from_hexa_string_slice(vs: &[String]) -> Result<Vec<Self>, HexaParseError> {
         let mut decoded = vs.iter().map(|s| Self::from_hexa_string(s.as_str()));
         let decoded_2 = decoded.clone();
         match decoded.find(|e| e.is_err()) {
@@ -262,50 +391,75 @@ pub trait Hexa: Sized {
     }
 }
 
-// enum representing the errors with big integer
-#[derive(Error, Debug)]
-pub enum IntegerError {
-    #[error("Integer {0} must be positive or zero")]
-    IsNegative(String),
-    #[error("Integer {0} must be positive")]
-    IsNotPositive(String),
-    #[error("Integer {0} must be odd")]
-    IsEven(String),
-    #[error("Error parsing {orig} in Integer in method {fnname}")]
-    ParseError { orig: String, fnname: String },
-    #[error("Problem with optimization: {0}")]
-    Optimization(String),
-    #[error("Problem with rug integer: {0}")]
-    RugInteger(String),
-    #[error("Error in gmpmee: {msg}. Caused by: {error}")]
-    GMPMEE { msg: String, error: String },
-    #[error("Error parsing {orig} in Integer in method {fnname} caused by {source}")]
-    ParseErrorWithSource {
-        orig: String,
-        fnname: String,
-        source: rug::integer::ParseIntegerError,
-    },
-    #[error("Function {0} not implemented")]
-    Notimplemented(String),
-    #[error("Error by parameters of multi exponential: {0}")]
-    MultiExpParameters(String),
-}
-
 /// Trait to calculate byte length
-pub trait ByteLengthTrait {
+pub trait ToByteArryTrait {
+    type Error: std::error::Error;
     /// Byte legnth of an object
-    fn byte_length(&self) -> usize;
+    fn byte_length(&self) -> Result<usize, Self::Error>;
+
+    // convert an integer to a byte array with the desired size
+    fn to_fixed_length_byte_array(&self, m: usize) -> Result<ByteArray, Self::Error>;
+
+    // convert an integer to a byte array
+    fn to_byte_array(&self) -> Result<ByteArray, Self::Error>;
 }
 
-impl ByteLengthTrait for Integer {
-    fn byte_length(&self) -> usize {
+impl ToByteArryTrait for Integer {
+    type Error = ToByteArrayError;
+
+    fn byte_length(&self) -> Result<usize, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
         let bits = self.nb_bits();
         let bytes = bits / 8;
-        if bits % 8 == 0 {
-            bytes
+        if bits.is_multiple_of(8) {
+            Ok(bytes)
         } else {
-            bytes + 1
+            Ok(bytes + 1)
         }
+    }
+
+    fn to_fixed_length_byte_array(&self, m: usize) -> Result<ByteArray, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
+        let byte_length = self
+            .byte_length()
+            .expect("Error calling byte_length in to_fixed_length_byte_array");
+        if byte_length > m {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::LengthToSmall {
+                val: self.clone(),
+                m,
+                byte_length,
+            }));
+        };
+        let mut x = self.clone();
+        let nb_256 = Integer::from(256u16);
+        let mut upper_b: Vec<u8> = Vec::new();
+        for _i in 0..m {
+            upper_b.insert(0, u8::try_from(Integer::from(&x % &nb_256)).unwrap());
+            x /= &nb_256;
+        }
+        Ok(ByteArray::from(&upper_b))
+    }
+
+    fn to_byte_array(&self) -> Result<ByteArray, Self::Error> {
+        if self.is_negative() {
+            return Err(ToByteArrayError(ToByteArrayErrorRepr::Negative {
+                val: self.clone(),
+            }));
+        }
+        let n = self
+            .byte_length()
+            .expect("Error calling byte_length in to_byte_array");
+        Ok(self
+            .to_fixed_length_byte_array(n)
+            .expect("Error calling to_fixed_length_byte_array in to_byte_array"))
     }
 }
 
@@ -344,21 +498,47 @@ impl OperationsTrait for Integer {
         self.is_even()
     }
 
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, IntegerError> {
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError> {
         if self.is_negative() {
-            return Err(IntegerError::IsNegative("self (base)".to_string()));
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::IsNegative {
+                    name: "self (base)",
+                    source: IsNegativeError {
+                        val: self.to_string(),
+                    },
+                },
+            ));
         }
         if modulus.is_negative() {
-            return Err(IntegerError::IsNegative("modulus".to_string()));
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::IsNegative {
+                    name: "modulus",
+                    source: IsNegativeError {
+                        val: modulus.to_string(),
+                    },
+                },
+            ));
         }
         if modulus.is_even() {
-            return Err(IntegerError::IsEven("modulus".to_string()));
+            return Err(ModExponentiateError::from(
+                ModExponentiateErrorRepr::NotOdd {
+                    name: "modulus",
+                    source: NotOddError {
+                        val: modulus.to_string(),
+                    },
+                },
+            ));
         }
         match OP_OPTIMIZATION.is_fpowm_optimized_for(self, modulus) {
-            true => OP_OPTIMIZATION.optimized_fpowm(exp),
-            false => Ok(Integer::from(self.pow_mod_ref(exp, modulus).ok_or(
-                IntegerError::RugInteger("pow_mod_ref return none".to_string()),
-            )?)),
+            true => OP_OPTIMIZATION
+                .optimized_fpowm(exp)
+                .map_err(|e| ModExponentiateErrorRepr::OptimizationError { source: e })
+                .map_err(ModExponentiateError::from),
+            false => self
+                .pow_mod_ref(exp, modulus)
+                .map(Integer::from)
+                .ok_or(ModExponentiateErrorRepr::PowModRefIsNone)
+                .map_err(ModExponentiateError::from),
         }
     }
 
@@ -376,13 +556,25 @@ impl OperationsTrait for Integer {
         Integer::from(self * other) % modulus
     }
 
-    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerError> {
+    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
         self.mod_exponentiate(Integer::two(), modulus)
+            .map_err(|e| IntegerOperationErrorRepr::Square {
+                val: self.clone(),
+                modulus: modulus.clone(),
+                source: e,
+            })
+            .map_err(IntegerOperationError::from)
     }
 
-    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerError> {
+    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
         let from = Integer::from(modulus - Self::two());
         self.mod_exponentiate(&from, modulus)
+            .map_err(|e| IntegerOperationErrorRepr::Inverse {
+                val: self.clone(),
+                modulus: modulus.clone(),
+                source: e,
+            })
+            .map_err(IntegerOperationError::from)
     }
 
     fn nb_bits(&self) -> usize {
@@ -402,7 +594,7 @@ impl OperationsTrait for Integer {
         bases: &[Self],
         exponents: &[Self],
         modulus: &Self,
-    ) -> Result<Self, IntegerError> {
+    ) -> Result<Self, IntegerOperationError> {
         Self::mod_multi_exponentiate_iter(&mut bases.iter(), &mut exponents.iter(), modulus)
     }
 
@@ -415,12 +607,18 @@ impl OperationsTrait for Integer {
         bases_iter: &mut T,
         exponents_iter: &mut S,
         modulus: &Self,
-    ) -> Result<Self, IntegerError> {
+    ) -> Result<Self, IntegerOperationError> {
         match OP_OPTIMIZATION.is_optimized() {
             true => {
                 let (bases, exponents): (Vec<_>, Vec<_>) =
                     bases_iter.cloned().zip(exponents_iter.cloned()).unzip();
-                OP_OPTIMIZATION.optimized_spowm(&bases, &exponents, modulus)
+                OP_OPTIMIZATION
+                    .optimized_spowm(&bases, &exponents, modulus)
+                    .map_err(|e| IntegerOperationErrorRepr::MultiExpOptimization {
+                        modulus: modulus.clone(),
+                        source: e,
+                    })
+                    .map_err(IntegerOperationError::from)
             }
             false => match bases_iter
                 .zip(exponents_iter)
@@ -430,27 +628,31 @@ impl OperationsTrait for Integer {
                     Err(e) => std::ops::ControlFlow::Break(e),
                 }) {
                 std::ops::ControlFlow::Continue(v) => Ok(v),
-                std::ops::ControlFlow::Break(e) => Err(e),
+                std::ops::ControlFlow::Break(e) => Err(IntegerOperationError::from(
+                    IntegerOperationErrorRepr::MultiExpExponentiate {
+                        modulus: modulus.clone(),
+                        source: e,
+                    },
+                )),
             },
         }
     }
 }
 
 impl Hexa for Integer {
-    fn from_hexa_string(s: &str) -> Result<Self, IntegerError> {
+    fn from_hexa_string(s: &str) -> Result<Self, HexaParseError> {
         if !s.starts_with("0x") && !s.starts_with("0X") {
-            return Err(IntegerError::ParseError {
-                orig: s.to_string(),
-                fnname: "from_hexa_string".to_string(),
-            });
+            return Err(HexaParseError::from(HexaParseErrorRepr::WrongStartChar(
+                s.to_string(),
+            )));
         }
         Integer::parse_radix(&s[2..], 16)
             .map(Integer::from)
-            .map_err(|e| IntegerError::ParseErrorWithSource {
-                orig: s.to_string(),
-                fnname: "from_hexa_string".to_string(),
+            .map_err(|e| HexaParseErrorRepr::ParseError {
+                s: s.to_string(),
                 source: e,
             })
+            .map_err(HexaParseError::from)
     }
 
     fn to_hexa(&self) -> String {
@@ -459,31 +661,53 @@ impl Hexa for Integer {
 }
 
 impl DecodeTrait for Integer {
-    fn base16_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    type Error = ByteArrayError;
+    fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base16_decode(s).map(|b| b.into_integer())
     }
 
-    fn base32_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base32_decode(s).map(|b| b.into_integer())
     }
 
-    fn base64_decode(s: &str) -> Result<Self, crate::byte_array::ByteArrayError> {
+    fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base64_decode(s).map(|b| b.into_integer())
     }
 }
 
 impl EncodeTrait for Integer {
-    type Error = IntegerError;
+    type Error = EncodeIntegerError;
     fn base16_encode(&self) -> Result<String, Self::Error> {
-        Ok(ByteArray::try_from(self)?.base16_encode().unwrap())
+        Ok(ByteArray::try_from(self)
+            .map_err(|e| EncodeIntegerError {
+                orig: self.clone(),
+                base: "16",
+                source: e,
+            })?
+            .base16_encode()
+            .unwrap())
     }
 
     fn base32_encode(&self) -> Result<String, Self::Error> {
-        Ok(ByteArray::try_from(self)?.base32_encode().unwrap())
+        Ok(ByteArray::try_from(self)
+            .map_err(|e| EncodeIntegerError {
+                orig: self.clone(),
+                base: "32",
+                source: e,
+            })?
+            .base32_encode()
+            .unwrap())
     }
 
     fn base64_encode(&self) -> Result<String, Self::Error> {
-        Ok(ByteArray::try_from(self)?.base64_encode().unwrap())
+        Ok(ByteArray::try_from(self)
+            .map_err(|e| EncodeIntegerError {
+                orig: self.clone(),
+                base: "64",
+                source: e,
+            })?
+            .base64_encode()
+            .unwrap())
     }
 }
 
@@ -503,12 +727,76 @@ mod test {
 
     #[test]
     fn byte_length() {
-        assert_eq!(Integer::from(0u32).byte_length(), 0);
-        assert_eq!(Integer::from(3u32).byte_length(), 1);
-        assert_eq!(Integer::from(23591u32).byte_length(), 2);
-        assert_eq!(Integer::from(23592u32).byte_length(), 2);
-        assert_eq!(Integer::from(4294967295u64).byte_length(), 4);
-        assert_eq!(Integer::from(4294967296u64).byte_length(), 5);
+        assert_eq!(Integer::from(0u32).byte_length().unwrap(), 0);
+        assert_eq!(Integer::from(3u32).byte_length().unwrap(), 1);
+        assert_eq!(Integer::from(23591u32).byte_length().unwrap(), 2);
+        assert_eq!(Integer::from(23592u32).byte_length().unwrap(), 2);
+        assert_eq!(Integer::from(4294967295u64).byte_length().unwrap(), 4);
+        assert_eq!(Integer::from(4294967296u64).byte_length().unwrap(), 5);
+        assert!(Integer::from(-1i32).byte_length().is_err())
+    }
+
+    #[test]
+    fn to_byte_array() {
+        assert_eq!(Integer::from(0u32).to_byte_array().unwrap().to_bytes(), b"",);
+        assert_eq!(
+            Integer::from(3u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x03"),
+        );
+        assert_eq!(
+            Integer::from(23591u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x5c\x27"),
+        );
+        assert_eq!(
+            Integer::from(23592u32).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x5c\x28"),
+        );
+        assert_eq!(
+            Integer::from(4294967295u64).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\xff\xff\xff\xff"),
+        );
+        assert_eq!(
+            Integer::from(4294967296u64).to_byte_array().unwrap(),
+            ByteArray::from_bytes(b"\x01\x00\x00\x00\x00"),
+        );
+        assert!(Integer::from(-1i32).byte_length().is_err())
+    }
+
+    #[test]
+    fn to_fixed_length_byte_array() {
+        assert_eq!(
+            Integer::from(0u32)
+                .to_fixed_length_byte_array(0)
+                .unwrap()
+                .to_bytes(),
+            b"",
+        );
+        assert_eq!(
+            Integer::from(0u32).to_fixed_length_byte_array(2).unwrap(),
+            ByteArray::from_bytes(b"\x00\x00"),
+        );
+        assert_eq!(
+            Integer::from(3u32).to_fixed_length_byte_array(3).unwrap(),
+            ByteArray::from_bytes(b"\x00\x00\x03"),
+        );
+        assert_eq!(
+            Integer::from(23591u32)
+                .to_fixed_length_byte_array(2)
+                .unwrap(),
+            ByteArray::from_bytes(b"\x5c\x27"),
+        );
+        assert_eq!(
+            Integer::from(23592u32)
+                .to_fixed_length_byte_array(5)
+                .unwrap(),
+            ByteArray::from_bytes(b"\x00\x00\x00\x5c\x28"),
+        );
+        assert!(Integer::from(-1i32).to_fixed_length_byte_array(1).is_err());
+        assert!(
+            Integer::from(23591u32)
+                .to_fixed_length_byte_array(1)
+                .is_err()
+        );
     }
 
     #[test]
@@ -749,26 +1037,28 @@ mod test {
 
     #[test]
     fn base16_encode() {
-        assert_eq!(Integer::from(0u8).base16_encode().unwrap(), "00");
+        assert_eq!(Integer::from(0u8).base16_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base16_encode().unwrap(), "0A");
         assert!(Integer::from(-2i64).base16_encode().is_err());
     }
 
     #[test]
     fn base16_decode() {
+        assert_eq!(Integer::base16_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base16_decode("00").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base16_decode("A1").unwrap(), Integer::from(161u8));
     }
 
     #[test]
     fn base32_encode() {
-        assert_eq!(Integer::from(0u8).base32_encode().unwrap(), "AA======");
+        assert_eq!(Integer::from(0u8).base32_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base32_encode().unwrap(), "BI======");
         assert!(Integer::from(-2i64).base32_encode().is_err());
     }
 
     #[test]
     fn base32_decode() {
+        assert_eq!(Integer::base32_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(
             Integer::base32_decode("AA======").unwrap(),
             Integer::from(0u8)
@@ -781,13 +1071,14 @@ mod test {
 
     #[test]
     fn base64_encode() {
-        assert_eq!(Integer::from(0u8).base64_encode().unwrap(), "AA==");
+        assert_eq!(Integer::from(0u8).base64_encode().unwrap(), "");
         assert_eq!(Integer::from(10u8).base64_encode().unwrap(), "Cg==");
         assert!(Integer::from(-2i64).base64_encode().is_err());
     }
 
     #[test]
     fn base64_decode() {
+        assert_eq!(Integer::base64_decode("").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("AA==").unwrap(), Integer::from(0u8));
         assert_eq!(Integer::base64_decode("Cg==").unwrap(), Integer::from(10u8));
     }

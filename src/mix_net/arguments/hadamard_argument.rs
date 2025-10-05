@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
@@ -21,12 +21,12 @@ use std::{fmt::Display, iter::once, ops::ControlFlow};
 use thiserror::Error;
 
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
-        MixNetResultTrait,
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
-    RecursiveHashTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, OperationsTrait, RecursiveHashTrait,
 };
 
 use super::{
@@ -73,19 +73,24 @@ pub enum HadamardArgumentError {
     CommitmentVectorNotCorrectLen,
     #[error("m in statement and argument are not the same")]
     MInStatementAndArguemntNotSame,
-    //#[error("Exponent vectors a' and b' have not the same size")]
-    //ExponentVectorNotSameLen,
-    //#[error(
-    //    "Commitment vector c_d has not the size 2*m + 1 where m={0}"
-    //)] CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("ZeroArgumentError: {0}")]
-    ZeroArgumentError(#[from] ZeroArgumentError),
-    #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("Error for y")]
+    Y { source: HashError },
+    #[error("Error calculating the pwoers of x")]
+    XPowers { source: ModExponentiateError },
+    #[error("Error calculating array D")]
+    VecD { source: ModExponentiateError },
+    #[error("Error calculating D")]
+    D { source: ModExponentiateError },
+    #[error("Error calculating commitment of c_(-1)")]
+    CommitmentCMinus1 { source: CommitmentError },
+    #[error("Error creating zero statement")]
+    ZeroStatement { source: ZeroArgumentError },
+    #[error("Error creating iinputs for zero arguemnt")]
+    ZeroArgumentInput { source: ZeroArgumentError },
+    #[error("Error verifying zero arguemnt")]
+    ZeroArgumentVerification { source: ZeroArgumentError },
 }
 
 pub fn verify_hadamard_argument(
@@ -99,13 +104,15 @@ pub fn verify_hadamard_argument(
     let p = context.ep.p();
     let q = context.ep.q();
 
-    let x = get_x(context, statement, argument)?;
-    let y = get_y(context, statement, argument)?;
+    let x =
+        get_x(context, statement, argument).map_err(|e| HadamardArgumentError::X { source: e })?;
+    let y =
+        get_y(context, statement, argument).map_err(|e| HadamardArgumentError::Y { source: e })?;
 
     let x_powers = (0..m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(HadamardArgumentError::IntegerError)?;
+        .map_err(|e| HadamardArgumentError::XPowers { source: e })?;
 
     let cs_upper_d = argument
         .cs_upper_b
@@ -114,7 +121,7 @@ pub fn verify_hadamard_argument(
         .zip(x_powers.iter().skip(1))
         .map(|(c_b_i, x_i_plus_1)| c_b_i.mod_exponentiate(x_i_plus_1, p))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(HadamardArgumentError::IntegerError)?;
+        .map_err(|e| HadamardArgumentError::VecD { source: e })?;
     let c_upper_d = match argument
         .cs_upper_b
         .iter()
@@ -126,7 +133,7 @@ pub fn verify_hadamard_argument(
             Err(e) => ControlFlow::Break(e),
         }) {
         ControlFlow::Continue(v) => Ok(v),
-        ControlFlow::Break(e) => Err(HadamardArgumentError::IntegerError(e)),
+        ControlFlow::Break(e) => Err(HadamardArgumentError::D { source: e }),
     }?;
 
     let minus_1_vec = vec![Integer::from(q - Integer::one()); n];
@@ -136,7 +143,7 @@ pub fn verify_hadamard_argument(
         Integer::zero(),
         context.ck,
     )
-    .map_err(HadamardArgumentError::CommitmentError)?;
+    .map_err(|e| HadamardArgumentError::CommitmentCMinus1 { source: e })?;
 
     let zero_statement_input_cs_upper_a = statement
         .cs_upper_a
@@ -155,15 +162,15 @@ pub fn verify_hadamard_argument(
         &zero_statement_input_cs_upper_b,
         &y,
     )
-    .map_err(HadamardArgumentError::ZeroArgumentError)?;
+    .map_err(|e| HadamardArgumentError::ZeroStatement { source: e })?;
     let zero_inputs = ZeroArgumentVerifyInput::new(&zero_statement, &argument.zero_argument)
-        .map_err(HadamardArgumentError::ZeroArgumentError)?;
+        .map_err(|e| HadamardArgumentError::ZeroArgumentInput { source: e })?;
 
     Ok(HadamardArgumentResult {
         c_upper_b_0_is_c_upper_a_0: argument.cs_upper_b[0] == statement.cs_upper_a[0],
         c_upper_b_m_minus_1_is_c_b: &argument.cs_upper_b[m - 1] == statement.c_b,
         zero_argument: verify_zero_argument(context, &zero_inputs)
-            .map_err(HadamardArgumentError::ZeroArgumentError)?,
+            .map_err(|e| HadamardArgumentError::ZeroArgumentVerification { source: e })?,
     })
 }
 
@@ -171,11 +178,10 @@ fn get_x(
     context: &ArgumentContext,
     statement: &HadamardStatement,
     argument: &HadamardArgument,
-) -> Result<Integer, HadamardArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(
         HashableMessage::from(get_hashable_vector_for_x(context, statement, argument))
-            .recursive_hash()
-            .map_err(HadamardArgumentError::HashError)?
+            .recursive_hash()?
             .into_integer(),
     )
 }
@@ -184,13 +190,10 @@ fn get_y(
     context: &ArgumentContext,
     statement: &HadamardStatement,
     argument: &HadamardArgument,
-) -> Result<Integer, HadamardArgumentError> {
+) -> Result<Integer, HashError> {
     let mut vec = get_hashable_vector_for_x(context, statement, argument);
     vec.insert(0, HashableMessage::from("1"));
-    Ok(HashableMessage::from(vec)
-        .recursive_hash()
-        .map_err(HadamardArgumentError::HashError)?
-        .into_integer())
+    Ok(HashableMessage::from(vec).recursive_hash()?.into_integer())
 }
 
 fn get_hashable_vector_for_x<'a>(
@@ -250,9 +253,13 @@ impl<'a> HadamardArgument<'a> {
     pub fn new(
         cs_upper_b: &'a [Integer],
         zero_argument: ZeroArgument<'a>,
-    ) -> Result<Self, HadamardArgumentError> {
+    ) -> Result<Self, MixnetError> {
         if zero_argument.cs_d.len() != 2 * cs_upper_b.len() + 1 {
-            return Err(HadamardArgumentError::CommitmentVectorNotCorrectLen);
+            return Err(MixnetError {
+                source: Box::new(MixnetErrorRepr::from(
+                    HadamardArgumentError::CommitmentVectorNotCorrectLen,
+                )),
+            });
         }
         Ok(Self {
             cs_upper_b,
@@ -289,33 +296,25 @@ impl<'a, 'b> HadamardArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::context_from_json_value;
-    use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::super::zero_argument::test::{
         get_argument as get_zero_argument, get_argument_values as get_zero_argument_values,
         ZeroArgumentValues,
     };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct HadamardStatementValues(pub Vec<Integer>, pub Integer);
     pub struct HadamardArgumentValues(pub Vec<Integer>, pub ZeroArgumentValues);
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-hadamard-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> HadamardStatementValues {
         HadamardStatementValues(
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_value_to_mpinteger(&statement["c_b"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_64_value_to_integer(&statement["c_b"]),
         )
     }
 
@@ -325,7 +324,7 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> HadamardArgumentValues {
         HadamardArgumentValues(
-            json_array_value_to_array_mpinteger(&argument["cUpperB"]),
+            json_array_64_value_to_array_integer(&argument["cUpperB"]),
             get_zero_argument_values(&argument["zero_argument"]),
         )
     }
@@ -339,29 +338,53 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-hadamard-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let statement = get_statement(&statement_values);
             let zero_argument = get_zero_argument(&argument_values.1);
             let argument = get_argument(&argument_values, zero_argument);
             let input = HadamardArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_hadamard_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x{}",
+                tc["description"]
+            );
+            let y_res = get_y(&context, &statement, &argument);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                y_res.is_ok(),
+                "Error unwraping y {}: {}",
+                tc["description"],
+                y_res.unwrap_err()
+            );
+            assert_eq!(
+                y_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["y"]),
+                "Verifying y: {}",
+                tc["description"]
+            );
+            let res = verify_hadamard_argument(&context, &input);
+            assert!(
+                res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }

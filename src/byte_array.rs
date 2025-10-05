@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,17 +10,58 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
 //! Implementation of the struct ByteArray that is used over the crate and for cryptographic functions
 
-use crate::{ByteLengthTrait, ConstantsTrait, Integer, IntegerError};
-use data_encoding::{DecodeError, BASE32, BASE64, HEXUPPER};
+use crate::{ConstantsTrait, Integer, ToByteArryTrait, integer::ToByteArrayError};
+use data_encoding::{BASE32, BASE64, DecodeError, HEXUPPER};
 use num_traits::Pow;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct ByteArrayError(#[from] ByteArrayErrorRepr);
+
+#[derive(Error, Debug)]
+enum ByteArrayErrorRepr {
+    #[error(transparent)]
+    DecodeErrorInBase(#[from] DecodeErrorInBase),
+    #[error(transparent)]
+    CutToBitLengthIndexError(#[from] CutToBitLengthIndexError),
+    #[error(transparent)]
+    FromIntegerError(#[from] FromIntegerError),
+}
+
+/// Error decoding a string to in a given base
+#[derive(Error, Debug)]
+#[error("Error decoding {orig} in base {base}")]
+struct DecodeErrorInBase {
+    orig: String,
+    base: u8,
+    source: DecodeError,
+}
+
+/// Error cutting a [ByteArray] to bit lenngth
+#[derive(Error, Debug)]
+#[error(
+    "Error in cut_bit_length for {ba}: the index {index} must be between 1 and 8*{}",
+    ba.len()
+)]
+struct CutToBitLengthIndexError {
+    index: usize,
+    ba: ByteArray,
+}
+
+/// Error getting [ByteArray] from [Integer]
+#[derive(Error, Debug)]
+enum FromIntegerError {
+    #[error("Error try_from Integer")]
+    ToByteArrayError { source: ToByteArrayError },
+}
 
 /// ByteArray represent a byte of arrays
 #[derive(Clone, PartialEq, Eq)]
@@ -37,7 +78,7 @@ pub struct ByteArray {
 /// assert_eq!(ba, "QQ==");
 /// ```
 pub trait EncodeTrait {
-    type Error;
+    type Error: std::error::Error;
 
     /// Code to base16 according specifications
     fn base16_encode(&self) -> Result<String, Self::Error>;
@@ -59,25 +100,27 @@ pub trait EncodeTrait {
 /// assert_eq!(ba_res.unwrap().to_bytes(), b"\x60");
 /// ```
 pub trait DecodeTrait: Sized {
+    type Error: std::error::Error + Sized;
+
     /// Code from string in base16 according specifications. The letters are in upper.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base16_decode(s: &str) -> Result<Self, ByteArrayError>;
+    fn base16_decode(s: &str) -> Result<Self, Self::Error>;
 
     /// Code from string in base32 according specifications.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base32_decode(s: &str) -> Result<Self, ByteArrayError>;
+    fn base32_decode(s: &str) -> Result<Self, Self::Error>;
 
     /// Code from string in base32 according specifications.
     ///
     /// # Error
     /// Return [ByteArrayError] if decode not possible
-    fn base64_decode(s: &str) -> Result<Self, ByteArrayError>;
+    fn base64_decode(s: &str) -> Result<Self, Self::Error>;
 
-    fn base_64_decode_vector(vs: &[String]) -> Result<Vec<Self>, ByteArrayError> {
+    fn base_64_decode_vector(vs: &[&str]) -> Result<Vec<Self>, Self::Error> {
         vs.iter()
             .map(|s| Self::base64_decode(s))
             .collect::<Result<Vec<_>, _>>()
@@ -87,7 +130,7 @@ pub trait DecodeTrait: Sized {
 impl ByteArray {
     /// Create an empty Bytearray (only with 0)
     pub fn new() -> Self {
-        ByteArray { inner: vec![0] }
+        ByteArray { inner: vec![] }
     }
 
     /// ByteArray from a slice of bytes
@@ -143,60 +186,41 @@ impl ByteArray {
         res
     }
 
+    /// Truncate to the given len
+    pub fn truncate(&mut self, len: usize) {
+        self.inner.truncate(len);
+    }
+
     /// Cut the byte array to given bit length according to the specifications of Swiss Post (Algorithm 3.1)
     ///
     /// # Error
     /// Return [ByteArrayError] if the conditions to cut are not satisfied (see algorithm)
     pub fn cut_bit_length(&self, n: usize) -> Result<ByteArray, ByteArrayError> {
-        if n < 1 || n > 8 * self.len() {
-            return Err(ByteArrayError::CutToBitLengthIndexError {
-                index: n,
-                ba: self.clone(),
-            });
+        if n > 8 * self.len() {
+            return Err(ByteArrayError::from(ByteArrayErrorRepr::from(
+                CutToBitLengthIndexError {
+                    index: n,
+                    ba: self.clone(),
+                },
+            )));
         }
-        let bs = self.to_bytes();
-        //println!("bs: {:?}", bs);
+        let upper_b = self.to_bytes();
+        let upper_n = self.len();
         let length = n.div_ceil(8);
-        //println!("length: {:?}", length);
-        let offset = self.len() - length;
-        //println!("offset: {:?}", length);
-        let mut arr: Vec<u8> = vec![];
-        if n % 8 != 0 {
-            //println!("n % 8: {:?}", (n % 8));
-            //println!("2^(n % 8): {:?}", Pow::pow(2u8, n % 8));
-            //println!("2^(n % 8)-1: {:?}", Pow::pow(2u8, n % 8) - 1);
-            //println!("mask: {:?}", (Pow::pow(2u8, n % 8) - 1));
-            arr.push(bs[offset] & (Pow::pow(2u8, n % 8) - 1));
-        } else {
-            arr.push(bs[offset]);
+        let offset = upper_n - length;
+        let mut upper_b_prime: Vec<u8> = vec![];
+        for i in 0..length {
+            upper_b_prime.push(upper_b[offset + i]);
         }
-        for i in 1..length {
-            //println!("i: {:?}", i);
-            //println!("bs[offset+i]: {:?}", bs[offset + i]);
-            arr.push(bs[offset + i]);
+        if !n.is_multiple_of(8) {
+            upper_b_prime[0] = upper_b[offset] & (Pow::pow(2u8, n % 8) - 1);
         }
-        Ok(ByteArray::from(&arr))
+        Ok(ByteArray::from(&upper_b_prime))
     }
 }
 
-// Enum representing the error generated by the module ByteArray
-#[derive(Error, Debug)]
-pub enum ByteArrayError {
-    #[error("Error decoding {orig} in base {base} caused by {source}")]
-    DecodeError {
-        orig: String,
-        base: u8,
-        source: DecodeError,
-    },
-    #[error(
-        "Error in cut_bit_length for {ba}: the index {index} must be between 1 and 8*{}",
-        ba.len()
-    )]
-    CutToBitLengthIndexError { index: usize, ba: ByteArray },
-}
-
 impl EncodeTrait for ByteArray {
-    type Error = ();
+    type Error = ByteArrayError;
 
     fn base16_encode(&self) -> Result<String, Self::Error> {
         Ok(HEXUPPER.encode(&self.inner))
@@ -212,36 +236,44 @@ impl EncodeTrait for ByteArray {
 }
 
 impl DecodeTrait for ByteArray {
-    fn base16_decode(s: &str) -> Result<Self, ByteArrayError> {
+    type Error = ByteArrayError;
+
+    fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         HEXUPPER
             .decode(s.as_bytes())
-            .map_err(|e| ByteArrayError::DecodeError {
+            .map_err(|e| DecodeErrorInBase {
                 orig: s.to_string(),
                 base: 16,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 
-    fn base32_decode(s: &str) -> Result<Self, ByteArrayError> {
+    fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         BASE32
             .decode(s.as_bytes())
-            .map_err(|e| ByteArrayError::DecodeError {
+            .map_err(|e| DecodeErrorInBase {
                 orig: s.to_string(),
                 base: 32,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 
-    fn base64_decode(s: &str) -> Result<Self, ByteArrayError> {
+    fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         BASE64
             .decode(s.as_bytes())
-            .map_err(|e| ByteArrayError::DecodeError {
+            .map_err(|e| DecodeErrorInBase {
                 orig: s.to_string(),
                 base: 64,
                 source: e,
             })
+            .map_err(ByteArrayErrorRepr::from)
+            .map_err(ByteArrayError::from)
             .map(|r| Self::from(&r))
     }
 }
@@ -265,21 +297,14 @@ impl Display for ByteArray {
 }
 
 impl TryFrom<&Integer> for ByteArray {
-    type Error = IntegerError;
+    type Error = ByteArrayError;
 
     fn try_from(value: &Integer) -> Result<Self, Self::Error> {
-        if value < Integer::zero() {
-            return Err(IntegerError::IsNegative("value".to_string()));
-        }
-        let byte_length = std::cmp::max(value.byte_length(), 1);
-        let mut x = value.clone();
-        let mut d: Vec<u8> = Vec::new();
-        let nb_256 = Integer::from(256u16);
-        for _i in 0..byte_length {
-            d.insert(0, u8::try_from(Integer::from(&x % &nb_256)).unwrap());
-            x /= &nb_256;
-        }
-        Ok(ByteArray::from(&d))
+        value
+            .to_byte_array()
+            .map_err(|e| FromIntegerError::ToByteArrayError { source: e })
+            .map_err(ByteArrayErrorRepr::FromIntegerError)
+            .map_err(ByteArrayError)
     }
 }
 
@@ -288,13 +313,20 @@ impl From<&usize> for ByteArray {
         ByteArray::try_from(&Integer::from(*value)).unwrap()
     }
 }
+
 impl From<&Vec<u8>> for ByteArray {
     fn from(bytes: &Vec<u8>) -> Self {
+        ByteArray::from(bytes.as_slice())
+    }
+}
+
+impl From<&[u8]> for ByteArray {
+    fn from(bytes: &[u8]) -> Self {
         if bytes.is_empty() {
             ByteArray::default()
         } else {
             ByteArray {
-                inner: (*bytes.clone()).to_vec(),
+                inner: bytes.to_vec(),
             }
         }
     }
@@ -312,12 +344,12 @@ mod test {
 
     #[test]
     fn new() {
-        assert_eq!(ByteArray::new().to_bytes(), [0]);
+        assert_eq!(ByteArray::new().to_bytes(), b"");
     }
 
     #[test]
     fn from_vec_bytes() {
-        assert_eq!(ByteArray::from(&vec![]).to_bytes(), b"\x00");
+        assert_eq!(ByteArray::from(&vec![]).to_bytes(), b"");
         assert_eq!(
             ByteArray::from(&vec![10u8, 5u8, 4u8]).to_bytes(),
             [10, 5, 4]
@@ -343,7 +375,7 @@ mod test {
             ByteArray::try_from(&Integer::from(0u32))
                 .unwrap()
                 .to_bytes(),
-            b"\x00"
+            b""
         );
         assert_eq!(
             ByteArray::try_from(&Integer::from(3u32))
@@ -480,13 +512,19 @@ mod test {
                 .unwrap(),
             ByteArray::base64_decode("Ac0=").unwrap()
         );
-        assert!(ByteArray::from_bytes(b"10011").cut_bit_length(0).is_err());
+        assert_eq!(
+            ByteArray::from_bytes(b"10011")
+                .cut_bit_length(0)
+                .unwrap()
+                .to_bytes(),
+            b""
+        );
         assert!(ByteArray::from_bytes(b"\x11").cut_bit_length(9).is_err());
     }
 
     #[test]
     fn base16_encode() {
-        assert_eq!(ByteArray::from_bytes(b"").base16_encode().unwrap(), "00");
+        assert_eq!(ByteArray::from_bytes(b"").base16_encode().unwrap(), "");
         assert_eq!(
             ByteArray::from_bytes(b"\x41").base16_encode().unwrap(),
             "41"
@@ -531,7 +569,7 @@ mod test {
 
     #[test]
     fn base16_decode() {
-        assert_eq!(ByteArray::base16_decode("00").unwrap().to_bytes(), b"\x00");
+        assert_eq!(ByteArray::base16_decode("").unwrap().to_bytes(), b"");
         assert_eq!(ByteArray::base16_decode("41").unwrap().to_bytes(), b"\x41");
         assert_eq!(ByteArray::base16_decode("60").unwrap().to_bytes(), b"\x60");
         assert_eq!(ByteArray::base16_decode("7F").unwrap().to_bytes(), b"\x7F");
@@ -554,10 +592,7 @@ mod test {
 
     #[test]
     fn base32_encode() {
-        assert_eq!(
-            ByteArray::from_bytes(b"").base32_encode().unwrap(),
-            "AA======"
-        );
+        assert_eq!(ByteArray::from_bytes(b"").base32_encode().unwrap(), "");
         assert_eq!(
             ByteArray::from_bytes(b"\x41").base32_encode().unwrap(),
             "IE======"
@@ -602,10 +637,7 @@ mod test {
 
     #[test]
     fn base32_decode() {
-        assert_eq!(
-            ByteArray::base32_decode("AA======").unwrap().to_bytes(),
-            b"\x00"
-        );
+        assert_eq!(ByteArray::base32_decode("").unwrap().to_bytes(), b"");
         assert_eq!(
             ByteArray::base32_decode("IE======").unwrap().to_bytes(),
             b"\x41"
@@ -643,7 +675,7 @@ mod test {
 
     #[test]
     fn base64_encode() {
-        assert_eq!(ByteArray::from_bytes(b"").base64_encode().unwrap(), "AA==");
+        assert_eq!(ByteArray::from_bytes(b"").base64_encode().unwrap(), "");
         assert_eq!(
             ByteArray::from_bytes(b"\x41").base64_encode().unwrap(),
             "QQ=="
@@ -688,10 +720,7 @@ mod test {
 
     #[test]
     fn base64_decode() {
-        assert_eq!(
-            ByteArray::base64_decode("AA==").unwrap().to_bytes(),
-            b"\x00"
-        );
+        assert_eq!(ByteArray::base64_decode("").unwrap().to_bytes(), b"");
         assert_eq!(
             ByteArray::base64_decode("QQ==").unwrap().to_bytes(),
             b"\x41"

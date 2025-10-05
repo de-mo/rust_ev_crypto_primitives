@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
@@ -22,11 +22,12 @@ use thiserror::Error;
 
 use super::{star_map, ArgumentContext, StarMapError};
 use crate::{
+    integer::ModExponentiateError,
     mix_net::{
         commitments::{get_commitment, CommitmentError},
-        MixNetResultTrait,
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
     },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
 };
 
@@ -74,16 +75,24 @@ pub enum ZeroArgumentError {
     CommitmentVectorNotSameLen,
     #[error("Exponent vectors a' and b' have not the same size")]
     ExponentVectorNotSameLen,
-    #[error("Commitment vector c_d has not the size 2*m + 1 where m={0}")]
-    CommitmentVectorNotCorrectSize(usize),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("StarMapError: {0}")]
-    StarMapError(#[from] StarMapError),
-    #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("Error calculating the pwoers of x")]
+    XPowers { source: ModExponentiateError },
+    #[error("Error calculating the product of c_A")]
+    ProdCA { source: IntegerOperationError },
+    #[error("error calculation Commitment A")]
+    CommitmentA { source: CommitmentError },
+    #[error("Error calculating the product of c_B")]
+    ProdCB { source: IntegerOperationError },
+    #[error("error calculation Commitment B")]
+    CommitmentB { source: CommitmentError },
+    #[error("error calculation Commitment D")]
+    CommitmentD { source: CommitmentError },
+    #[error("Error calculating the product of c_D")]
+    ProdCD { source: IntegerOperationError },
+    #[error("error starmap for the calculation of the production of commitment c_D")]
+    StarmapCD { source: StarMapError },
 }
 
 /// Algorithm 9.23
@@ -97,37 +106,37 @@ pub fn verify_zero_argument(
     let q = context.ep.q();
     let m = statement.m();
 
-    let x = get_x(context, statement, argument)?;
+    let x = get_x(context, statement, argument).map_err(|e| ZeroArgumentError::X { source: e })?;
     let x_powers: Vec<Integer> = (0..2 * m + 1)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(ZeroArgumentError::IntegerError)?;
+        .map_err(|e| ZeroArgumentError::XPowers { source: e })?;
 
     let verif_upper_c_d = &argument.cs_d[m + 1] == Integer::one();
 
     let mut prod_c_a_bases_iter = once(argument.c_upper_a_0).chain(statement.cs_upper_a.iter());
     let prod_c_a =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_a_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerError)?;
+            .map_err(|e| ZeroArgumentError::ProdCA { source: e })?;
     let comm_a = get_commitment(context.ep, argument.as_prime, argument.r_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentA { source: e })?;
     let verif_upper_a = prod_c_a == comm_a;
 
     let mut prod_c_b_bases_iter =
         once(argument.c_upper_b_m).chain(statement.cs_upper_b.iter().rev());
     let prod_c_b =
         Integer::mod_multi_exponentiate_iter(&mut prod_c_b_bases_iter, &mut x_powers.iter(), p)
-            .map_err(ZeroArgumentError::IntegerError)?;
+            .map_err(|e| ZeroArgumentError::ProdCB { source: e })?;
     let comm_b = get_commitment(context.ep, argument.bs_prime, argument.s_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentB { source: e })?;
     let verif_upper_b = prod_c_b == comm_b;
 
     let prod_c_d = Integer::mod_multi_exponentiate(argument.cs_d, &x_powers, p)
-        .map_err(ZeroArgumentError::IntegerError)?;
+        .map_err(|e| ZeroArgumentError::ProdCD { source: e })?;
     let prod = star_map(q, statement.y, argument.as_prime, argument.bs_prime)
-        .map_err(ZeroArgumentError::StarMapError)?;
+        .map_err(|e| ZeroArgumentError::StarmapCD { source: e })?;
     let comm_d = get_commitment(context.ep, &[prod], argument.t_prime, context.ck)
-        .map_err(ZeroArgumentError::CommitmentError)?;
+        .map_err(|e| ZeroArgumentError::CommitmentD { source: e })?;
     let verif_upper_d = prod_c_d == comm_d;
 
     Ok(ZeroArgumentResult {
@@ -142,7 +151,7 @@ fn get_x(
     context: &ArgumentContext,
     statement: &ZeroStatement,
     argument: &ZeroArgument,
-) -> Result<Integer, ZeroArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -154,8 +163,7 @@ fn get_x(
         HashableMessage::from(statement.cs_upper_b),
         HashableMessage::from(statement.cs_upper_a),
     ])
-    .recursive_hash()
-    .map_err(ZeroArgumentError::HashError)?
+    .recursive_hash()?
     .into_integer())
 }
 
@@ -204,7 +212,7 @@ impl<'a> ZeroStatement<'a> {
 
 #[allow(clippy::too_many_arguments)]
 impl<'a> ZeroArgument<'a> {
-    /// New statement cloning the data
+    /// New Zero Argument
     ///
     /// Return error if the domain is wrong
     pub fn new(
@@ -216,9 +224,13 @@ impl<'a> ZeroArgument<'a> {
         r_prime: &'a Integer,
         s_prime: &'a Integer,
         t_prime: &'a Integer,
-    ) -> Result<Self, ZeroArgumentError> {
+    ) -> Result<Self, MixnetError> {
         if as_prime.len() != bs_prime.len() {
-            return Err(ZeroArgumentError::ExponentVectorNotSameLen);
+            return Err(MixnetError {
+                source: Box::new(MixnetErrorRepr::from(
+                    ZeroArgumentError::ExponentVectorNotSameLen,
+                )),
+            });
         }
         Ok(Self {
             c_upper_a_0,
@@ -257,13 +269,13 @@ impl<'a, 'b> ZeroArgumentVerifyInput<'a, 'b> {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::{
-        ck_from_json_value, context_from_json_value, context_values, ep_from_json_value,
-    };
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer,
+    };
     use serde_json::Value;
-    use std::path::Path;
 
     pub struct ZeroStatementValues(pub Vec<Integer>, pub Vec<Integer>, pub Integer);
 
@@ -278,20 +290,11 @@ pub mod test {
         pub Integer,
     );
 
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-zero-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
     fn get_statement_values(statement: &Value) -> ZeroStatementValues {
         ZeroStatementValues(
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
-            json_array_value_to_array_mpinteger(&statement["c_b"]),
-            json_value_to_mpinteger(&statement["y"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
+            json_array_64_value_to_array_integer(&statement["c_b"]),
+            json_64_value_to_integer(&statement["y"]),
         )
     }
 
@@ -301,14 +304,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> ZeroArgumentValues {
         ZeroArgumentValues(
-            json_value_to_mpinteger(&argument["c_a0"]),
-            json_value_to_mpinteger(&argument["c_bm"]),
-            json_array_value_to_array_mpinteger(&argument["c_d"]),
-            json_array_value_to_array_mpinteger(&argument["a"]),
-            json_array_value_to_array_mpinteger(&argument["b"]),
-            json_value_to_mpinteger(&argument["r"]),
-            json_value_to_mpinteger(&argument["s"]),
-            json_value_to_mpinteger(&argument["t"]),
+            json_64_value_to_integer(&argument["c_a0"]),
+            json_64_value_to_integer(&argument["c_bm"]),
+            json_array_64_value_to_array_integer(&argument["c_d"]),
+            json_array_64_value_to_array_integer(&argument["a"]),
+            json_array_64_value_to_array_integer(&argument["b"]),
+            json_64_value_to_integer(&argument["r"]),
+            json_64_value_to_integer(&argument["s"]),
+            json_64_value_to_integer(&argument["t"]),
         )
     }
 
@@ -320,56 +323,40 @@ pub mod test {
     }
 
     #[test]
-    fn test_get_x() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
-            let statement_values = get_statement_values(&tc["input"]["statement"]);
-            let statement = get_statement(&statement_values);
-            let argument_values = get_argument_values(&tc["input"]["argument"]);
-            let argument = get_argument(&argument_values);
-            let x_res = get_x(&context, &statement, &argument);
-            assert!(
-                x_res.is_ok(),
-                "Error unwraping {}: {}",
-                tc["description"],
-                x_res.unwrap_err()
-            );
-            assert_eq!(
-                x_res.unwrap(),
-                json_value_to_mpinteger(&tc["output"]["x"]),
-                "{}",
-                tc["description"]
-            );
-        }
-    }
-
-    #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-zero-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = ZeroArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_zero_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x{}",
+                tc["description"]
+            );
+            let res = verify_zero_argument(&context, &input);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                res.is_ok(),
+                "Error unwraping res {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }

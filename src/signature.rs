@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>.
 
@@ -24,6 +24,62 @@ use crate::{
 };
 use thiserror::Error;
 
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error with signature
+pub struct SignatureError(#[from] SignatureErrorRepr);
+
+#[derive(Error, Debug)]
+enum SignatureErrorRepr {
+    #[error("Error verifiying the signature")]
+    VerifySignatureError { source: SignatureInternalError },
+    #[error("Error signing")]
+    SignError { source: SignatureInternalError },
+}
+
+/*
+#[error(transparent)]
+Keystore(DirectTrustError),
+#[error("Error of certificate {name} during {action}: {error}")]
+Certificate {
+    name: String,
+    error: BasisCryptoError,
+    action: String,
+},
+#[error("Secret key is missing")]
+MissingSecretKey,
+#[error("Time is not valide for certificate: {0}")]
+Time(String),
+#[error(transparent)]
+Hash(HashError),
+#[error("Certificate Authority {0} is unknown")]
+CertificateAuthority(String),
+ */
+
+#[derive(Error, Debug)]
+enum SignatureInternalError {
+    #[error("Error getting the direct_trust certificate from the keystore")]
+    DTCertificate { source: DirectTrustError },
+    #[error("Error getting the valid time of the direct_trust certificate")]
+    GetTime { source: BasisCryptoError },
+    #[error("Time is not valide for certificate: {0}")]
+    Time(String),
+    #[error("Error getting the public key from the direct_trust certificate")]
+    PublicKey { source: BasisCryptoError },
+    #[error("Error hashing message")]
+    HashMessage { source: HashError },
+    #[error("Error hashing additional content")]
+    HashAddContent { source: HashError },
+    #[error("Error hashing h")]
+    HashH { source: HashError },
+    #[error("Error verifying signature")]
+    VerifySignature { source: BasisCryptoError },
+    #[error("Secret key is missing")]
+    MissingSecretKey,
+    #[error("Error signing the message")]
+    Sign { source: BasisCryptoError },
+}
+
 /// Verification of the signature according to the specification of Swiss Post (Algorithm 7.3)
 ///
 /// # Error
@@ -35,52 +91,57 @@ pub fn verify_signature(
     additional_context: &HashableMessage,
     signature: &ByteArray,
 ) -> Result<bool, SignatureError> {
+    verify_signature_impl(keystore, ca_id, message, additional_context, signature)
+        .map_err(|e| SignatureErrorRepr::VerifySignatureError { source: e })
+        .map_err(SignatureError::from)
+}
+
+fn verify_signature_impl(
+    keystore: &Keystore,
+    ca_id: &str,
+    message: &HashableMessage,
+    additional_context: &HashableMessage,
+    signature: &ByteArray,
+) -> Result<bool, SignatureInternalError> {
     // FindCertificate
     let direct_trust_certificate = keystore
         .public_certificate(ca_id)
-        .map_err(SignatureError::Keystore)?;
+        .map_err(|e| SignatureInternalError::DTCertificate { source: e })?;
     let cert = direct_trust_certificate.signing_certificate();
 
     // Validate Time
     let time_ok = cert
         .is_valid_time()
-        .map_err(|e| SignatureError::Certificate {
-            name: ca_id.to_string(),
-            error: e,
-            action: "validating time".to_string(),
-        })?;
+        .map_err(|e| SignatureInternalError::GetTime { source: e })?;
     if !time_ok {
-        return Err(SignatureError::Time(ca_id.to_string()));
+        return Err(SignatureInternalError::Time(ca_id.to_string()));
     }
 
     // Get public key
-    let pkey = cert.public_key().map_err(|e| SignatureError::Certificate {
-        name: ca_id.to_string(),
-        error: e,
-        action: "reading public key".to_string(),
-    })?;
-    let pub_key = pkey.pkey_public().as_ref();
+    let pkey = cert
+        .public_key()
+        .map_err(|e| SignatureInternalError::PublicKey { source: e })?;
 
     // Calculate hash
     // Precalulate hash of message and additional_context to avoid problem with lifetimes
     let h_vec = vec![
-        HashableMessage::Hashed(message.recursive_hash().map_err(SignatureError::Hash)?),
+        HashableMessage::Hashed(
+            message
+                .recursive_hash()
+                .map_err(|e| SignatureInternalError::HashMessage { source: e })?,
+        ),
         HashableMessage::Hashed(
             additional_context
                 .recursive_hash()
-                .map_err(SignatureError::Hash)?,
+                .map_err(|e| SignatureInternalError::HashAddContent { source: e })?,
         ),
     ];
     let h = HashableMessage::from(h_vec)
         .recursive_hash()
-        .map_err(SignatureError::Hash)?;
+        .map_err(|e| SignatureInternalError::HashH { source: e })?;
 
     // Verify signature
-    verify(pub_key, &h, signature).map_err(|e| SignatureError::Certificate {
-        name: ca_id.to_string(),
-        error: e,
-        action: "verifying signature".to_string(),
-    })
+    verify(&pkey, &h, signature).map_err(|e| SignatureInternalError::VerifySignature { source: e })
 }
 
 /// Sign the message according to the specification of Swiss Post (Algorithm 7.3)
@@ -92,72 +153,55 @@ pub fn sign(
     message: &HashableMessage,
     additional_context: &HashableMessage,
 ) -> Result<ByteArray, SignatureError> {
+    sign_impl(keystore, message, additional_context)
+        .map_err(|e| SignatureErrorRepr::SignError { source: e })
+        .map_err(SignatureError::from)
+}
+
+fn sign_impl(
+    keystore: &Keystore,
+    message: &HashableMessage,
+    additional_context: &HashableMessage,
+) -> Result<ByteArray, SignatureInternalError> {
     // get secret key and certificate to sign
     let direct_trust_certificate = keystore
         .secret_key_certificate()
-        .map_err(SignatureError::Keystore)?;
+        .map_err(|e| SignatureInternalError::DTCertificate { source: e })?;
     let cert = direct_trust_certificate.signing_certificate();
 
     // Validate Time
     let time_ok = cert
         .is_valid_time()
-        .map_err(|e| SignatureError::Certificate {
-            name: cert.authority().to_owned(),
-            error: e,
-            action: "validating time".to_string(),
-        })?;
+        .map_err(|e| SignatureInternalError::GetTime { source: e })?;
     if !time_ok {
-        return Err(SignatureError::Time(cert.authority().to_owned()));
+        return Err(SignatureInternalError::Time(cert.authority().to_owned()));
     }
 
     let pk_private = cert
         .secret_key()
         .as_ref()
-        .ok_or(SignatureError::MissingSecretKey)?
-        .pkey_private();
+        .ok_or(SignatureInternalError::MissingSecretKey)?;
 
     // Calculate hash
     // Precalulate hash of message and additional_context to avoid problem with lifetimes
     let h_vec = vec![
-        HashableMessage::Hashed(message.recursive_hash().map_err(SignatureError::Hash)?),
+        HashableMessage::Hashed(
+            message
+                .recursive_hash()
+                .map_err(|e| SignatureInternalError::HashMessage { source: e })?,
+        ),
         HashableMessage::Hashed(
             additional_context
                 .recursive_hash()
-                .map_err(SignatureError::Hash)?,
+                .map_err(|e| SignatureInternalError::HashAddContent { source: e })?,
         ),
     ];
     let h = HashableMessage::from(h_vec)
         .recursive_hash()
-        .map_err(SignatureError::Hash)?;
+        .map_err(|e| SignatureInternalError::HashH { source: e })?;
 
     // Verify signature
-    let res = openssl_sign(pk_private, &h).map_err(|e| SignatureError::Certificate {
-        name: cert.authority().to_owned(),
-        error: e,
-        action: "Signing".to_string(),
-    })?;
-    Ok(res)
-}
-
-// Enum representing the errors validating the signature
-#[derive(Error, Debug)]
-pub enum SignatureError {
-    #[error(transparent)]
-    Keystore(DirectTrustError),
-    #[error("Error of certificate {name} during {action}: {error}")]
-    Certificate {
-        name: String,
-        error: BasisCryptoError,
-        action: String,
-    },
-    #[error("Secret key is missing")]
-    MissingSecretKey,
-    #[error("Time is not valide for certificate: {0}")]
-    Time(String),
-    #[error(transparent)]
-    Hash(HashError),
-    #[error("Certificate Authority {0} is unknown")]
-    CertificateAuthority(String),
+    openssl_sign(pk_private, &h).map_err(|e| SignatureInternalError::Sign { source: e })
 }
 
 #[cfg(test)]

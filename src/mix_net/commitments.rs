@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,18 +10,16 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
-use thiserror::Error;
-
-use crate::{
-    elgamal::EncryptionParameters, ConstantsTrait, HashError, HashableMessage, Integer,
-    IntegerError, OperationsTrait, RecursiveHashTrait,
-};
-
 use super::matrix::{Matrix, MatrixError};
+use crate::{
+    elgamal::EncryptionParameters, integer::ModExponentiateError, ConstantsTrait, HashError,
+    HashableMessage, Integer, IntegerOperationError, OperationsTrait, RecursiveHashTrait,
+};
+use thiserror::Error;
 
 /// Structure for the verifiable commitment key according specification of swiss post
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,20 +30,28 @@ pub struct CommitmentKey {
 
 #[derive(Error, Debug)]
 pub enum CommitmentError {
-    #[error("nu too big. Must less or equal q-3.")]
+    #[error("get_verifiable_commitment_key: nu too big. Must less or equal q-3.")]
     NuTooBig,
-    #[error(transparent)]
-    HashError(#[from] HashError),
-    #[error(transparent)]
-    MatrixError(#[from] MatrixError),
-    #[error(transparent)]
-    IntegerError(#[from] IntegerError),
-    #[error("Matrix is mallformed in: {0}")]
-    MalformedMatrix(String),
-    #[error("Size {0} of random vector must be {1}")]
-    RandomSizeWrong(usize, usize),
+    #[error("get_verifiable_commitment_key: Error calculating u")]
+    U { source: HashError },
+    #[error("get_verifiable_commitment_key: Error calculating w")]
+    W { source: IntegerOperationError },
     #[error("Size of commitment key to small")]
     SmallCommitmentKey,
+    #[error("get_commitment: Error calculating product")]
+    CommitmentProd { source: IntegerOperationError },
+    #[error("get_commitment: Error calculating ck.h^r mod p")]
+    GetCommitmentHExpRModP { source: ModExponentiateError },
+    #[error("get_commitment_matrix: Matrix is mallformed in")]
+    MalformedMatrix,
+    #[error("get_commitment_matrix: Size {0} of random vector must be {1}")]
+    RandomSizeWrong(usize, usize),
+    #[error("get_commitment_matrix: error calculating the commitments")]
+    MatrixCommitment { source: Box<CommitmentError> },
+    #[error("get_commitment_vector: error with the matrix")]
+    VecMatrixError { source: MatrixError },
+    #[error("get_commitment_vector: error calculating the commitments")]
+    VecCommitment { source: Box<CommitmentError> },
 }
 
 impl CommitmentKey {
@@ -67,9 +73,11 @@ impl CommitmentKey {
                 HashableMessage::from(&count),
             ])
             .recursive_hash_to_zq(ep.q())
-            .map_err(CommitmentError::HashError)?
+            .map_err(|e| CommitmentError::U { source: e })?
                 + Integer::one();
-            let w = u.mod_square(ep.p())?;
+            let w = u
+                .mod_square(ep.p())
+                .map_err(|e| CommitmentError::W { source: e })?;
             if &w != Integer::one() && &w != ep.g() && !v.contains(&w) {
                 v.push(w);
                 count += 1;
@@ -111,11 +119,11 @@ pub fn get_commitment(
     if ck.gs.len() < a.len() {
         return Err(CommitmentError::SmallCommitmentKey);
     }
-    let prod = Integer::mod_multi_exponentiate(&ck.gs, a, ep.p())?;
-    println!("prod of get_commitment = {}", &prod);
+    let prod = Integer::mod_multi_exponentiate(&ck.gs, a, ep.p())
+        .map_err(|e| CommitmentError::CommitmentProd { source: e })?;
     let c =
         ck.h.mod_exponentiate(r, ep.p())
-            .map_err(CommitmentError::IntegerError)?
+            .map_err(|e| CommitmentError::GetCommitmentHExpRModP { source: e })?
             .mod_multiply(&prod, ep.p());
     Ok(c)
 }
@@ -127,9 +135,7 @@ pub fn get_commitment_matrix(
     ck: &CommitmentKey,
 ) -> Result<Vec<Integer>, CommitmentError> {
     if a.is_malformed() {
-        return Err(CommitmentError::MalformedMatrix(
-            "get_commitment_matrix".to_string(),
-        ));
+        return Err(CommitmentError::MalformedMatrix);
     }
     if a.nb_columns() != rs.len() {
         return Err(CommitmentError::RandomSizeWrong(rs.len(), a.nb_columns()));
@@ -138,6 +144,9 @@ pub fn get_commitment_matrix(
         .zip(rs.iter())
         .map(|(a_i, r_i)| get_commitment(ep, &a_i, r_i, ck))
         .collect::<Result<Vec<Integer>, CommitmentError>>()
+        .map_err(|e| CommitmentError::MatrixCommitment {
+            source: Box::new(e),
+        })
 }
 
 #[allow(dead_code)]
@@ -147,19 +156,24 @@ pub fn get_commitment_vector(
     ts: &[Integer],
     ck: &CommitmentKey,
 ) -> Result<Vec<Integer>, CommitmentError> {
-    let a = Matrix::to_matrix(ds, (1, ds.len())).map_err(CommitmentError::MatrixError)?;
-    get_commitment_matrix(ep, &a, ts, ck)
+    let a = Matrix::to_matrix(ds, (1, ds.len()))
+        .map_err(|e| CommitmentError::VecMatrixError { source: e })?;
+    get_commitment_matrix(ep, &a, ts, ck).map_err(|e| CommitmentError::VecCommitment {
+        source: Box::new(e),
+    })
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger},
+        test_json_data::{
+            get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_64_value_to_array_integer, json_value_to_encryption_parameters,
+        },
         Hexa,
     };
     use serde_json::Value;
-    use std::path::Path;
 
     #[test]
     fn test_recursive_hash() {
@@ -191,40 +205,25 @@ mod test {
         );
     }
 
-    fn get_verif_commitment_key_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("get-verifiable-commitment-key.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
-
-    fn get_verif_commitment_key_ep(value: &Value) -> EncryptionParameters {
-        EncryptionParameters::from((
-            &json_value_to_mpinteger(&value["p"]),
-            &json_value_to_mpinteger(&value["q"]),
-            &json_value_to_mpinteger(&value["g"]),
-        ))
-    }
-
-    fn get_expected(value: &Value) -> CommitmentKey {
+    fn get_output(value: &Value) -> CommitmentKey {
         CommitmentKey {
-            h: json_value_to_mpinteger(&value["h"]),
-            gs: json_array_value_to_array_mpinteger(&value["g"]),
+            h: json_64_value_to_integer(&value["h"]),
+            gs: json_array_64_value_to_array_integer(&value["g"]),
         }
     }
 
     #[test]
     fn test_verifiable_commitment_key() {
-        for tc in get_verif_commitment_key_test_cases().iter() {
+        for tc in
+            get_test_cases_from_json_file("mixnet", "get-verifiable-commitment-key.json").iter()
+        {
             let description = tc["description"].as_str().unwrap();
-            let ep = get_verif_commitment_key_ep(&tc["context"]);
+            let ep = json_value_to_encryption_parameters(&tc["context"]);
             let k = tc["input"]["k"].as_number().unwrap().as_u64().unwrap() as usize;
-            let expected = get_expected(&tc["output"]);
+            let expected = get_output(&tc["output"]);
             let r = CommitmentKey::get_verifiable_commitment_key(&ep, k);
             assert!(r.is_ok(), "{}", description);
-            assert_eq!(r.unwrap(), expected, "{}", description);
+            assert_eq!(r.unwrap(), expected, "{description}");
         }
     }
 }

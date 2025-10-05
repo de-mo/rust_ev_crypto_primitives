@@ -1,7 +1,7 @@
 // Copyright © 2023 Denis Morel
 //
 // This program is free software: you can redistribute it and/or modify it under
-// the terms of the GNU Lesser General Public License as published by the Free
+// the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version.
 //
@@ -10,7 +10,7 @@
 // FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
 // details.
 //
-// You should have received a copy of the GNU Lesser General Public License and
+// You should have received a copy of the GNU General Public License and
 // a copy of the GNU General Public License along with this program. If not, see
 // <https://www.gnu.org/licenses/>
 
@@ -21,17 +21,18 @@ use std::{fmt::Display, ops::ControlFlow};
 use thiserror::Error;
 
 use crate::{
-    elgamal::{Ciphertext, ElgamalError},
-    mix_net::{
-        commitments::{get_commitment, CommitmentError},
-        matrix::Matrix,
-        MixNetResultTrait,
-    },
-    ConstantsTrait, HashError, HashableMessage, Integer, IntegerError, OperationsTrait,
+    ConstantsTrait, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
     RecursiveHashTrait,
+    elgamal::{Ciphertext, ElgamalError},
+    integer::ModExponentiateError,
+    mix_net::{
+        MixNetResultTrait, MixnetError, MixnetErrorRepr,
+        commitments::{CommitmentError, get_commitment},
+        matrix::Matrix,
+    },
 };
 
-use super::{ArgumentContext, StarMapError};
+use super::ArgumentContext;
 
 /// Statement in input of the verify algorithm
 #[derive(Debug, Clone)]
@@ -84,16 +85,24 @@ pub enum MultiExponentiationArgumentError {
     ValueNotConsistent(String),
     #[error("{0} is too small")]
     SizeTooSmall(String),
-    #[error("HashError: {0}")]
-    HashError(#[from] HashError),
-    #[error("CommitmentError: {0}")]
-    CommitmentError(#[from] CommitmentError),
-    #[error("StarMapError: {0}")]
-    StarMapError(#[from] StarMapError),
-    #[error("ElgamalError: {0}")]
-    ElgamalError(#[from] ElgamalError),
-    #[error(transparent)]
-    IntegerError(#[from] IntegerError),
+    #[error("Error for x")]
+    X { source: HashError },
+    #[error("Error calculating the pwoers of x")]
+    XPowers { source: ModExponentiateError },
+    #[error("Error calculating the product of A")]
+    ProdA { source: IntegerOperationError },
+    #[error("error calculation Commitment A")]
+    CommitmentA { source: CommitmentError },
+    #[error("Error calculating the product of B")]
+    ProdB { source: IntegerOperationError },
+    #[error("error calculation Commitment B")]
+    CommitmentB { source: CommitmentError },
+    #[error("error calculation product E")]
+    ProdE { source: ElgamalError },
+    #[error("error calculation g^b mod p")]
+    GExpBModP { source: ModExponentiateError },
+    #[error("error encrypting g^b mod p")]
+    EncryptionGExpModP { source: ElgamalError },
 }
 
 /// Algorithm 9.16
@@ -109,11 +118,12 @@ pub fn verify_multi_exponentiation_argument(
     let m = statement.m();
     let l = statement.l();
 
-    let x = get_x(context, statement, argument)?;
+    let x = get_x(context, statement, argument)
+        .map_err(|e| MultiExponentiationArgumentError::X { source: e })?;
     let x_powers = (0..2 * m)
         .map(|i| x.mod_exponentiate(&Integer::from(i), q))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(MultiExponentiationArgumentError::IntegerError)?;
+        .map_err(|e| MultiExponentiationArgumentError::XPowers { source: e })?;
 
     let verif_upper_c_b_m = &argument.cs_upper_b[m] == Integer::one();
     let verif_upper_e_m = &argument.upper_es[m] == statement.upper_c;
@@ -124,7 +134,7 @@ pub fn verify_multi_exponentiation_argument(
             &mut x_powers.iter().skip(1),
             p,
         )
-        .map_err(MultiExponentiationArgumentError::IntegerError)?,
+        .map_err(|e| MultiExponentiationArgumentError::ProdA { source: e })?,
         p,
     );
     /*statement
@@ -136,7 +146,7 @@ pub fn verify_multi_exponentiation_argument(
         acc.mod_multiply(&v, p)
     });*/
     let comm_upper_a = get_commitment(context.ep, argument.a_vec, argument.r, context.ck)
-        .map_err(MultiExponentiationArgumentError::CommitmentError)?;
+        .map_err(|e| MultiExponentiationArgumentError::CommitmentA { source: e })?;
     let verif_upper_a = prod_upper_c_a == comm_upper_a;
 
     let prod_upper_c_b = Integer::mod_multi_exponentiate_iter(
@@ -144,7 +154,7 @@ pub fn verify_multi_exponentiation_argument(
         &mut x_powers.iter(),
         p,
     )
-    .map_err(MultiExponentiationArgumentError::IntegerError)?;
+    .map_err(|e| MultiExponentiationArgumentError::ProdB { source: e })?;
     /*argument
     .cs_upper_b
     .iter()
@@ -154,8 +164,13 @@ pub fn verify_multi_exponentiation_argument(
     .fold(argument.cs_upper_b[0].clone(), |acc, v| {
         acc.mod_multiply(&v, p)
     });*/
-    let comm_upper_b = get_commitment(context.ep, &[argument.b.clone()], argument.s, context.ck)
-        .map_err(MultiExponentiationArgumentError::CommitmentError)?;
+    let comm_upper_b = get_commitment(
+        context.ep,
+        std::slice::from_ref(argument.b),
+        argument.s,
+        context.ck,
+    )
+    .map_err(|e| MultiExponentiationArgumentError::CommitmentB { source: e })?;
     let verif_upper_b = prod_upper_c_b == comm_upper_b;
 
     let prod_upper_e = match argument
@@ -169,20 +184,20 @@ pub fn verify_multi_exponentiation_argument(
             Err(e) => ControlFlow::Break(e),
         }) {
         ControlFlow::Continue(v) => Ok(v),
-        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ElgamalError(e)),
+        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ProdE { source: e }),
     }?;
     let encrypted_upper_g_b = Ciphertext::get_ciphertext(
         context.ep,
         vec![
             g.mod_exponentiate(argument.b, p)
-                .map_err(MultiExponentiationArgumentError::IntegerError)?;
+                .map_err(|e| MultiExponentiationArgumentError::GExpBModP { source: e })?;
             l
         ]
         .as_slice(),
         argument.tau,
         context.pks,
     )
-    .map_err(MultiExponentiationArgumentError::ElgamalError)?;
+    .map_err(|e| MultiExponentiationArgumentError::EncryptionGExpModP { source: e })?;
     let prod_c = match statement
         .ciphertext_matrix
         .rows_iter()
@@ -204,7 +219,7 @@ pub fn verify_multi_exponentiation_argument(
             },
         ) {
         ControlFlow::Continue(c) => Ok(c),
-        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ElgamalError(e)),
+        ControlFlow::Break(e) => Err(MultiExponentiationArgumentError::ProdE { source: e }),
     }?;
     let verif_upper_e_upper_c =
         prod_upper_e == encrypted_upper_g_b.get_ciphertext_product(&prod_c, context.ep);
@@ -222,7 +237,7 @@ pub fn get_x(
     context: &ArgumentContext,
     statement: &MultiExponentiationStatement,
     argument: &MultiExponentiationArgument,
-) -> Result<Integer, MultiExponentiationArgumentError> {
+) -> Result<Integer, HashError> {
     Ok(HashableMessage::from(vec![
         HashableMessage::from(context.ep.p()),
         HashableMessage::from(context.ep.q()),
@@ -235,8 +250,7 @@ pub fn get_x(
         HashableMessage::from(argument.cs_upper_b),
         HashableMessage::from(argument.upper_es),
     ])
-    .recursive_hash()
-    .map_err(MultiExponentiationArgumentError::HashError)?
+    .recursive_hash()?
     .into_integer())
 }
 
@@ -286,10 +300,27 @@ impl<'a> MultiExponentiationStatement<'a> {
 
 #[allow(clippy::too_many_arguments)]
 impl<'a> MultiExponentiationArgument<'a> {
-    /// New statement cloning the data
+    /// New statement
     ///
     /// Return error if the domain is wrong
     pub fn new(
+        c_upper_a_0: &'a Integer,
+        cs_upper_b: &'a [Integer],
+        upper_es: &'a [Ciphertext],
+        a_vec: &'a [Integer],
+        r: &'a Integer,
+        b: &'a Integer,
+        s: &'a Integer,
+        tau: &'a Integer,
+    ) -> Result<Self, MixnetError> {
+        Self::new_impl(c_upper_a_0, cs_upper_b, upper_es, a_vec, r, b, s, tau)
+            .map_err(MixnetErrorRepr::from)
+            .map_err(|e| MixnetError {
+                source: Box::new(e),
+            })
+    }
+
+    fn new_impl(
         c_upper_a_0: &'a Integer,
         cs_upper_b: &'a [Integer],
         upper_es: &'a [Ciphertext],
@@ -402,28 +433,20 @@ impl Display for MultiExponentiationArgumentResult {
 
 #[cfg(test)]
 pub mod test {
-    use super::super::test::context_from_json_value;
-    use super::super::test::{ck_from_json_value, context_values, ep_from_json_value};
     use super::*;
-    use crate::test_json_data::{json_array_value_to_array_mpinteger, json_value_to_mpinteger};
+    use crate::mix_net::arguments::test_json_data::json_to_context_values;
+    use crate::test_json_data::{
+        get_test_cases_from_json_file, json_64_value_to_integer,
+        json_array_64_value_to_array_integer, json_values_to_ciphertext,
+    };
     use serde_json::Value;
-    use std::path::Path;
-
-    fn get_test_cases() -> Vec<Value> {
-        let test_file = Path::new("./")
-            .join("test_data")
-            .join("mixnet")
-            .join("verify-multiexp-argument.json");
-        let json = std::fs::read_to_string(test_file).unwrap();
-        serde_json::from_str(&json).unwrap()
-    }
 
     pub fn get_ciphertexts(value: &Value) -> Vec<Ciphertext> {
         value
             .as_array()
             .unwrap()
             .iter()
-            .map(get_ciphertext)
+            .map(json_values_to_ciphertext)
             .collect()
     }
 
@@ -435,13 +458,6 @@ pub mod test {
             .map(get_ciphertexts)
             .collect();
         Matrix::from_rows(&temp).unwrap()
-    }
-
-    fn get_ciphertext(tc: &Value) -> Ciphertext {
-        Ciphertext::from_expanded(
-            &json_value_to_mpinteger(&tc["gamma"]),
-            &json_array_value_to_array_mpinteger(&tc["phis"]),
-        )
     }
 
     pub struct MEStatementValues(pub Matrix<Ciphertext>, pub Ciphertext, pub Vec<Integer>);
@@ -459,8 +475,8 @@ pub mod test {
     fn get_statement_values(statement: &Value) -> MEStatementValues {
         MEStatementValues(
             get_ciphertext_matrix(&statement["ciphertexts"]),
-            get_ciphertext(&statement["ciphertext_product"]),
-            json_array_value_to_array_mpinteger(&statement["c_a"]),
+            json_values_to_ciphertext(&statement["ciphertext_product"]),
+            json_array_64_value_to_array_integer(&statement["c_a"]),
         )
     }
 
@@ -470,14 +486,14 @@ pub mod test {
 
     pub fn get_argument_values(argument: &Value) -> MEArgumentValues {
         MEArgumentValues(
-            json_value_to_mpinteger(&argument["c_a_0"]),
-            json_array_value_to_array_mpinteger(&argument["c_b"]),
+            json_64_value_to_integer(&argument["c_a_0"]),
+            json_array_64_value_to_array_integer(&argument["c_b"]),
             get_ciphertexts(&argument["e"]),
-            json_array_value_to_array_mpinteger(&argument["a"]),
-            json_value_to_mpinteger(&argument["r"]),
-            json_value_to_mpinteger(&argument["b"]),
-            json_value_to_mpinteger(&argument["s"]),
-            json_value_to_mpinteger(&argument["tau"]),
+            json_array_64_value_to_array_integer(&argument["a"]),
+            json_64_value_to_integer(&argument["r"]),
+            json_64_value_to_integer(&argument["b"]),
+            json_64_value_to_integer(&argument["s"]),
+            json_64_value_to_integer(&argument["tau"]),
         )
     }
 
@@ -490,28 +506,39 @@ pub mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases().iter() {
-            let context_values = context_values(&tc["context"]);
-            let ep = ep_from_json_value(&context_values.0);
-            let ck = ck_from_json_value(&context_values.2);
-            let context = context_from_json_value(&context_values, &ep, &ck);
+        for tc in get_test_cases_from_json_file("mixnet", "verify-multiexp-argument.json").iter() {
+            let context_values = json_to_context_values(&tc["context"]);
+            let context = ArgumentContext::from(&context_values);
             let statement_values = get_statement_values(&tc["input"]["statement"]);
             let statement = get_statement(&statement_values);
             let argument_values = get_argument_values(&tc["input"]["argument"]);
             let argument = get_argument(&argument_values);
             let input = MultiExponentiationArgumentVerifyInput::new(&statement, &argument).unwrap();
-            let x_res = verify_multi_exponentiation_argument(&context, &input);
+            let x_res = get_x(&context, &statement, &argument);
             assert!(
                 x_res.is_ok(),
-                "Error unwraping {}: {}",
+                "Error unwraping x {}: {}",
                 tc["description"],
                 x_res.unwrap_err()
             );
+            assert_eq!(
+                x_res.unwrap(),
+                json_64_value_to_integer(&tc["output"]["x"]),
+                "Verifying x: {}",
+                tc["description"]
+            );
+            let res = verify_multi_exponentiation_argument(&context, &input);
             assert!(
-                x_res.as_ref().unwrap().is_ok(),
+                res.is_ok(),
+                "Error unwraping {}: {}",
+                tc["description"],
+                res.unwrap_err()
+            );
+            assert!(
+                res.as_ref().unwrap().is_ok(),
                 "Verification for {} not ok: {}",
                 tc["description"],
-                x_res.as_ref().unwrap()
+                res.as_ref().unwrap()
             );
         }
     }
