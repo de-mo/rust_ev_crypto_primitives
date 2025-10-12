@@ -22,6 +22,15 @@ The crate uses the crate [rug](https://crates.io/crates/rug) to wrap the functio
 
 In particular the build on Windows must be perfomerd with MSYS2 (see [windows](https://docs.rs/gmp-mpfr-sys/1.6.4/gmp_mpfr_sys/index.html#building-on-windows) for details).
 
+Following packagess must be installed with pacman:
+
+```
+pacman -S pacman-mirrors
+pacman -S diffutils m4 make mingw-w64-x86_64-gcc
+pacman -S mingw-w64-x86_64-openssl
+pacman -S openssl-devel pkgconf
+```
+
 ## Licence
 
 Rug is free software: you can redistribute it and/or modify it under the terms 
