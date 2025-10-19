@@ -2,7 +2,7 @@
 name = "rust_ev_crypto_primitives"
 description = "Crypto Primitives necessary for E-Voting Applications."
 authors = ["Denis Morel"]
-version = "0.8.0"
+version = "0.8.2"
 edition = "2024"
 rust-version = "1.90"
 license = "GPL-3.0+"
