@@ -32,7 +32,7 @@ rug = { version = "1", features = ["rand"] }
 criterion = "0.7"
 
 [features]
-default = ["gmpmee"]
+default = []
 checks = []
 gmpmee = ["dep:rug-gmpmee"]
 
