@@ -60,8 +60,8 @@ pub mod zero_knowledge_proofs;
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
 pub use integer::{
-    prepare_fixed_based_optimization, ConstantsTrait, Hexa, IntegerOperationError,
-    ModExponentiateError, OperationsTrait, ToByteArryTrait,
+    ConstantsTrait, Hexa, IntegerOperationError, ModExponentiateError, OperationsTrait,
+    ToByteArryTrait, prepare_fixed_based_optimization,
 };
 pub use number_theory::{
     IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
@@ -79,11 +79,15 @@ pub const GROUP_PARAMETER_Q_LENGTH: usize = 3071;
 /// The security length according to the security level in the specifications
 pub const SECURITY_STRENGTH: usize = 128;
 
-type DomainVerificationFunctionBoxed<T, E> = Box<dyn Fn(&T) -> Vec<E>>;
+type DomainVerificationFunctionBoxed<C, T, E> = Box<dyn Fn(&T, &C) -> Vec<E>>;
+
+#[derive(Debug, Default)]
+/// Empty context structure when no context is necessary
+pub struct EmptyContext;
 
 /// Structure containing the verifications for the generic object T with the error type E
-pub struct DomainVerifications<T: Sized, E> {
-    verification_fns: Vec<DomainVerificationFunctionBoxed<T, E>>,
+pub struct DomainVerifications<C: Sized, T: Sized, E> {
+    verification_fns: Vec<DomainVerificationFunctionBoxed<C, T, E>>,
 }
 
 /// Trait for the verification of a the domain of a strucut
@@ -93,24 +97,36 @@ pub struct DomainVerifications<T: Sized, E> {
 ///
 /// In the default implementation, nothing will be verified
 ///
+/// If no context is necessary, the structure `EmptyContext` can be used
+/// ```no_run
+/// use evoting_crypto_primitives::domain_verification::{VerifyDomainTrait, EmptyContext};
+/// struct MyStruct {
+///    value: u32,
+/// }
+/// impl VerifyDomainTrait<EmptyContext, String> for MyStruct;
+/// ```
+///
 /// It is possible to implement the function `verifiy_domain` or the function `new_domain_verifications`
-pub trait VerifyDomainTrait<E>: Sized {
+pub trait VerifyDomainTrait<C: Sized, E>: Sized {
     /// Create the new list of verications containing all the necessary verifications
     /// for the object implementing the trait
-    fn new_domain_verifications() -> DomainVerifications<Self, E> {
+    fn new_domain_verifications() -> DomainVerifications<C, Self, E> {
         DomainVerifications::default()
     }
 
     /// Verify the domain
     ///
     /// Return a vector of `E`. Empty if no error found
-    fn verifiy_domain(&self) -> Vec<E> {
+    fn verifiy_domain(&self, context: &C) -> Vec<E> {
         let verifications = Self::new_domain_verifications();
-        verifications.iter().flat_map(|f| f(self)).collect()
+        verifications
+            .iter()
+            .flat_map(|f| f(self, context))
+            .collect()
     }
 }
 
-impl<T, E> Default for DomainVerifications<T, E> {
+impl<C, T, E> Default for DomainVerifications<C, T, E> {
     fn default() -> Self {
         Self {
             verification_fns: Default::default(),
@@ -118,20 +134,20 @@ impl<T, E> Default for DomainVerifications<T, E> {
     }
 }
 
-impl<T, E> DomainVerifications<T, E> {
+impl<C, T, E> DomainVerifications<C, T, E> {
     /// Add Verification function to the structure
-    pub fn add_verification(&mut self, fct: impl (Fn(&T) -> Vec<E>) + 'static) {
+    pub fn add_verification(&mut self, fct: impl (Fn(&T, &C) -> Vec<E>) + 'static) {
         self.verification_fns.push(Box::new(fct));
     }
 
     /// Add a verification return a vector of vector of errors
     pub fn add_verification_with_vec_of_vec_errors(
         &mut self,
-        fct: impl (Fn(&T) -> Vec<Vec<E>>) + 'static,
+        fct: impl (Fn(&T, &C) -> Vec<Vec<E>>) + 'static,
     ) {
-        self.add_verification(move |t| {
+        self.add_verification(move |t, c| {
             let mut res = vec![];
-            for r in fct(t) {
+            for r in fct(t, c) {
                 for e in r {
                     res.push(e);
                 }
@@ -141,7 +157,7 @@ impl<T, E> DomainVerifications<T, E> {
     }
 
     /// Iterate over ale the functions
-    pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<T, E>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, DomainVerificationFunctionBoxed<C, T, E>> {
         self.verification_fns.iter()
     }
 }
@@ -149,8 +165,8 @@ impl<T, E> DomainVerifications<T, E> {
 #[cfg(test)]
 mod test_json_data {
     use crate::{
-        elgamal::{Ciphertext, EncryptionParameters},
         ByteArray, DecodeTrait, Integer,
+        elgamal::{Ciphertext, EncryptionParameters},
     };
     use serde_json::Value;
     use std::path::Path;

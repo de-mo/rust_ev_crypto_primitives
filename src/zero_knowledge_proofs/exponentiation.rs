@@ -15,11 +15,11 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
+    EmptyContext, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait, VerifyDomainTrait,
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
-    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait, VerifyDomainTrait,
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -98,7 +98,7 @@ fn verify_exponentiation_impl(
 ) -> Result<bool, ExponentiationProofErrorRepr> {
     // Check of input parameters
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain();
+        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
         if !domain_errs.is_empty() {
             return Err(ExponentiationProofErrorRepr::CheckElgamal(domain_errs));
         }
@@ -180,7 +180,7 @@ mod test {
             get_test_cases_from_json_file, json_array_64_value_to_array_integer,
             json_array_value_to_array_string, json_value_to_encryption_parameters,
         },
-        zero_knowledge_proofs::test::{proof_from_json_values, Proof},
+        zero_knowledge_proofs::test::{Proof, proof_from_json_values},
     };
     use serde_json::Value;
 

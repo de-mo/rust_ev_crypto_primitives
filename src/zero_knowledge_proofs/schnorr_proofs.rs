@@ -15,11 +15,11 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
+    EmptyContext, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait, VerifyDomainTrait,
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
-    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait, VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -81,7 +81,7 @@ fn verify_schnorr_impl(
     i_aux: &Vec<String>,
 ) -> Result<bool, SchnorrProofErrorRepr> {
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain();
+        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
         if !domain_errs.is_empty() {
             return Err(SchnorrProofErrorRepr::CheckElgamal(domain_errs));
         }
@@ -122,12 +122,12 @@ fn verify_schnorr_impl(
 mod test {
     use super::*;
     use crate::{
+        Hexa,
         test_json_data::{
             get_test_cases_from_json_file, json_64_value_to_integer,
             json_array_value_to_array_string, json_value_to_encryption_parameters,
         },
-        zero_knowledge_proofs::test::{proof_from_json_values, Proof},
-        Hexa,
+        zero_knowledge_proofs::test::{Proof, proof_from_json_values},
     };
     use serde_json::Value;
 
@@ -160,21 +160,25 @@ mod test {
         let y = Integer::from_hexa_string("0x6AC7B188F3C0AB80238FEA40C71A3BA9C8E438F549CC113C1FA23B0893C0C63157C2E4E147CD69BAEBF2EB464F64131F99D7E23D939972D7E6E60FEF27068E34B84CF011129AF98B0F82C78859F890F6312652BD162477A23ACC3516B2945F52E3FE0168000B3F62B04823418F1B1D3D3BE030586B39174EB1BACB832FC8E86A151DFDC11106B484530B1F9F6E4E072EDFDED5E4C564D75978B05CB797256C225901F31DD2DE56709509BDAE1DFBECA410AEFC94D87A7D585012E70EA977A812744CFF03E50A7FD5B74B7BC232D2318A384E19C0BBAA5D1100DFFD903B9FDE5D86DCDF6541444AA8983F297F9C94E50D2273B020881A600CA5B0FBCB9A17ACD3").unwrap();
         let add_info: Vec<String> = vec!["test-0".to_string()];
         if cfg!(feature = "checks") {
-            assert!(verify_schnorr(
-                &EncryptionParameters::from((&p, &q, &g)),
-                (&e, &z),
-                &y,
-                &add_info
+            assert!(
+                verify_schnorr(
+                    &EncryptionParameters::from((&p, &q, &g)),
+                    (&e, &z),
+                    &y,
+                    &add_info
+                )
+                .is_err()
             )
-            .is_err())
         } else {
-            assert!(verify_schnorr(
-                &EncryptionParameters::from((&p, &q, &g)),
-                (&e, &z),
-                &y,
-                &add_info
+            assert!(
+                verify_schnorr(
+                    &EncryptionParameters::from((&p, &q, &g)),
+                    (&e, &z),
+                    &y,
+                    &add_info
+                )
+                .is_ok()
             )
-            .is_ok())
         }
     }
 
