@@ -18,10 +18,10 @@
 
 use super::{ElgamalError, ElgamalErrorRepr};
 use crate::{
-    basic_crypto_functions::{shake256, BasisCryptoError},
+    ByteArray, ConstantsTrait, DomainVerifications, GROUP_PARAMETER_P_LENGTH, HashableMessage,
+    Integer, SECURITY_STRENGTH, SmallPrimeTrait, VerifyDomainTrait,
+    basic_crypto_functions::{BasisCryptoError, shake256},
     number_theory::{IsPrimeTrait, QuadraticResidueTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
-    ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
-    VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
 use thiserror::Error;
 
@@ -408,23 +408,35 @@ mod test {
         let q_err_1 = Integer::from(6u8);
         let q_err_2 = Integer::from(11u8);
         let g_err = Integer::from(2u8);
-        assert!(EncryptionParameters::from((&p, &q, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p_err, &q, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_1, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_2, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q, &g_err))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q, Integer::one()))
-            .verifiy_domain()
-            .is_empty());
+        assert!(
+            EncryptionParameters::from((&p, &q, &g))
+                .verifiy_domain()
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p_err, &q, &g))
+                .verifiy_domain()
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q_err_1, &g))
+                .verifiy_domain()
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q_err_2, &g))
+                .verifiy_domain()
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q, &g_err))
+                .verifiy_domain()
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q, Integer::one()))
+                .verifiy_domain()
+                .is_empty()
+        );
     }
 }
