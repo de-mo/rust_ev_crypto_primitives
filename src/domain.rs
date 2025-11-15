@@ -37,14 +37,13 @@ pub struct DomainVerifications<C: Sized, T: Sized, E> {
 /// In the default implementation, nothing will be verified
 ///
 /// If no context is necessary, the structure `EmptyContext` can be used
-/// ```no_run
-/// use evoting_crypto_primitives::domain_verification::{VerifyDomainTrait, EmptyContext};
+/// ```ignore
+/// use rust_ev_crypto_primitives::domain::{VerifyDomainTrait, EmptyContext};
 /// struct MyStruct {
 ///    value: u32,
 /// }
-/// impl VerifyDomainTrait<EmptyContext, String> for MyStruct;
+/// impl VerifyDomainTrait<EmptyContext, String> for MyStruct {};
 /// ```
-///
 pub trait VerifyDomainTrait<C: Sized, E>: Sized {
     /// Create the new list of verications containing all the necessary verifications
     /// for the object implementing the trait
