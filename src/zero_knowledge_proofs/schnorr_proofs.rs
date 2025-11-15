@@ -15,11 +15,11 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
+    EmptyContext, HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait, VerifyDomainTrait,
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
-    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
-    RecursiveHashTrait, VerifyDomainTrait,
 };
 use thiserror::Error;
 
@@ -69,7 +69,7 @@ pub fn verify_schnorr(
     ep: &EncryptionParameters,
     (e, z): (&Integer, &Integer),
     y: &Integer,
-    i_aux: &Vec<String>,
+    i_aux: &[&str],
 ) -> Result<bool, SchnorrProofError> {
     verify_schnorr_impl(ep, (e, z), y, i_aux).map_err(SchnorrProofError::from)
 }
@@ -78,10 +78,10 @@ fn verify_schnorr_impl(
     ep: &EncryptionParameters,
     (e, z): (&Integer, &Integer),
     y: &Integer,
-    i_aux: &Vec<String>,
+    i_aux: &[&str],
 ) -> Result<bool, SchnorrProofErrorRepr> {
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain();
+        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
         if !domain_errs.is_empty() {
             return Err(SchnorrProofErrorRepr::CheckElgamal(domain_errs));
         }
@@ -102,7 +102,7 @@ fn verify_schnorr_impl(
     let mut l: Vec<HashableMessage> = vec![];
     l.push(HashableMessage::from("SchnorrProof"));
     if !i_aux.is_empty() {
-        l.push(HashableMessage::from(i_aux.as_slice()));
+        l.push(HashableMessage::from(i_aux));
     }
     let h_aux = HashableMessage::from(l);
     let l_final: Vec<HashableMessage> = vec![
@@ -122,12 +122,12 @@ fn verify_schnorr_impl(
 mod test {
     use super::*;
     use crate::{
+        Hexa,
         test_json_data::{
             get_test_cases_from_json_file, json_64_value_to_integer,
             json_array_value_to_array_string, json_value_to_encryption_parameters,
         },
-        zero_knowledge_proofs::test::{proof_from_json_values, Proof},
-        Hexa,
+        zero_knowledge_proofs::test::{Proof, proof_from_json_values},
     };
     use serde_json::Value;
 
@@ -158,23 +158,27 @@ mod test {
         .unwrap();
         let z = Integer::from_hexa_string("0x4BC63F12E01FBE31246E7EF85292D8ABAAF850C9531E78B5EF7DE7692259E2DF5F0AC93A8BC7F262FA8ACCC5352C6B81976FB8A470FCB80696EFB46DF4EF9E86326AC801B692E4BCD0DAA452A2D749EEE277358EBA0C141187088DCF1CEF6DDAB8FEE47299671BF7AB411AF8E792787471B74DF3866187808685E2FF169AAC4AE55B6CA7152EB29BD82317F1BD26680C6BC15DA734E1E19153253A8D2AFA0C11B08B20A2D334EDE3D29460DA359306B4B7DD4DB65B3CE4F18FDEC6FBE5328C319C5847F8DC7B9FB97E997416CA58DCF286A3D8992B2453F4924152C34687579E1D3E8AACA94F24D24C2810C70AF14BD78BDF6F528BC8167364329685F7F5D60A").unwrap();
         let y = Integer::from_hexa_string("0x6AC7B188F3C0AB80238FEA40C71A3BA9C8E438F549CC113C1FA23B0893C0C63157C2E4E147CD69BAEBF2EB464F64131F99D7E23D939972D7E6E60FEF27068E34B84CF011129AF98B0F82C78859F890F6312652BD162477A23ACC3516B2945F52E3FE0168000B3F62B04823418F1B1D3D3BE030586B39174EB1BACB832FC8E86A151DFDC11106B484530B1F9F6E4E072EDFDED5E4C564D75978B05CB797256C225901F31DD2DE56709509BDAE1DFBECA410AEFC94D87A7D585012E70EA977A812744CFF03E50A7FD5B74B7BC232D2318A384E19C0BBAA5D1100DFFD903B9FDE5D86DCDF6541444AA8983F297F9C94E50D2273B020881A600CA5B0FBCB9A17ACD3").unwrap();
-        let add_info: Vec<String> = vec!["test-0".to_string()];
+        let add_info = vec!["test-0"];
         if cfg!(feature = "checks") {
-            assert!(verify_schnorr(
-                &EncryptionParameters::from((&p, &q, &g)),
-                (&e, &z),
-                &y,
-                &add_info
+            assert!(
+                verify_schnorr(
+                    &EncryptionParameters::from((&p, &q, &g)),
+                    (&e, &z),
+                    &y,
+                    &add_info
+                )
+                .is_err()
             )
-            .is_err())
         } else {
-            assert!(verify_schnorr(
-                &EncryptionParameters::from((&p, &q, &g)),
-                (&e, &z),
-                &y,
-                &add_info
+            assert!(
+                verify_schnorr(
+                    &EncryptionParameters::from((&p, &q, &g)),
+                    (&e, &z),
+                    &y,
+                    &add_info
+                )
+                .is_ok()
             )
-            .is_ok())
         }
     }
 
@@ -183,12 +187,17 @@ mod test {
         for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-schnorr.json") {
             let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
+            let add_info_str = input
+                .additional_information
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<&str>>();
             assert!(
                 verify_schnorr(
                     &ep,
                     (&input.proof.e, &input.proof.z),
                     &input.statement,
-                    &input.additional_information
+                    &add_info_str
                 )
                 .unwrap(),
                 "{}",

@@ -509,6 +509,12 @@ impl<'a> From<&'a [String]> for HashableMessage<'a> {
     }
 }
 
+impl<'a> From<&'a [&'a str]> for HashableMessage<'a> {
+    fn from(value: &'a [&'a str]) -> Self {
+        Self::from(value.iter().map(|s| Self::from(*s)).collect::<Vec<_>>())
+    }
+}
+
 impl<'a> From<&'a [&'a String]> for HashableMessage<'a> {
     fn from(value: &'a [&'a String]) -> Self {
         Self::from(
@@ -647,7 +653,7 @@ mod test {
     #[test]
     fn test_integer_list_len1() {
         let inputs = Integer::base_64_decode_vector(&[
-            "AKTZsLSB+wMHPks+7oYvoqpmeu033SAf9B94YWbJjQGrPO7QJJ+h8S8j3vIDqYxTopT13hpUqY6qNvcjIzb9/onyithniby2e15Br/nObuVjmhK3Y9KhcOC4IIg4B5piKxH8fc2sPeF4gD52cCj+tgfClUg0qKU7QAiU4s91kdnmjLmH0rXwXFp5mjilE+U8RR5t90bFwy+6/prta4oXIqwV1A8codrF8FhhiClRSBHxNRahikFC0baYMIA6SRComlk4SR91r+nAesE4zLm1SIFHlKe1puTyLNI2X+1QEaHn3SaVWVjIqfze4xucaqu2tQzI5ZUUT0zMr/x0ZW2hNeM="        
+            "AKTZsLSB+wMHPks+7oYvoqpmeu033SAf9B94YWbJjQGrPO7QJJ+h8S8j3vIDqYxTopT13hpUqY6qNvcjIzb9/onyithniby2e15Br/nObuVjmhK3Y9KhcOC4IIg4B5piKxH8fc2sPeF4gD52cCj+tgfClUg0qKU7QAiU4s91kdnmjLmH0rXwXFp5mjilE+U8RR5t90bFwy+6/prta4oXIqwV1A8codrF8FhhiClRSBHxNRahikFC0baYMIA6SRComlk4SR91r+nAesE4zLm1SIFHlKe1puTyLNI2X+1QEaHn3SaVWVjIqfze4xucaqu2tQzI5ZUUT0zMr/x0ZW2hNeM="
         ]).unwrap();
         let r = HashableMessage::from(inputs.as_slice())
             .recursive_hash()

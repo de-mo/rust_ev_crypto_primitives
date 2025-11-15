@@ -18,10 +18,10 @@
 
 use super::{ElgamalError, ElgamalErrorRepr};
 use crate::{
-    basic_crypto_functions::{shake256, BasisCryptoError},
+    ByteArray, ConstantsTrait, DomainVerifications, EmptyContext, GROUP_PARAMETER_P_LENGTH,
+    HashableMessage, Integer, SECURITY_STRENGTH, SmallPrimeTrait, VerifyDomainTrait,
+    basic_crypto_functions::{BasisCryptoError, shake256},
     number_theory::{IsPrimeTrait, QuadraticResidueTrait, SMALL_PRIMES, SMALL_PRIMES_LIMIT},
-    ByteArray, ConstantsTrait, DomainVerifications, HashableMessage, Integer, SmallPrimeTrait,
-    VerifyDomainTrait, GROUP_PARAMETER_P_LENGTH, SECURITY_STRENGTH,
 };
 use thiserror::Error;
 
@@ -273,11 +273,11 @@ impl<'a> From<&'a EncryptionParameters> for HashableMessage<'a> {
     }
 }
 
-impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters {
-    fn new_domain_verifications() -> crate::DomainVerifications<Self, EncryptionParameterDomainError>
-    {
+impl VerifyDomainTrait<EmptyContext, EncryptionParameterDomainError> for EncryptionParameters {
+    fn new_domain_verifications()
+    -> DomainVerifications<EmptyContext, Self, EncryptionParameterDomainError> {
         let mut res = DomainVerifications::default();
-        res.add_verification(|ep| {
+        res.add_verification(|ep, _c| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_p(ep) {
                 res.push(EncryptionParameterDomainError::from(
@@ -286,7 +286,7 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
             }
             res
         });
-        res.add_verification(|ep| {
+        res.add_verification(|ep, _c| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_q(ep) {
                 res.push(EncryptionParameterDomainError::from(
@@ -295,7 +295,7 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
             }
             res
         });
-        res.add_verification(|ep| {
+        res.add_verification(|ep, _c| {
             let mut res = vec![];
             for e in EncryptionParameters::validate_g(ep) {
                 res.push(EncryptionParameterDomainError::from(
@@ -311,7 +311,7 @@ impl VerifyDomainTrait<EncryptionParameterDomainError> for EncryptionParameters 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{DecodeTrait, Hexa};
+    use crate::{DecodeTrait, EmptyContext, Hexa};
 
     #[test]
     fn test_get_small_prime_group_members() {
@@ -408,23 +408,35 @@ mod test {
         let q_err_1 = Integer::from(6u8);
         let q_err_2 = Integer::from(11u8);
         let g_err = Integer::from(2u8);
-        assert!(EncryptionParameters::from((&p, &q, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p_err, &q, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_1, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q_err_2, &g))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q, &g_err))
-            .verifiy_domain()
-            .is_empty());
-        assert!(!EncryptionParameters::from((&p, &q, Integer::one()))
-            .verifiy_domain()
-            .is_empty());
+        assert!(
+            EncryptionParameters::from((&p, &q, &g))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p_err, &q, &g))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q_err_1, &g))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q_err_2, &g))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q, &g_err))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
+        assert!(
+            !EncryptionParameters::from((&p, &q, Integer::one()))
+                .verifiy_domain(&EmptyContext::default())
+                .is_empty()
+        );
     }
 }
