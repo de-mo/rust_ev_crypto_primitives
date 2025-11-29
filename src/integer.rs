@@ -20,13 +20,17 @@
 //! used in the client modules
 //!
 
-use crate::byte_array::ByteArrayError;
-use crate::shared_error::{IsNegativeError, NotImplemented};
-use crate::{ByteArray, DecodeTrait, EncodeTrait, NotOddError};
-use rug::Integer;
-use rug::integer::ParseIntegerError;
-use std::sync::OnceLock;
-use std::{fmt::Debug, sync::LazyLock};
+use crate::{
+    ByteArray, DecodeTrait, EncodeTrait, NotOddError,
+    byte_array::ByteArrayError,
+    shared_error::{IsNegativeError, NotImplemented},
+};
+use rug::{Integer, integer::ParseIntegerError, ops::NegAssign};
+use std::{
+    fmt::Debug,
+    ops::{AddAssign, MulAssign},
+    sync::{LazyLock, OnceLock},
+};
 use thiserror::Error;
 use tracing::info;
 
@@ -304,7 +308,7 @@ pub trait OperationsOptimizationTrait: Sized {
 }
 
 /// Trait to extend operations of [Integer]
-pub trait OperationsTrait: Sized {
+pub trait OperationsTrait: Sized + Clone {
     /// Test if is even
     fn is_even(&self) -> bool;
 
@@ -317,21 +321,65 @@ pub trait OperationsTrait: Sized {
     fn nb_bits(&self) -> usize;
 
     /// Calculate the add modulo: self + other % modulus
-    fn mod_add(&self, other: &Self, modulus: &Self) -> Self;
+    fn mod_add(&self, other: &Self, modulus: &Self) -> Self {
+        let mut res = self.clone();
+        res.mod_add_mut(other, modulus);
+        res
+    }
+
+    /// Calculate the add modulo replace self: self + other % modulus
+    fn mod_add_mut(&mut self, other: &Self, modulus: &Self);
 
     /// Calculate the substraction modulo: self - other % modulus
-    fn mod_sub(&self, other: &Self, modulus: &Self) -> Self;
+    #[inline]
+    fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
+        let mut res = self.clone();
+        res.mod_sub_mut(other, modulus);
+        res
+    }
+
+    /// Calculate the substraction modulo replacing self: self - other % modulus
+    fn mod_sub_mut(&mut self, other: &Self, modulus: &Self);
 
     /// Calculate the exponentiate modulo: self^exp % modulus
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError>;
+    #[inline]
+    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError> {
+        let mut res = self.clone();
+        res.mod_exponentiate_mut(exp, modulus)?;
+        Ok(res)
+    }
+
+    /// Calculate the exponentiate modulo: self^exp % modulus
+    fn mod_exponentiate_mut(
+        &mut self,
+        exp: &Self,
+        modulus: &Self,
+    ) -> Result<(), ModExponentiateError>;
 
     /// Calculate the negative number modulo modulus (is a positive number): -self & modulus
-    fn mod_negate(&self, modulus: &Self) -> Self;
+    #[inline]
+    fn mod_negate(&self, modulus: &Self) -> Self {
+        let mut res = self.clone();
+        res.mod_negate_mut(modulus);
+        res
+    }
+
+    /// Calculate the negative number modulo modulus (is a positive number) replacing self: -self & modulus
+    fn mod_negate_mut(&mut self, modulus: &Self);
 
     /// Calculate the multiplication modulo: self*other % modulus
-    fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self;
+    #[inline]
+    fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self {
+        let mut res = self.clone();
+        res.mod_multiply_mut(other, modulus);
+        res
+    }
+
+    /// Calculate the multiplication modulo: self*other % modulus
+    fn mod_multiply_mut(&mut self, other: &Self, modulus: &Self);
 
     /// multiply all elements of other with self (scalar product)
+    #[inline]
     fn mod_scalar_multiply(&self, others: &[Self], modulus: &Self) -> Vec<Self> {
         others
             .iter()
@@ -340,15 +388,45 @@ pub trait OperationsTrait: Sized {
     }
 
     /// Calculate the square modulo: self*2 % modulus
-    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError>;
+    #[inline]
+    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
+        let mut res = self.clone();
+        res.mod_square_mut(modulus)?;
+        Ok(res)
+    }
+
+    /// Calculate the square modulo: self*2 % modulus
+    fn mod_square_mut(&mut self, modulus: &Self) -> Result<(), IntegerOperationError>;
 
     /// Calculate the inverse modulo: self^(-1) % modulus
     ///
     /// Return the correct answer only if modulus is prime
-    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError>;
+    #[inline]
+    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
+        let mut res = self.clone();
+        res.mod_inverse_mut(modulus)?;
+        Ok(res)
+    }
 
+    /// Calculate the inverse modulo: self^(-1) % modulus
+    ///
+    /// Return the correct answer only if modulus is prime
+    fn mod_inverse_mut(&mut self, modulus: &Self) -> Result<(), IntegerOperationError>;
+
+    #[inline]
     fn mod_divide(&self, divisor: &Self, modulus: &Self) -> Result<Self, IntegerOperationError> {
-        Ok(self.mod_multiply(&divisor.mod_inverse(modulus)?, modulus))
+        let mut res = self.clone();
+        res.mod_divide_mut(divisor, modulus)?;
+        Ok(res)
+    }
+
+    #[inline]
+    fn mod_divide_mut(
+        &mut self,
+        divisor: &Self,
+        modulus: &Self,
+    ) -> Result<(), IntegerOperationError> {
+        Ok(self.mod_multiply_mut(&divisor.mod_inverse(modulus)?, modulus))
     }
 
     /// Multi Exponentation modulo (prouct of b_^e_i mod modulus)
@@ -471,34 +549,48 @@ static FOR: OnceLock<Integer> = OnceLock::new();
 static FIVE: OnceLock<Integer> = OnceLock::new();
 
 impl ConstantsTrait for Integer {
+    #[inline]
     fn zero() -> &'static Self {
         ZERO.get_or_init(|| Integer::from(0u8))
     }
 
+    #[inline]
     fn one() -> &'static Self {
         ONE.get_or_init(|| Integer::from(1u8))
     }
 
+    #[inline]
     fn two() -> &'static Self {
         TWO.get_or_init(|| Integer::from(2u8))
     }
+
+    #[inline]
     fn three() -> &'static Self {
         THREE.get_or_init(|| Integer::from(3u8))
     }
+
+    #[inline]
     fn four() -> &'static Self {
         FOR.get_or_init(|| Integer::from(4u8))
     }
+
+    #[inline]
     fn five() -> &'static Self {
         FIVE.get_or_init(|| Integer::from(5u8))
     }
 }
 
 impl OperationsTrait for Integer {
+    #[inline]
     fn is_even(&self) -> bool {
         self.is_even()
     }
 
-    fn mod_exponentiate(&self, exp: &Self, modulus: &Self) -> Result<Self, ModExponentiateError> {
+    fn mod_exponentiate_mut(
+        &mut self,
+        exp: &Self,
+        modulus: &Self,
+    ) -> Result<(), ModExponentiateError> {
         if self.is_negative() {
             return Err(ModExponentiateError::from(
                 ModExponentiateErrorRepr::IsNegative {
@@ -530,34 +622,36 @@ impl OperationsTrait for Integer {
             ));
         }
         match OP_OPTIMIZATION.is_fpowm_optimized_for(self, modulus) {
-            true => OP_OPTIMIZATION
-                .optimized_fpowm(exp)
-                .map_err(|e| ModExponentiateErrorRepr::OptimizationError { source: e })
-                .map_err(ModExponentiateError::from),
+            true => {
+                *self = OP_OPTIMIZATION
+                    .optimized_fpowm(exp)
+                    .map_err(|e| ModExponentiateErrorRepr::OptimizationError { source: e })
+                    .map_err(ModExponentiateError::from)?;
+            }
             false => self
-                .pow_mod_ref(exp, modulus)
-                .map(Integer::from)
-                .ok_or(ModExponentiateErrorRepr::PowModRefIsNone)
-                .map_err(ModExponentiateError::from),
+                .pow_mod_mut(exp, modulus)
+                .map_err(|_| ModExponentiateErrorRepr::PowModRefIsNone)
+                .map_err(ModExponentiateError::from)?,
         }
+        Ok(())
     }
 
-    fn mod_negate(&self, modulus: &Self) -> Self {
-        let bi = Integer::from(-self);
+    #[inline]
+    fn mod_negate_mut(&mut self, modulus: &Self) {
+        self.neg_assign();
         let modulus_bi = Integer::from(-modulus);
-        let mut neg = bi % &modulus_bi;
-        if neg < 0 {
-            neg += &modulus_bi.abs();
-        }
-        neg
+        self.modulo_mut(&modulus_bi);
     }
 
-    fn mod_multiply(&self, other: &Self, modulus: &Self) -> Self {
-        Integer::from(self * other) % modulus
+    #[inline]
+    fn mod_multiply_mut(&mut self, other: &Self, modulus: &Self) {
+        self.mul_assign(other);
+        self.modulo_mut(modulus);
     }
 
-    fn mod_square(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
-        self.mod_exponentiate(Integer::two(), modulus)
+    #[inline]
+    fn mod_square_mut(&mut self, modulus: &Self) -> Result<(), IntegerOperationError> {
+        self.mod_exponentiate_mut(Integer::two(), modulus)
             .map_err(|e| IntegerOperationErrorRepr::Square {
                 val: self.clone(),
                 modulus: modulus.clone(),
@@ -566,9 +660,10 @@ impl OperationsTrait for Integer {
             .map_err(IntegerOperationError::from)
     }
 
-    fn mod_inverse(&self, modulus: &Self) -> Result<Self, IntegerOperationError> {
+    #[inline]
+    fn mod_inverse_mut(&mut self, modulus: &Self) -> Result<(), IntegerOperationError> {
         let from = Integer::from(modulus - Self::two());
-        self.mod_exponentiate(&from, modulus)
+        self.mod_exponentiate_mut(&from, modulus)
             .map_err(|e| IntegerOperationErrorRepr::Inverse {
                 val: self.clone(),
                 modulus: modulus.clone(),
@@ -577,19 +672,23 @@ impl OperationsTrait for Integer {
             .map_err(IntegerOperationError::from)
     }
 
+    #[inline]
     fn nb_bits(&self) -> usize {
         self.significant_bits() as usize
     }
 
-    fn mod_add(&self, other: &Self, modulus: &Self) -> Self {
-        let res = Integer::from(self + other);
-        res.modulo(modulus)
+    #[inline]
+    fn mod_add_mut(&mut self, other: &Self, modulus: &Self) {
+        self.add_assign(other);
+        self.modulo_mut(modulus);
     }
 
-    fn mod_sub(&self, other: &Self, modulus: &Self) -> Self {
-        self.mod_add(&other.mod_negate(modulus), modulus)
+    #[inline]
+    fn mod_sub_mut(&mut self, other: &Self, modulus: &Self) {
+        self.mod_add_mut(&other.mod_negate(modulus), modulus);
     }
 
+    #[inline]
     fn mod_multi_exponentiate(
         bases: &[Self],
         exponents: &[Self],
@@ -662,14 +761,17 @@ impl Hexa for Integer {
 
 impl DecodeTrait for Integer {
     type Error = ByteArrayError;
+    #[inline]
     fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base16_decode(s).map(|b| b.into_integer())
     }
 
+    #[inline]
     fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base32_decode(s).map(|b| b.into_integer())
     }
 
+    #[inline]
     fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         ByteArray::base64_decode(s).map(|b| b.into_integer())
     }
@@ -677,6 +779,7 @@ impl DecodeTrait for Integer {
 
 impl EncodeTrait for Integer {
     type Error = EncodeIntegerError;
+    #[inline]
     fn base16_encode(&self) -> Result<String, Self::Error> {
         Ok(ByteArray::try_from(self)
             .map_err(|e| EncodeIntegerError {
@@ -688,6 +791,7 @@ impl EncodeTrait for Integer {
             .unwrap())
     }
 
+    #[inline]
     fn base32_encode(&self) -> Result<String, Self::Error> {
         Ok(ByteArray::try_from(self)
             .map_err(|e| EncodeIntegerError {
@@ -699,6 +803,7 @@ impl EncodeTrait for Integer {
             .unwrap())
     }
 
+    #[inline]
     fn base64_encode(&self) -> Result<String, Self::Error> {
         Ok(ByteArray::try_from(self)
             .map_err(|e| EncodeIntegerError {
