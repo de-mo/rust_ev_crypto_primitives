@@ -367,9 +367,9 @@ dependencies = [
 
 [[package]]
 name = "gmpmee-sys"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b46020e288674a65330330cc9c190bb13eb4d4a4cda743f3f51a36a4aa337c73"
+checksum = "4ba992ea5dbcd0ed851d2928b1efccb824fe7980a818ecb056ff69ab789033fe"
 dependencies = [
  "cc",
  "dirs",
@@ -719,9 +719,9 @@ dependencies = [
 
 [[package]]
 name = "rug-gmpmee"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b77262a63b5b32437d39cf5ff97dc5296ec1483870be5e07c2542a43938d7cc"
+checksum = "a7f45ac804906f1aed0c932663f26b57353c253c500f7f9a1d46e1959a440eac"
 dependencies = [
  "gmpmee-sys",
  "rug",
@@ -730,9 +730,9 @@ dependencies = [
 
 [[package]]
 name = "rug-miller-rabin"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e47d1d017b2260e825a8f6acc62486fbb190782fdbbc5ec7ae2633a6e873504e"
+checksum = "77cf6c75d5315c6c863a22ddc9a001382ec9a62d7584c68765980811ab64efff"
 dependencies = [
  "rand",
  "rayon",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "rust_ev_crypto_primitives"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "argon2",
  "criterion",
