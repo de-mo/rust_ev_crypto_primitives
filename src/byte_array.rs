@@ -129,11 +129,13 @@ pub trait DecodeTrait: Sized {
 
 impl ByteArray {
     /// Create an empty Bytearray (only with 0)
+    #[inline]
     pub fn new() -> Self {
         ByteArray { inner: vec![] }
     }
 
     /// ByteArray from a slice of bytes
+    #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Self {
         if bytes.is_empty() {
             return ByteArray::default();
@@ -144,6 +146,7 @@ impl ByteArray {
     }
 
     /// ByteArray into Integer
+    #[inline]
     pub fn into_integer(&self) -> Integer {
         let int_256 = Integer::from(256u32);
         self.inner
@@ -153,11 +156,13 @@ impl ByteArray {
 
     /// Len of the ByteArray in bytes
     #[allow(clippy::len_without_is_empty)]
+    #[inline]
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
     /// ByteArray to bytes
+    #[inline]
     pub fn to_bytes(&self) -> &[u8] {
         self.inner.as_slice()
     }
@@ -165,6 +170,7 @@ impl ByteArray {
     /// Extend other to self
     ///
     /// self will changed and extend. other is cloned at the end of self
+    #[inline]
     pub fn extend(&mut self, other: &ByteArray) -> &ByteArray {
         self.inner.extend_from_slice(other.inner.as_slice());
         self
@@ -173,6 +179,7 @@ impl ByteArray {
     /// Append and return a new one
     ///
     /// The new one is the concatenation of self and other. self and other remain unchanged
+    #[inline]
     pub fn new_append(&self, other: &ByteArray) -> ByteArray {
         let mut res = self.clone();
         res.extend(other);
@@ -180,6 +187,7 @@ impl ByteArray {
     }
 
     /// Create a new ByteArray prepending a byte
+    #[inline]
     pub fn new_prepend_byte(&self, byte: u8) -> ByteArray {
         let mut res = self.clone();
         res.inner.insert(0, byte);
@@ -187,6 +195,7 @@ impl ByteArray {
     }
 
     /// Truncate to the given len
+    #[inline]
     pub fn truncate(&mut self, len: usize) {
         self.inner.truncate(len);
     }
@@ -222,14 +231,17 @@ impl ByteArray {
 impl EncodeTrait for ByteArray {
     type Error = ByteArrayError;
 
+    #[inline]
     fn base16_encode(&self) -> Result<String, Self::Error> {
         Ok(HEXUPPER.encode(&self.inner))
     }
 
+    #[inline]
     fn base32_encode(&self) -> Result<String, Self::Error> {
         Ok(BASE32.encode(&self.inner))
     }
 
+    #[inline]
     fn base64_encode(&self) -> Result<String, Self::Error> {
         Ok(BASE64.encode(&self.inner))
     }
@@ -238,6 +250,7 @@ impl EncodeTrait for ByteArray {
 impl DecodeTrait for ByteArray {
     type Error = ByteArrayError;
 
+    #[inline]
     fn base16_decode(s: &str) -> Result<Self, Self::Error> {
         HEXUPPER
             .decode(s.as_bytes())
@@ -251,6 +264,7 @@ impl DecodeTrait for ByteArray {
             .map(|r| Self::from(&r))
     }
 
+    #[inline]
     fn base32_decode(s: &str) -> Result<Self, Self::Error> {
         BASE32
             .decode(s.as_bytes())
@@ -264,6 +278,7 @@ impl DecodeTrait for ByteArray {
             .map(|r| Self::from(&r))
     }
 
+    #[inline]
     fn base64_decode(s: &str) -> Result<Self, Self::Error> {
         BASE64
             .decode(s.as_bytes())
@@ -279,18 +294,21 @@ impl DecodeTrait for ByteArray {
 }
 
 impl Default for ByteArray {
+    #[inline]
     fn default() -> Self {
         ByteArray::new()
     }
 }
 
 impl Debug for ByteArray {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.inner.fmt(f)
     }
 }
 
 impl Display for ByteArray {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.base16_encode().unwrap())
     }

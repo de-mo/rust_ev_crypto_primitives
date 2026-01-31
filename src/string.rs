@@ -18,10 +18,9 @@
 
 use std::cmp::min;
 
+#[inline]
 pub fn truncate(s: &str, l: usize) -> String {
-    let u = s.len();
-    let m = min(u, l);
-    s.chars().take(m).collect()
+    s.chars().take(min(s.len(), l)).collect()
 }
 
 #[cfg(test)]

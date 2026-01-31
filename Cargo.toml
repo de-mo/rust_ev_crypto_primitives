@@ -15,7 +15,7 @@ exclude = ["specs"]
 [dependencies]
 openssl = "0.10"
 thiserror = "2"
-data-encoding = "2.5"
+data-encoding = "2"
 num-traits = "0.2"
 argon2 = { version = "0.5", features = ["std"] }
 rug = { version = "1" }
@@ -29,7 +29,7 @@ tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rug = { version = "1", features = ["rand"] }
-criterion = "0.7"
+criterion = "0.8"
 
 [features]
 default = []
@@ -47,7 +47,6 @@ harness = false
 [[bench]]
 name = "elgamal"
 harness = false
-required-features = ["gmpmee"]
 
 [[bench]]
 name = "hashing"
@@ -56,4 +55,7 @@ harness = false
 [[bench]]
 name = "zero_knowledge_proofs"
 harness = false
-required-features = ["gmpmee"]
+
+[[bench]]
+name = "integer"
+harness = false
