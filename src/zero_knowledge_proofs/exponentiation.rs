@@ -98,7 +98,7 @@ fn verify_exponentiation_impl(
 ) -> Result<bool, ExponentiationProofErrorRepr> {
     // Check of input parameters
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
+        let domain_errs = ep.verifiy_domain(&EmptyContext);
         if !domain_errs.is_empty() {
             return Err(ExponentiationProofErrorRepr::CheckElgamal(domain_errs));
         }

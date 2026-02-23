@@ -426,7 +426,8 @@ pub trait OperationsTrait: Sized + Clone {
         divisor: &Self,
         modulus: &Self,
     ) -> Result<(), IntegerOperationError> {
-        Ok(self.mod_multiply_mut(&divisor.mod_inverse(modulus)?, modulus))
+        let _: () = self.mod_multiply_mut(&divisor.mod_inverse(modulus)?, modulus);
+        Ok(())
     }
 
     /// Multi Exponentation modulo (prouct of b_^e_i mod modulus)

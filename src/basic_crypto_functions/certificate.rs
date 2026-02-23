@@ -128,8 +128,9 @@ pub struct Keystore {
 }
 
 /// Possible extension of the X509 certificate
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum CertificateExtension {
+    #[default]
     Cer,
     Pem,
 }
@@ -422,12 +423,6 @@ impl PublicKey {
 impl Secretkey {
     pub(crate) fn pkey_private(&self) -> &PKey<Private> {
         &self.0
-    }
-}
-
-impl Default for CertificateExtension {
-    fn default() -> Self {
-        Self::Cer
     }
 }
 

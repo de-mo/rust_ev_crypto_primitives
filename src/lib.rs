@@ -69,7 +69,7 @@ pub use number_theory::{
     IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
     SmallPrimeTrait,
 };
-pub use rug::Integer;
+pub use rug::{Integer, ops};
 pub use shared_error::{NotOddError, NotPositiveError};
 
 /// The length of the group parameter `p` according to the security level in the specifications

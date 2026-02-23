@@ -410,32 +410,32 @@ mod test {
         let g_err = Integer::from(2u8);
         assert!(
             EncryptionParameters::from((&p, &q, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p_err, &q, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q_err_1, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q_err_2, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q, &g_err))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q, Integer::one()))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
     }
