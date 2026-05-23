@@ -18,7 +18,7 @@
 
 use super::{ElgamalError, ElgamalErrorRepr, EncryptionParameters};
 use crate::{
-    integer::ModExponentiateError, ConstantsTrait, HashableMessage, Integer, OperationsTrait,
+    ConstantsTrait, HashableMessage, Integer, OperationsTrait, integer::ModExponentiateError,
 };
 use std::{iter::once, ops::ControlFlow};
 use thiserror::Error;
@@ -169,6 +169,10 @@ impl Ciphertext {
             ))),
         }
     }
+
+    pub fn to_vec(&self) -> Vec<&Integer> {
+        once(&self.gamma).chain(self.phis.iter()).collect()
+    }
 }
 
 impl<'a> From<&'a Ciphertext> for HashableMessage<'a> {
@@ -250,9 +254,15 @@ impl<'a> From<Vec<&'a Ciphertext>> for HashableMessage<'a> {
 
 impl From<&[Integer]> for Ciphertext {
     fn from(value: &[Integer]) -> Self {
+        Self::from(value.iter().collect::<Vec<&Integer>>().as_slice())
+    }
+}
+
+impl From<&[&Integer]> for Ciphertext {
+    fn from(value: &[&Integer]) -> Self {
         Self {
             gamma: value[0].clone(),
-            phis: value.iter().skip(1).cloned().collect(),
+            phis: value.iter().skip(1).map(|&phi| phi.clone()).collect(),
         }
     }
 }
@@ -261,11 +271,12 @@ impl From<&[Integer]> for Ciphertext {
 mod test {
     use super::*;
     use crate::{
-        test_json_data::{
-            json_value_to_encryption_parameters, json_values_to_ciphertext_values, get_test_cases_from_json_file, json_64_value_to_integer,
-            json_array_64_value_to_array_integer, CiphertextValues,
-        },
         Hexa,
+        test_json_data::{
+            CiphertextValues, get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_64_value_to_array_integer, json_value_to_encryption_parameters,
+            json_values_to_ciphertext_values,
+        },
     };
     use serde_json::Value;
 

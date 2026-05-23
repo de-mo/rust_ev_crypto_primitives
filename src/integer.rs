@@ -162,6 +162,20 @@ enum ToByteArrayErrorRepr {
     },
 }
 
+#[derive(Error, Debug)]
+#[error(transparent)]
+/// Error in to string
+pub struct StringToIntegerError(#[from] StringToIntegerErrorRepr);
+
+#[derive(Error, Debug)]
+enum StringToIntegerErrorRepr {
+    #[error("Error parsing String {s} to Integer")]
+    ParseError {
+        s: String,
+        source: rug::integer::ParseIntegerError,
+    },
+}
+
 /// Trait to implement constant numbers
 pub trait ConstantsTrait: Sized {
     /// Zero
@@ -176,6 +190,15 @@ pub trait ConstantsTrait: Sized {
     fn four() -> &'static Self;
     /// Five
     fn five() -> &'static Self;
+}
+
+/// Trait to implement string conversion
+pub trait ConvertStringTait: Sized {
+    /// Convert from string
+    fn string_to_integer(s: &str) -> Result<Self, StringToIntegerError>;
+
+    /// Convert to string
+    fn integer_to_string(&self) -> String;
 }
 
 /// Default optimization
@@ -578,6 +601,21 @@ impl ConstantsTrait for Integer {
     #[inline]
     fn five() -> &'static Self {
         FIVE.get_or_init(|| Integer::from(5u8))
+    }
+}
+
+impl ConvertStringTait for Integer {
+    fn string_to_integer(s: &str) -> Result<Self, StringToIntegerError> {
+        Integer::from_str_radix(s, 10)
+            .map_err(|e| StringToIntegerErrorRepr::ParseError {
+                s: s.to_string(),
+                source: e,
+            })
+            .map_err(StringToIntegerError::from)
+    }
+
+    fn integer_to_string(&self) -> String {
+        self.to_string_radix(10)
     }
 }
 

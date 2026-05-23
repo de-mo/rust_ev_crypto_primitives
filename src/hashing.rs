@@ -18,7 +18,8 @@
 //!
 
 use crate::{
-    ByteArray, ByteArrayError, GROUP_PARAMETER_Q_LENGTH, Integer, SECURITY_STRENGTH,
+    ByteArray, ByteArrayError, GROUP_PARAMETER_Q_LENGTH, Integer, ModExponentiateError,
+    OperationsTrait, SECURITY_STRENGTH,
     basic_crypto_functions::{BasisCryptoError, sha3_256, shake256},
 };
 use std::{borrow::Cow, fmt::Debug, str::FromStr};
@@ -132,6 +133,8 @@ enum HashErrorRepr {
     CompositeHash { source: Box<HashError> },
     #[error("Error hashing to bit len composite")]
     CompositeHashToBitLen { source: Box<HashError> },
+    #[error("Error square mod p in hash_and_square")]
+    SquareModP { source: ModExponentiateError },
 }
 
 impl HashableMessage<'_> {
@@ -368,6 +371,25 @@ impl HashableMessage<'_> {
         };
         res.map_err(|s| format!("Match error at deepness {deep} -> {s}"))
     }
+}
+
+/// Hash and square function according to the specification of Swiss Post (Algorithm 5.8)
+pub fn hash_and_square(p: &Integer, q: &Integer, x: &Integer) -> Result<Integer, HashError> {
+    let x_h: Integer = HashableMessage::from(vec![
+        HashableMessage::from(q),
+        HashableMessage::from(vec![
+            HashableMessage::from("HashAndSquare"),
+            HashableMessage::from(x),
+        ]),
+    ])
+    .recursive_hash_to_zq(q)
+    .map_err(|e| HashErrorRepr::CompositeHash {
+        source: Box::new(e),
+    })? + 1;
+    let y = x_h
+        .mod_exponentiate(&Integer::from(2), p)
+        .map_err(|e| HashErrorRepr::SquareModP { source: e })?;
+    Ok(y)
 }
 
 impl RecursiveHashTrait for HashableMessage<'_> {
