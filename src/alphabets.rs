@@ -59,6 +59,10 @@ impl Alphabet {
     pub fn character_at_pos(&self, pos: usize) -> Option<char> {
         self.0.chars().nth(pos)
     }
+
+    pub fn rank_of_character(&self, c: char) -> Option<usize> {
+        self.0.chars().position(|x| x == c)
+    }
 }
 
 #[cfg(test)]
