@@ -1254,4 +1254,23 @@ mod test {
             //println!("Duration fpowm: {} micro s", duration_fpowm.as_micros());
         }
     }
+
+    #[test]
+    fn test_string_to_integer() {
+        assert_eq!(
+            Integer::string_to_integer("123").unwrap(),
+            Integer::from(123u32)
+        );
+        assert_eq!(
+            Integer::string_to_integer("-123").unwrap(),
+            Integer::from(-123i32)
+        );
+        assert!(Integer::string_to_integer("12a3").is_err());
+    }
+
+    #[test]
+    fn test_integer_to_string() {
+        assert_eq!(Integer::from(123u32).integer_to_string(), "123");
+        assert_eq!(Integer::from(-123i32).integer_to_string(), "-123");
+    }
 }
