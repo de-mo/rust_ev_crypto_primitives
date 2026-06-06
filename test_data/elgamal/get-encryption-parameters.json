@@ -1,0 +1,15 @@
+[
+  {
+    "description": "3072 - Get Encryption Parameters",
+    "input": {
+      "bit_len": 3072,
+      "lambda": 128,
+      "seed": "31"
+    },
+    "output": {
+      "p": "AL7c3jQFuKGNbHYV/P+X2xwpzSymnxuxQy5pDh6UeDb8HekWDVwq3uUu0kT3mX7M4Z/5edAMw8zjeE2mxkldDYczeySrsP2EjHnrvPKYNJOW+uQDGjt+wr8xPK7zarGRytNtSu/f+of3LarLLqhU//zMZumcKJaRHrqTNBwAbdOqTdBrQystP815tffGHe0YG3NLLcHIaeSYsmR+jEMB2/0Xh/HH9eaH0RjypdQQ23NolYY3eqknPe7AUbYNuBPdDCL61WG6vjxZzGfrKEOH7m0/jDj2oLNN6CzvkpuFPDsaUsbNa4eqCogsMPi3FrNofMuOuewb9nQHxRQjFdK9/6XTfgrbloWTvGapmWld8RsBZLIaYvegpwBtSe+N6zFAjmatU6SmvjjyDvCchMcpqVRO34VCdNwhIMr6G8COIOfH8ZadzUwsCNy4q0Gbaosi8dbxg7GRLlSwRchOleZo0oIHPvkhbjEGwXP/mh0p3ERQWUkSCfqVQNBrZmYR617Odw==",
+      "q": "X25vGgLcUMa2Owr+f8vtjhTmllNPjdihlzSHD0o8G34O9IsGrhVvcpdpInvMv2Zwz/y86AZh5nG8JtNjJK6Gw5m9klXYfsJGPPXeeUwaSct9cgGNHb9hX5ieV3m1WMjlabald+/9Q/uW1WWXVCp//mYzdM4US0iPXUmaDgA26dUm6DWhlZaf5rza++MO9owNuaWW4OQ08kxZMj9GIYDt/ovD+OP680PojHlS6ghtubRKwxu9VJOe92Ao2wbcCe6GEX1qsN1fHizmM/WUIcP3Np/GHHtQWab0FnfJTcKeHY0pY2a1w9UFRBYYfFuLWbQ+Zcdc9g37OgPiihGK6V7/0um/BW3LQsneM1TMtK74jYCyWQ0xe9BTgDak98b1mKBHM1ap0lNfHHkHeE5CY5TUqidvwqE6bhCQZX0N4EcQc+P4y07mphYEblxVoM21RZF463jB2MiXKlgi5CdK8zRpQQOffJC3GINguf/NDpTuIigspIkE/UqgaDWzMwj1r2c7",
+      "g": "Ag=="
+    }
+  }
+]
