@@ -20,6 +20,7 @@ use crate::{
     elgamal::{EncryptionParameterDomainError, EncryptionParameters},
     integer::ModExponentiateError,
     number_theory::{QuadraticResidueError, QuadraticResidueTrait},
+    random::{RandomError, gen_random_integer},
 };
 use std::iter::zip;
 use thiserror::Error;
@@ -59,6 +60,8 @@ enum ExponentiationProofErrorRepr {
     YExpEModP { source: ModExponentiateError },
     #[error("Error in v^(-1) mod p claculting cs'")]
     InverseVModP { source: IntegerOperationError },
+    #[error("Error generating random r: {msg}")]
+    RandomError { msg: String, source: RandomError },
 }
 
 /// Compute phi exponation according to specifications of Swiss Post (Algorithm 10.7)
@@ -75,6 +78,20 @@ fn compute_phi_exponentiation(
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Generate Exponentiation proof according to specifications of Swiss Post (Algorithm 10.8)
+///
+/// # Error
+/// Return an error if preconditions are not satisfied
+pub fn gen_exponentiation_proof(
+    ep: &EncryptionParameters,
+    gs: &[&Integer],
+    x: &Integer,
+    ys: &[&Integer],
+    i_aux: &[String],
+) -> Result<(Integer, Integer), ExponentiationProofError> {
+    gen_exponentiation_proof_impl(ep, gs, x, ys, i_aux).map_err(ExponentiationProofError::from)
+}
+
 /// Verify Exponation proof according to specifications of Swiss Post (Algorithm 10.9)
 ///
 /// # Error
@@ -84,9 +101,55 @@ pub fn verify_exponentiation(
     gs: &[&Integer],
     ys: &[&Integer],
     (e, z): (&Integer, &Integer),
-    i_aux: &Vec<String>,
+    i_aux: &[String],
 ) -> Result<bool, ExponentiationProofError> {
     verify_exponentiation_impl(ep, gs, ys, (e, z), i_aux).map_err(ExponentiationProofError::from)
+}
+
+fn gen_exponentiation_proof_impl(
+    ep: &EncryptionParameters,
+    gs: &[&Integer],
+    x: &Integer,
+    ys: &[&Integer],
+    i_aux: &[String],
+) -> Result<(Integer, Integer), ExponentiationProofErrorRepr> {
+    let b = gen_random_integer(ep.q()).map_err(|e| ExponentiationProofErrorRepr::RandomError {
+        msg: "Error generating random b".to_string(),
+        source: e,
+    })?;
+    let cs = compute_phi_exponentiation(ep, &b, gs)?;
+    let f_list = vec![
+        HashableMessage::from(ep.p()),
+        HashableMessage::from(ep.q()),
+        HashableMessage::from(
+            gs.iter()
+                .map(|g| HashableMessage::from(*g))
+                .collect::<Vec<_>>(),
+        ),
+    ];
+    let f = HashableMessage::from(&f_list);
+    let mut h_aux_l: Vec<HashableMessage> = vec![];
+    h_aux_l.push(HashableMessage::from("ExponentiationProof"));
+    if !i_aux.is_empty() {
+        h_aux_l.push(HashableMessage::from(i_aux));
+    }
+    let h_aux = HashableMessage::from(&h_aux_l);
+    let l_final: Vec<HashableMessage> = vec![
+        f,
+        HashableMessage::from(
+            ys.iter()
+                .map(|y| HashableMessage::from(*y))
+                .collect::<Vec<_>>(),
+        ),
+        HashableMessage::from(cs.as_slice()),
+        h_aux,
+    ];
+    let e = HashableMessage::from(&l_final)
+        .recursive_hash()
+        .map_err(|e| ExponentiationProofErrorRepr::EPrimeHash { source: e })?
+        .into_integer();
+    let z = (b + &e * x) % ep.q();
+    Ok((e, z))
 }
 
 fn verify_exponentiation_impl(
@@ -94,11 +157,11 @@ fn verify_exponentiation_impl(
     gs: &[&Integer],
     ys: &[&Integer],
     (e, z): (&Integer, &Integer),
-    i_aux: &Vec<String>,
+    i_aux: &[String],
 ) -> Result<bool, ExponentiationProofErrorRepr> {
     // Check of input parameters
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
+        let domain_errs = ep.verifiy_domain(&EmptyContext);
         if !domain_errs.is_empty() {
             return Err(ExponentiationProofErrorRepr::CheckElgamal(domain_errs));
         }
@@ -152,7 +215,7 @@ fn verify_exponentiation_impl(
     let mut h_aux_l: Vec<HashableMessage> = vec![];
     h_aux_l.push(HashableMessage::from("ExponentiationProof"));
     if !i_aux.is_empty() {
-        h_aux_l.push(HashableMessage::from(i_aux.as_slice()));
+        h_aux_l.push(HashableMessage::from(i_aux));
     }
     let h_aux = HashableMessage::from(&h_aux_l);
     let l_final: Vec<HashableMessage> = vec![
@@ -218,5 +281,38 @@ mod test {
             assert!(res.is_ok(), "{}", &tc["description"]);
             assert!(res.unwrap(), "{}", &tc["description"])
         }
+    }
+
+    #[test]
+    fn test_gen_and_verify() {
+        let tcs =
+            get_test_cases_from_json_file("zeroknowledgeproofs", "verify-exponentiation.json");
+        let tc = tcs.first().unwrap();
+        let ep = json_value_to_encryption_parameters(&tc["context"]);
+        let input = get_input(&tc["input"]);
+        let x = Integer::from(12345);
+        let statements = input
+            .bases
+            .iter()
+            .map(|g| g.mod_exponentiate(&x, ep.p()).unwrap())
+            .collect::<Vec<_>>();
+        let proof = gen_exponentiation_proof(
+            &ep,
+            input.bases.iter().collect::<Vec<_>>().as_slice(),
+            &x,
+            statements.iter().collect::<Vec<_>>().as_slice(),
+            &input.additional_information,
+        );
+        assert!(proof.is_ok(), "{}", proof.err().unwrap());
+        let proof = proof.unwrap();
+        let res = verify_exponentiation(
+            &ep,
+            input.bases.iter().collect::<Vec<_>>().as_slice(),
+            statements.iter().collect::<Vec<_>>().as_slice(),
+            (&proof.0, &proof.1),
+            &input.additional_information,
+        );
+        assert!(res.is_ok(), "{}", res.err().unwrap());
+        assert!(res.unwrap());
     }
 }

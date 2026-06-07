@@ -81,7 +81,7 @@ fn verify_schnorr_impl(
     i_aux: &[&str],
 ) -> Result<bool, SchnorrProofErrorRepr> {
     if cfg!(feature = "checks") {
-        let domain_errs = ep.verifiy_domain(&EmptyContext::default());
+        let domain_errs = ep.verifiy_domain(&EmptyContext);
         if !domain_errs.is_empty() {
             return Err(SchnorrProofErrorRepr::CheckElgamal(domain_errs));
         }

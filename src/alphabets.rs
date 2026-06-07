@@ -46,6 +46,7 @@ const ALPHABET_USER_FRIENDLY_CONTENT: &str = "abcdefghijkmnpqrstuvwxyz23456789";
 pub struct Alphabet(&'static str);
 
 impl Alphabet {
+    /// New alphabet from a static string of characters
     pub fn new(chars: &'static str) -> Self {
         Self(chars)
     }
@@ -59,6 +60,21 @@ impl Alphabet {
     pub fn character_at_pos(&self, pos: usize) -> Option<char> {
         self.0.chars().nth(pos)
     }
+
+    /// Rank of the character `c` in the alphabet
+    pub fn rank_of_character(&self, c: char) -> Option<usize> {
+        self.0.chars().position(|x| x == c)
+    }
+
+    /// Check if the character `c` is in the alphabet
+    pub fn is_character_in_alphabet(&self, c: char) -> bool {
+        self.0.chars().any(|x| x == c)
+    }
+
+    /// Check if the string `s` is in the alphabet, it means that all characters of `s` are in the alphabet
+    pub fn is_string_in_alphabet(&self, s: &str) -> bool {
+        s.chars().all(|c| self.is_character_in_alphabet(c))
+    }
 }
 
 #[cfg(test)]
@@ -71,5 +87,14 @@ mod test {
         assert_eq!(ALPHABET_LATIN.character_at_pos(14), Some('5'));
         assert_eq!(ALPHABET_LATIN.character_at_pos(28), Some('J'));
         assert_eq!(ALPHABET_LATIN.character_at_pos(125), Some('ï'));
+    }
+
+    #[test]
+    fn test_user_friendly() {
+        assert_eq!(ALPHABET_USER_FRIENDLY.size(), 32);
+        assert!(ALPHABET_USER_FRIENDLY.is_character_in_alphabet('a'));
+        assert!(!ALPHABET_USER_FRIENDLY.is_character_in_alphabet('l'));
+        assert!(ALPHABET_USER_FRIENDLY.is_string_in_alphabet("abc23"));
+        assert!(!ALPHABET_USER_FRIENDLY.is_string_in_alphabet("abc!@#"));
     }
 }

@@ -311,7 +311,10 @@ impl VerifyDomainTrait<EmptyContext, EncryptionParameterDomainError> for Encrypt
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{DecodeTrait, EmptyContext, Hexa};
+    use crate::{
+        DecodeTrait, EmptyContext, Hexa,
+        test_json_data::{get_test_cases_from_json_file, json_value_to_encryption_parameters},
+    };
 
     #[test]
     fn test_get_small_prime_group_members() {
@@ -410,33 +413,51 @@ mod test {
         let g_err = Integer::from(2u8);
         assert!(
             EncryptionParameters::from((&p, &q, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p_err, &q, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q_err_1, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q_err_2, &g))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q, &g_err))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
         assert!(
             !EncryptionParameters::from((&p, &q, Integer::one()))
-                .verifiy_domain(&EmptyContext::default())
+                .verifiy_domain(&EmptyContext)
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn test_get_encryption_parameters_file() {
+        for tc in get_test_cases_from_json_file("elgamal", "get-encryption-parameters.json") {
+            let ep = json_value_to_encryption_parameters(&tc["output"]);
+            let seed = tc["input"]["seed"].as_str().unwrap();
+            let ep_res = EncryptionParameters::get_encryption_parameters(seed);
+            assert!(
+                ep_res.is_ok(),
+                "Error in get_encryption_parameters for {}",
+                tc["description"]
+            );
+            let ep_calc = ep_res.unwrap();
+            assert_eq!(ep_calc.p, ep.p, "Not same p for {}", tc["description"]);
+            assert_eq!(ep_calc.q, ep.q, "Not same q for {}", tc["description"]);
+            assert_eq!(ep_calc.g, ep.g, "Not same g for {}", tc["description"]);
+        }
     }
 }

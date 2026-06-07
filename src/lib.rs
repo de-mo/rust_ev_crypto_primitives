@@ -60,16 +60,16 @@ pub mod zero_knowledge_proofs;
 
 pub use byte_array::{ByteArray, ByteArrayError, DecodeTrait, EncodeTrait};
 pub use domain::*;
-pub use hashing::{HashError, HashableMessage, RecursiveHashTrait};
+pub use hashing::{HashError, HashableMessage, RecursiveHashTrait, hash_and_square};
 pub use integer::{
-    ConstantsTrait, Hexa, IntegerOperationError, ModExponentiateError, OperationsTrait,
-    ToByteArryTrait, prepare_fixed_based_optimization,
+    ConstantsTrait, ConvertStringTait, Hexa, IntegerOperationError, ModExponentiateError,
+    OperationsTrait, StringToIntegerError, ToByteArryTrait, prepare_fixed_based_optimization,
 };
 pub use number_theory::{
     IsPrimeTrait, JacobiError, JacobiTrait, NotPrimeError, QuadraticResidueTrait, SmallPrimeError,
     SmallPrimeTrait,
 };
-pub use rug::Integer;
+pub use rug::{Integer, integer::ParseIntegerError, ops};
 pub use shared_error::{NotOddError, NotPositiveError};
 
 /// The length of the group parameter `p` according to the security level in the specifications

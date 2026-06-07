@@ -25,9 +25,13 @@ mod exponentiation;
 mod plaintext_equality;
 mod schnorr_proofs;
 
-pub use decryption::{verify_decryption, DecryptionProofError};
-pub use exponentiation::{verify_exponentiation, ExponentiationProofError};
-pub use plaintext_equality::{verify_plaintext_equality, PlaintextProofError};
+pub use decryption::{DecryptionProofError, verify_decryption};
+pub use exponentiation::{
+    ExponentiationProofError, gen_exponentiation_proof, verify_exponentiation,
+};
+pub use plaintext_equality::{
+    PlaintextProofError, gen_plaintext_equality_proof, verify_plaintext_equality,
+};
 pub use schnorr_proofs::verify_schnorr;
 
 #[cfg(test)]
@@ -35,8 +39,8 @@ mod test {
     use serde_json::Value;
 
     use crate::{
-        test_json_data::{json_64_value_to_integer, json_array_64_value_to_array_integer},
         Integer,
+        test_json_data::{json_64_value_to_integer, json_array_64_value_to_array_integer},
     };
 
     pub struct Proof {

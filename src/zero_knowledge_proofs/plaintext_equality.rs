@@ -15,8 +15,11 @@
 // <https://www.gnu.org/licenses/>.
 
 use crate::{
-    elgamal::EncryptionParameters, integer::ModExponentiateError, HashError, HashableMessage,
-    Integer, IntegerOperationError, OperationsTrait, RecursiveHashTrait,
+    HashError, HashableMessage, Integer, IntegerOperationError, OperationsTrait,
+    RecursiveHashTrait,
+    elgamal::EncryptionParameters,
+    integer::ModExponentiateError,
+    random::{RandomError, gen_random_vector},
 };
 use thiserror::Error;
 
@@ -37,6 +40,8 @@ enum PhiPlaintextEqualityError {
     Division { source: IntegerOperationError },
     #[error("Error calculating h'^x' mod p")]
     HPrimeExpXPrimeModP { source: ModExponentiateError },
+    #[error("Error generating random r: {msg}")]
+    RandomError { msg: String, source: RandomError },
 }
 
 #[derive(Error, Debug)]
@@ -81,6 +86,27 @@ fn compute_phi_plaintext_equality(
     ])
 }
 
+pub fn gen_plaintext_equality_proof(
+    ep: &EncryptionParameters,
+    (c_0, c_1): (&Integer, &Integer),
+    (c_prime_0, c_prime_1): (&Integer, &Integer),
+    h: &Integer,
+    h_prime: &Integer,
+    (r, r_prime): (&Integer, &Integer),
+    i_aux: &[String],
+) -> Result<(Integer, (Integer, Integer)), PlaintextProofError> {
+    gen_plaintext_equality_proof_impl(
+        ep,
+        (c_0, c_1),
+        (c_prime_0, c_prime_1),
+        h,
+        h_prime,
+        (r, r_prime),
+        i_aux,
+    )
+    .map_err(PlaintextProofError::from)
+}
+
 pub fn verify_plaintext_equality(
     ep: &EncryptionParameters,
     (c_0, c_1): (&Integer, &Integer),
@@ -90,7 +116,7 @@ pub fn verify_plaintext_equality(
     (e, (z_0, z_1)): (&Integer, (&Integer, &Integer)),
     i_aux: &[String],
 ) -> Result<bool, PlaintextProofError> {
-    verify_plaintext_equality_imple(
+    verify_plaintext_equality_impl(
         ep,
         (c_0, c_1),
         (c_prime_0, c_prime_1),
@@ -102,7 +128,60 @@ pub fn verify_plaintext_equality(
     .map_err(PlaintextProofError::from)
 }
 
-fn verify_plaintext_equality_imple(
+fn gen_plaintext_equality_proof_impl(
+    ep: &EncryptionParameters,
+    (c_0, c_1): (&Integer, &Integer),
+    (c_prime_0, c_prime_1): (&Integer, &Integer),
+    h: &Integer,
+    h_prime: &Integer,
+    (r, r_prime): (&Integer, &Integer),
+    i_aux: &[String],
+) -> Result<(Integer, (Integer, Integer)), PlaintextProofErrorRepr> {
+    let b_list = gen_random_vector(ep.q(), 2).map_err(|e| {
+        PlaintextProofErrorRepr::PhiPlaintextEqualityError {
+            source: PhiPlaintextEqualityError::RandomError {
+                msg: "Error generating random b vector".to_string(),
+                source: e,
+            },
+        }
+    })?;
+    let mut b_iter = b_list.iter();
+    let b1 = b_iter.next().unwrap();
+    let b2 = b_iter.next().unwrap();
+    let c_list = compute_phi_plaintext_equality(ep, (b1, b2), h, h_prime)
+        .map_err(|e| PlaintextProofErrorRepr::PhiPlaintextEqualityError { source: e })?;
+    let fs = vec![ep.p(), ep.q(), ep.g(), h, h_prime];
+    let ys = [
+        c_0.clone(),
+        c_prime_0.clone(),
+        c_1.mod_divide(c_prime_1, ep.p())
+            .map_err(|e| PlaintextProofErrorRepr::C1DivideCPrime1 { source: e })?,
+    ];
+    let mut h_aux = vec![
+        HashableMessage::from("PlaintextEqualityProof"),
+        HashableMessage::from(c_1),
+        HashableMessage::from(c_prime_1),
+    ];
+    if !i_aux.is_empty() {
+        h_aux.push(HashableMessage::from(i_aux));
+    }
+    let e = HashableMessage::from(vec![
+        HashableMessage::from(fs),
+        HashableMessage::from(ys.as_slice()),
+        HashableMessage::from(c_list.as_slice()),
+        HashableMessage::from(&h_aux),
+    ])
+    .recursive_hash()
+    .map_err(|e| PlaintextProofErrorRepr::EPrimeHash { source: e })?
+    .into_integer();
+    let z = (
+        (b1.clone() + &e * r) % ep.q(),
+        (b2.clone() + &e * r_prime) % ep.q(),
+    );
+    Ok((e, z))
+}
+
+fn verify_plaintext_equality_impl(
     ep: &EncryptionParameters,
     (c_0, c_1): (&Integer, &Integer),
     (c_prime_0, c_prime_1): (&Integer, &Integer),
@@ -158,11 +237,11 @@ mod test {
     use super::*;
     use crate::{
         test_json_data::{
-            get_test_cases_from_json_file, json_64_value_to_integer, json_array_value_to_array_string,
-            json_value_to_encryption_parameters, json_values_to_ciphertext_values,
-            CiphertextValues,
+            CiphertextValues, get_test_cases_from_json_file, json_64_value_to_integer,
+            json_array_value_to_array_string, json_value_to_encryption_parameters,
+            json_values_to_ciphertext_values,
         },
-        zero_knowledge_proofs::test::{proof_vec_from_json_values, ProofVec},
+        zero_knowledge_proofs::test::{ProofVec, proof_vec_from_json_values},
     };
     use serde_json::Value;
 
@@ -188,7 +267,9 @@ mod test {
 
     #[test]
     fn test_verify() {
-        for tc in get_test_cases_from_json_file("zeroknowledgeproofs", "verify-plaintext-equality.json") {
+        for tc in
+            get_test_cases_from_json_file("zeroknowledgeproofs", "verify-plaintext-equality.json")
+        {
             let ep = json_value_to_encryption_parameters(&tc["context"]);
             let input = get_input(&tc["input"]);
             let res = verify_plaintext_equality(
@@ -203,5 +284,54 @@ mod test {
             assert!(res.is_ok(), "{}", &tc["description"]);
             assert!(res.unwrap(), "{}", &tc["description"])
         }
+    }
+
+    #[test]
+    fn test_gen_and_verify() {
+        let tcs =
+            get_test_cases_from_json_file("zeroknowledgeproofs", "verify-plaintext-equality.json");
+        let tc = tcs.first().unwrap();
+        let ep = json_value_to_encryption_parameters(&tc["context"]);
+        let input = get_input(&tc["input"]);
+        let (r, r_prime) = (Integer::from(12345), Integer::from(67890));
+        let m = Integer::from(42);
+        let (c_0, c_1) = (
+            ep.g().mod_exponentiate(&r, ep.p()).unwrap(),
+            input
+                .h
+                .mod_exponentiate(&r, ep.p())
+                .unwrap()
+                .mod_multiply(&m, ep.p()),
+        );
+        let (c_prime_0, c_prime_1) = (
+            ep.g().mod_exponentiate(&r_prime, ep.p()).unwrap(),
+            input
+                .h_prime
+                .mod_exponentiate(&r_prime, ep.p())
+                .unwrap()
+                .mod_multiply(&m, ep.p()),
+        );
+        let proof = gen_plaintext_equality_proof(
+            &ep,
+            (&c_0, &c_1),
+            (&c_prime_0, &c_prime_1),
+            &input.h,
+            &input.h_prime,
+            (&r, &r_prime),
+            &input.i_aux,
+        );
+        assert!(proof.is_ok(), "{}", proof.err().unwrap());
+        let proof = proof.unwrap();
+        let res = verify_plaintext_equality(
+            &ep,
+            (&c_0, &c_1),
+            (&c_prime_0, &c_prime_1),
+            &input.h,
+            &input.h_prime,
+            (&proof.0, (&proof.1.0, &proof.1.1)),
+            &input.i_aux,
+        );
+        assert!(res.is_ok(), "{}", res.err().unwrap());
+        assert!(res.unwrap());
     }
 }
